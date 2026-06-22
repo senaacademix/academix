@@ -1,0 +1,62 @@
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { LicenseClientView } from "@/components/license/LicenseClientView";
+
+export const metadata = {
+    title: "Licencia de Uso | AcademiX",
+    description: "Licencia de uso condicional y restricciones de propósito de la plataforma.",
+};
+
+const LICENSE_TEXT = `# LICENCIA DE USO GRATUITO Y CÓDIGO CERRADO CON RESTRICCIÓN DE PROPÓSITO
+
+Copyright (c) 2026 AcademiX / AcademiX
+Todos los derechos reservados.
+
+Por la presente se otorga permiso a cualquier persona u organización que obtenga una copia de este software y los archivos de documentación asociados (el "Software"), para utilizar y ejecutar el Software de forma gratuita, sujeto estrictamente a las siguientes condiciones:
+
+### 1. RESTRICCIONES DE CÓDIGO FUENTE Y REUTILIZACIÓN
+
+* Queda estrictamente prohibido modificar, alterar, adaptar, traducir, realizar ingeniería inversa, descompilar o desensamblar el código fuente del Software.
+* No se otorga permiso para sublicenciar, vender, alquilar, redistribuir el código fuente, ni crear trabajos derivados basados en este Software.
+* El uso del Software es libre y gratuito para el usuario final, pero el código fuente es propiedad exclusiva de los autores y no puede ser reutilizado en otros proyectos, parcial ni totalmente.
+
+### 2. RESTRICCIÓN DE CAMPO DE USO (CONDICIÓN ESENCIAL)
+
+* **Uso Permitido:** El Software está diseñado y autorizado única y exclusivamente para la gestión académica, control de asistencia, seguimiento y calificación de estudiantes, alumnos o aprendices.
+* **Uso Prohibido:** Queda expresamente prohibido el uso del Software, de forma directa o indirecta, para el control de asistencia laboral, supervisión de horarios, fichaje de entrada/salida, evaluación de desempeño o cualquier forma de fiscalización o auditoría de personal docente, profesores, instructores, tutores, personal administrativo, directivos o cualquier otro empleado de la institución o empresa.
+
+### 3. EFECTOS DEL INCUMPLIMIENTO
+
+Cualquier uso del Software que viole las restricciones establecidas en las Secciones 1 o 2 revocará de forma automática e inmediata todos los derechos y licencias otorgados bajo este documento. El uso continuado del Software tras dicha violación constituirá una infracción deliberada de los derechos de autor (Copyright) y dará derecho al Licenciante a exigir el cese inmediato del uso y las compensaciones legales correspondientes.
+
+### 4. AVISO DE DERECHOS DE AUTOR
+
+El aviso de copyright anterior y este aviso de permisos (incluyendo todas las restricciones) se incluirán en todas las copias de distribución o despliegue del Software.
+
+### 5. EXCLUSIÓN DE GARANTÍA
+
+EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O IMPLÍCITA, INCLUYENDO PERO NO LIMITADO A GARANTÍAS DE COMERCIABILIDAD, IDONEIDAD PARA UN PROPÓSITO PARTICULAR Y NO INFRACCIÓN. EN NINGÚN CASO LOS AUTORES O TITULARES DEL COPYRIGHT SERÁN RESPONSABLES DE NINGUNA RECLAMACIÓN, DAÑOS U OTRAS RESPONSABILIDADES, YA SEA EN UNA ACCIÓN DE CONTRATO, AGRAVIO O DE OTRO MODO, QUE SURJA DE, FUERA DE O EN CONEXIÓN CON EL SOFTWARE O EL USO U OTROS TRATOS EN EL SOFTWARE.`;
+
+const README_TEXT = `> ⚠️ **Atención:** Este software está protegido por una licencia de uso gratuito pero código cerrado. Está **estrictamente prohibido** modificar o reutilizar su código fuente. Además, está **estrictamente prohibido** su uso para el control laboral de profesores o administrativos. Lea el archivo \`LICENSE\` para más detalles.`;
+
+export default async function LicensePage() {
+    const session = await auth.api.getSession({ headers: await headers() });
+
+    if (!session || !session.user) {
+        redirect("/signin");
+    }
+
+    const role = session.user.role;
+    if (role !== "admin" && role !== "teacher") {
+        // Students are not allowed to view the license page
+        redirect("/dashboard/student");
+    }
+
+    return (
+        <LicenseClientView 
+            licenseText={LICENSE_TEXT} 
+            readmeText={README_TEXT} 
+        />
+    );
+}
