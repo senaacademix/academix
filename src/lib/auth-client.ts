@@ -3,7 +3,8 @@ import { inferAdditionalFields } from "better-auth/client/plugins";
 import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000", 
+  baseURL: process.env.NEXT_PUBLIC_APP_URL || 
+           (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : "http://localhost:3000"), 
   plugins: [inferAdditionalFields<typeof auth>()]
 });
 
