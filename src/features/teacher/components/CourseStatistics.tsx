@@ -194,7 +194,7 @@ export function CourseStatistics({
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{gradesData.students?.length || 0}</div>
-                        <p className="text-xs text-muted-foreground">Enrolados en el curso</p>
+                        <p className="text-xs text-muted-foreground">Enrolados en la materia</p>
                     </CardContent>
                 </Card>
                 <Card>

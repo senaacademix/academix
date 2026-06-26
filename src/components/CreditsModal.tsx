@@ -59,9 +59,15 @@ export function CreditsModal() {
                     <div className="p-4 bg-primary/10 rounded-full">
                         <Info className="h-12 w-12 text-primary" />
                     </div>
-                    <div>
-                        <h3 className="text-lg font-bold">Jhon Fredy Valencia Gómez</h3>
-                        <p className="text-muted-foreground">Ingeniero de Software y Datos</p>
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="text-lg font-bold">Jhon Fredy Valencia Gómez</h3>
+                            <p className="text-muted-foreground">Ingeniero de Software y Datos</p>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold">Deimer Andrés Miranda Montoya</h3>
+                            <p className="text-muted-foreground">Ingeniero en Instrumentación y Control</p>
+                        </div>
                     </div>
                     <p className="text-sm text-muted-foreground pt-4">
                         © {new Date().getFullYear()} AcademiX. Todos los derechos reservados.

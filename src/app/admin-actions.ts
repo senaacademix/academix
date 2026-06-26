@@ -36,6 +36,7 @@ export async function getAllUsersAction(filters?: {
     search?: string;
     courseId?: string;
     groupId?: string;
+    programId?: string;
     limit?: number;
     offset?: number;
 }) {
@@ -394,7 +395,7 @@ export async function deleteCourseAction(courseId: string) {
     // Log deletion
     await auditLogger.logCourseDelete(
         courseId,
-        course?.title || "Curso desconocido",
+        course?.title || "Materia desconocido",
         session.user.id,
         session.user.name || "Admin"
     );

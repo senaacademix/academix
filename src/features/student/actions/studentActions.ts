@@ -8,19 +8,32 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
-export async function getStudentRecords() {
+export async function getStudentRecords(targetStudentId?: string) {
     const session = await getSession();
     if (!session?.user) {
         throw new Error("Unauthorized");
     }
 
-    const studentId = session.user.id;
+    let studentId = session.user.id;
+    if (targetStudentId) {
+        if (session.user.role !== "teacher" && session.user.role !== "admin" && session.user.id !== targetStudentId) {
+            throw new Error("Unauthorized");
+        }
+        studentId = targetStudentId;
+    }
 
     // Fetch Attendance
     const attendances = await prisma.attendance.findMany({
         where: { userId: studentId },
         include: {
-            course: { select: { title: true } },
+            course: {
+                select: {
+                    id: true,
+                    title: true,
+                    teacher: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } },
+                    schedules: { orderBy: { dayOfWeek: 'asc' } },
+                }
+            },
         },
         orderBy: { date: "desc" },
     });
@@ -29,7 +42,13 @@ export async function getStudentRecords() {
     const remarks = await prisma.remark.findMany({
         where: { userId: studentId },
         include: {
-            course: { select: { title: true } },
+            course: {
+                select: {
+                    id: true,
+                    title: true,
+                    teacher: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } },
+                }
+            },
             teacher: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } }
         },
         orderBy: { date: "desc" },
@@ -74,4 +93,126 @@ export async function justifyAttendanceAction(attendanceId: string, justificatio
     });
 
     return { success: true, attendance: updated };
+}
+
+export async function markRemarkViewed(remarkId: string) {
+    const session = await getSession();
+    if (!session?.user) throw new Error("Unauthorized");
+
+    const studentId = session.user.id;
+
+    // Verify the remark belongs to this student
+    const remark = await prisma.remark.findUnique({
+        where: { id: remarkId },
+        select: { userId: true, viewedAt: true }
+    });
+
+    if (!remark || remark.userId !== studentId) {
+        throw new Error("No autorizado");
+    }
+
+    // Only set viewedAt on first view
+    if (!remark.viewedAt) {
+        await prisma.remark.update({
+            where: { id: remarkId },
+            data: { viewedAt: new Date() }
+        });
+    }
+
+    return { success: true };
+}
+
+export async function getStudentDocumentation(targetStudentId?: string) {
+    const session = await getSession();
+    if (!session?.user) throw new Error("Unauthorized");
+
+    let studentId = session.user.id;
+    if (targetStudentId) {
+        if (
+            session.user.role !== "teacher" &&
+            session.user.role !== "admin" &&
+            session.user.id !== targetStudentId
+        ) {
+            throw new Error("Unauthorized");
+        }
+        studentId = targetStudentId;
+    }
+
+    const courseSelect = {
+        id: true,
+        title: true,
+        teacher: {
+            select: {
+                name: true,
+                profile: { select: { nombres: true, apellido: true } },
+            },
+        },
+        sharedContent: {
+            orderBy: { createdAt: "desc" as const },
+            select: {
+                id: true,
+                title: true,
+                links: true,
+                createdAt: true,
+            },
+        },
+    };
+
+    // Source 1: direct enrollments (APPROVED, active group)
+    const enrollments = await prisma.enrollment.findMany({
+        where: {
+            userId: studentId,
+            status: "APPROVED",
+            course: {
+                OR: [
+                    { group: null },
+                    {
+                        group: {
+                            OR: [
+                                { endDate: null },
+                                { endDate: { gte: new Date() } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        select: { course: { select: courseSelect } },
+    });
+
+    // Source 2: courses from the student's group membership
+    const user = await prisma.user.findUnique({
+        where: { id: studentId },
+        select: { groupId: true },
+    });
+
+    let groupCourses: any[] = [];
+    if (user?.groupId) {
+        const group = await prisma.group.findUnique({
+            where: { id: user.groupId },
+            select: {
+                endDate: true,
+                courses: { select: courseSelect },
+            },
+        });
+        // Only include if group is still active
+        const isActive =
+            !group?.endDate || new Date(group.endDate) >= new Date();
+        if (group && isActive) {
+            groupCourses = group.courses;
+        }
+    }
+
+    // Merge & deduplicate by courseId
+    const seen = new Set<string>();
+    const all = [
+        ...enrollments.map((e) => e.course),
+        ...groupCourses,
+    ];
+
+    return all.filter((c) => {
+        if (seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+    });
 }

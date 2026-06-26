@@ -69,7 +69,7 @@ interface GradesManagerProps {
     initialData: any;
 }
 
-export function GradesManager({ courseId, courseTitle = "Curso", initialData }: GradesManagerProps) {
+export function GradesManager({ courseId, courseTitle = "Materia", initialData }: GradesManagerProps) {
     const [data, setData] = useState(initialData);
     const [activeTab, setActiveTab] = useState("view");
     const [searchTerm, setSearchTerm] = useState("");
@@ -470,7 +470,7 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                                             <div className="flex flex-col items-center">
                                                 <span>{cat.name}</span>
                                                 <Badge variant="outline" className="mt-1 text-[9px] font-bold bg-primary/5">
-                                                    {cat.weight}% del Curso
+                                                    {cat.weight}% de la Materia
                                                 </Badge>
                                             </div>
                                         </TableHead>
@@ -591,7 +591,7 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                                                 <div>
                                                     <h4 className="text-lg font-bold">{cat.name}</h4>
                                                     <Badge variant="secondary" className="text-xs">
-                                                        Peso en Curso: {cat.weight}%
+                                                        Peso en Materia: {cat.weight}%
                                                     </Badge>
                                                 </div>
                                             </div>
@@ -732,7 +732,7 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Nueva Categoría de Calificación</DialogTitle>
-                        <DialogDescription>Crea un contenedor de alto nivel (ej: "Primer Corte") y define su peso sobre el total del curso.</DialogDescription>
+                        <DialogDescription>Crea un contenedor de alto nivel (ej: "Primer Corte") y define su peso sobre el total de la materia.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateCategory} className="space-y-4 py-4">
                         <div className="space-y-2">
@@ -740,7 +740,7 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                             <Input id="cat-name" name="name" required />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="cat-weight">Peso sobre el Total del Curso (%)</Label>
+                            <Label htmlFor="cat-weight">Peso sobre el Total de la Materia (%)</Label>
                             <Input id="cat-weight" name="weight" type="number" step="0.1" defaultValue="30" required />
                         </div>
                         <DialogFooter>

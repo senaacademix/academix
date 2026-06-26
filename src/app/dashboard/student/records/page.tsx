@@ -2,7 +2,7 @@ import { StudentRecords } from "@/features/student/components/StudentRecords";
 
 export const metadata = {
     title: "Registro Académico | AcademiX",
-    description: "Visualiza tu historial de asistencia y observaciones disciplinarias.",
+    description: "Visualiza tu historial de asistencia, observaciones disciplinarias y calificaciones.",
 };
 
 export default function StudentRecordsPage() {
@@ -11,7 +11,7 @@ export default function StudentRecordsPage() {
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Registro Académico</h1>
                 <p className="text-muted-foreground text-sm mt-1">
-                    Visualiza tu historial de asistencia a clases y las observaciones que los docentes han registrado.
+                    Consulta tu historial de asistencia, observaciones de los docentes y tus calificaciones por materia.
                 </p>
             </div>
             

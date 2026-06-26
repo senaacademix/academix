@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { BookOpen, Calendar, BarChart, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, Settings2, GraduationCap, Building2 } from "lucide-react"
+import { BookOpen, Calendar, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, Settings2, GraduationCap, Building2 } from "lucide-react"
 
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -66,25 +66,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           isActive: false,
         },
         {
-          title: "Programas de Formación",
+          title: "Estructura Académica",
           url: "/dashboard/admin/courses",
           icon: BookOpen,
           isActive: false,
         },
+
         {
-          title: "Ambientes de Formación",
-          url: "/dashboard/admin/environments",
-          icon: Building2,
-          isActive: false,
-        },
-        {
-          title: "Banco de Profesores",
-          url: "/dashboard/admin/teachers",
-          icon: GraduationCap,
-          isActive: false,
-        },
-        {
-          title: "Grupos",
+          title: "Gestión de Estudiantes",
           url: "/dashboard/admin/users",
           icon: Users,
           isActive: false,
@@ -150,12 +139,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               isActive: false,
             },
             {
-              title: "Calificaciones",
-              url: "/dashboard/student/evaluations",
-              icon: BarChart,
-              isActive: false,
-            },
-            {
               title: "Horario",
               url: "/dashboard/student/schedule",
               icon: Calendar,
@@ -163,6 +146,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
           : []
+
 
   const user = {
     name: (session?.user as { name?: string } | null | undefined)?.name || "Usuario",

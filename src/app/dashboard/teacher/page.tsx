@@ -19,11 +19,20 @@ export default async function Page() {
   const groups = await courseService.getTeacherGroups(session.user.id);
 
   const currentDate = new Date().toISOString();
+  const formattedDate = new Date().toLocaleDateString('es-ES', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+  });
+
   return (
     <TeacherDashboard 
       courses={courses} 
       groups={groups}
       currentDate={currentDate} 
+      teacherName={session.user.name}
+      formattedDate={formattedDate}
     />
   );
 }

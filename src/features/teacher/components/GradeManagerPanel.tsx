@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Save, Trash2, Edit, Users, Search, UsersRound } from "lucide-react";
+import { Plus, Save, Trash2, Edit, Users, Search, UsersRound, Link2 } from "lucide-react";
+import MDEditor from "@uiw/react-md-editor";
 import { getCourseWorkGroups } from "../actions/workGroupActions";
 import { WorkGroupManagerDialog } from "./WorkGroupManagerDialog";
 import { getCourseActivities, createActivity, updateActivity, deleteActivity, saveStudentGrades, toggleCourseWeightMode } from "../actions/gradeActions";
@@ -35,7 +36,7 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
   const [searchQuery, setSearchQuery] = useState("");
 
   const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false);
-  const [activityForm, setActivityForm] = useState({ id: "", title: "", description: "", weight: 0 });
+  const [activityForm, setActivityForm] = useState({ id: "", title: "", description: "", weight: 0, allowSubmissionLink: false });
 
   const [isBulkGradeDialogOpen, setIsBulkGradeDialogOpen] = useState(false);
   const [bulkGradeActivity, setBulkGradeActivity] = useState<any | null>(null);
@@ -99,9 +100,9 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
     startTransition(async () => {
       let res;
       if (activityForm.id) {
-        res = await updateActivity(activityForm.id, activityForm.title, activityForm.description, activityForm.weight);
+        res = await updateActivity(activityForm.id, activityForm.title, activityForm.description, activityForm.weight, activityForm.allowSubmissionLink);
       } else {
-        res = await createActivity(selectedCourseId, activityForm.title, activityForm.description, activityForm.weight);
+        res = await createActivity(selectedCourseId, activityForm.title, activityForm.description, activityForm.weight, activityForm.allowSubmissionLink);
       }
 
       if (res.success) {
@@ -374,7 +375,7 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
               Equipos
             </Button>
             <Button size="sm" variant="outline" className="h-9 gap-2 shadow-sm" onClick={() => {
-              setActivityForm({ id: "", title: "", description: "", weight: 20 });
+              setActivityForm({ id: "", title: "", description: "", weight: 20, allowSubmissionLink: false });
               setIsActivityDialogOpen(true);
             }}>
               <Plus className="w-3.5 h-3.5" />
@@ -408,7 +409,7 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => handleOpenBulkGrade(act)} title="Asignación Masiva">
                           <Users className="w-3 h-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => { setActivityForm(act); setIsActivityDialogOpen(true); }}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => { setActivityForm({ id: act.id, title: act.title, description: act.description || "", weight: act.weight, allowSubmissionLink: act.allowSubmissionLink ?? false }); setIsActivityDialogOpen(true); }}>
                           <Edit className="w-3 h-3" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteActivity(act.id)}>
@@ -479,37 +480,91 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
         </Card>
       )}
 
-      {/* Activity Dialog */}
+      {/* Activity Dialog — Full Screen */}
       <Dialog open={isActivityDialogOpen} onOpenChange={setIsActivityDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{activityForm.id ? "Editar" : "Crear"} Actividad</DialogTitle>
-            <DialogDescription>Define los detalles de la actividad y su peso porcentual dentro del curso.</DialogDescription>
+        <DialogContent className="!fixed !inset-0 !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !m-0 !p-0 !rounded-none flex flex-col overflow-hidden bg-background !border-0" data-color-mode="auto">
+          <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl font-black">{activityForm.id ? "Editar" : "Nueva"} Actividad</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-0.5">Define los detalles, descripción y configuración de la actividad.</DialogDescription>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Título de la Actividad</Label>
-              <Input value={activityForm.title} onChange={e => setActivityForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Ej. Taller 1, Examen Final..." />
+
+          {/* Main content — overflow-hidden so columns manage their own scroll */}
+          <div className="flex-1 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-3 h-full">
+              {/* Left — Metadata (own scroll) */}
+              <div className="lg:col-span-1 border-r p-6 space-y-5 overflow-y-auto">
+                <div className="space-y-2">
+                  <Label className="font-semibold">Título de la Actividad *</Label>
+                  <Input
+                    value={activityForm.title}
+                    onChange={e => setActivityForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="Ej. Taller 1, Examen Final..."
+                    className="bg-background"
+                  />
+                </div>
+
+                {usePercentageWeights && (
+                  <div className="space-y-2">
+                    <Label className="font-semibold">Peso Porcentual (%)</Label>
+                    <Input
+                      type="number" min="1" max="100"
+                      value={activityForm.weight}
+                      onChange={e => setActivityForm(prev => ({ ...prev, weight: parseFloat(e.target.value) || 0 }))}
+                      className="bg-background"
+                    />
+                  </div>
+                )}
+
+                {/* Submission Link Toggle */}
+                <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/20">
+                  <Switch
+                    id="submission-link-toggle"
+                    checked={activityForm.allowSubmissionLink}
+                    onCheckedChange={val => setActivityForm(prev => ({ ...prev, allowSubmissionLink: val }))}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <div>
+                    <Label htmlFor="submission-link-toggle" className="font-semibold cursor-pointer flex items-center gap-1.5">
+                      <Link2 className="w-4 h-4 text-primary" />
+                      Permitir Enlace de Entrega
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Los estudiantes podrán enviar un enlace (URL) con su trabajo para esta actividad.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right — Markdown Editor (fills all remaining height) */}
+              <div className="lg:col-span-2 flex flex-col overflow-hidden p-6 gap-3">
+                <Label className="font-semibold shrink-0">Descripción / Instrucciones (Markdown)</Label>
+                <div className="flex-1 overflow-hidden" data-color-mode="auto">
+                  <MDEditor
+                    value={activityForm.description}
+                    onChange={val => setActivityForm(prev => ({ ...prev, description: val || "" }))}
+                    height="100%"
+                    style={{ height: "100%", display: "flex", flexDirection: "column" }}
+                    preview="edit"
+                    visibleDragbar={false}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Descripción (Opcional)</Label>
-              <Input value={activityForm.description || ""} onChange={e => setActivityForm(prev => ({ ...prev, description: e.target.value }))} />
-            </div>
-            {usePercentageWeights && (
-            <div className="space-y-2">
-              <Label>Peso Porcentual (%)</Label>
-              <Input type="number" min="1" max="100" value={activityForm.weight} onChange={e => setActivityForm(prev => ({ ...prev, weight: parseFloat(e.target.value) || 0 }))} />
-            </div>
-            )}
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="px-6 py-4 border-t shrink-0">
             <Button variant="outline" onClick={() => setIsActivityDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveActivity} disabled={isPending}>{isPending ? "Guardando..." : "Guardar Actividad"}</Button>
+            <Button onClick={handleSaveActivity} disabled={isPending} className="gap-2">
+              <Save className="w-4 h-4" />
+              {isPending ? "Guardando..." : "Guardar Actividad"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog open={isBulkGradeDialogOpen} onOpenChange={setIsBulkGradeDialogOpen}>
-        <DialogContent className="max-w-full sm:max-w-full w-screen h-screen m-0 p-0 rounded-none flex flex-col overflow-hidden bg-background border-0">
+        <DialogContent className="!fixed !inset-0 !top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !m-0 !p-0 !rounded-none flex flex-col overflow-hidden bg-background !border-0">
           <DialogHeader className="p-6 pb-4 border-b shrink-0">
             <DialogTitle>Asignación Masiva de Notas</DialogTitle>
             <DialogDescription>

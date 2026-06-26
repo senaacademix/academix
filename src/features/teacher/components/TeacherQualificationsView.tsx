@@ -11,7 +11,9 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
     getTeacherQualificationsAction,
     updateTeacherQualificationsAction,
-    publishTeacherQualificationsAction
+    publishTeacherQualificationsAction,
+    adminLockTeacherQualificationsAction,
+    unlockTeacherQualificationsAction
 } from "../actions/qualificationActions";
 import {
     AlertDialog,
@@ -26,7 +28,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { authClient } from "@/lib/auth-client";
 
-export function TeacherQualificationsView() {
+interface TeacherQualificationsViewProps {
+    teacherId?: string;
+    isAdminMode?: boolean;
+    programId?: string;
+    onAdminActionComplete?: () => void;
+}
+
+export function TeacherQualificationsView({ teacherId, isAdminMode = false, programId, onAdminActionComplete }: TeacherQualificationsViewProps) {
     const { data: session } = authClient.useSession();
     const [locked, setLocked] = useState(false);
     const [qualPrograms, setQualPrograms] = useState<any[]>([]);
@@ -37,17 +46,19 @@ export function TeacherQualificationsView() {
     const [lastModifiedBy, setLastModifiedBy] = useState<{name: string, role: string} | null>(null);
     const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
+    const targetTeacherId = isAdminMode ? teacherId : session?.user?.id;
+
     useEffect(() => {
-        if (session?.user?.id) {
+        if (targetTeacherId) {
             loadQualifications();
         }
-    }, [session?.user?.id]);
+    }, [targetTeacherId]);
 
     const loadQualifications = async () => {
-        if (!session?.user?.id) return;
+        if (!targetTeacherId) return;
         setLoading(true);
         try {
-            const data = await getTeacherQualificationsAction(session.user.id);
+            const data = await getTeacherQualificationsAction(targetTeacherId);
             if (data) {
                 setQualPrograms((data as any).programs || []);
                 setSelectedQualCourses(((data as any).qualifiedCourses || []).map((c: any) => c.id));
@@ -63,10 +74,10 @@ export function TeacherQualificationsView() {
     };
 
     const handleSaveChanges = () => {
-        if (!session?.user?.id) return;
+        if (!targetTeacherId) return;
         startTransition(async () => {
             try {
-                await updateTeacherQualificationsAction(session.user.id, selectedQualCourses);
+                await updateTeacherQualificationsAction(targetTeacherId, selectedQualCourses);
                 toast.success("Borrador de materias guardado exitosamente");
                 await loadQualifications();
             } catch (e: any) {
@@ -76,18 +87,47 @@ export function TeacherQualificationsView() {
     };
 
     const handlePublish = () => {
-        if (!session?.user?.id) return;
+        if (!targetTeacherId) return;
         startTransition(async () => {
             try {
                 // First save the current state
-                await updateTeacherQualificationsAction(session.user.id, selectedQualCourses);
+                await updateTeacherQualificationsAction(targetTeacherId, selectedQualCourses);
                 // Then publish/lock
-                await publishTeacherQualificationsAction(session.user.id);
+                await publishTeacherQualificationsAction(targetTeacherId);
                 toast.success("Materias publicadas y bloqueadas con éxito");
                 setPublishDialogOpen(false);
                 await loadQualifications();
             } catch (e: any) {
                 toast.error(e.message || "Error al publicar las materias");
+            }
+        });
+    };
+
+    const handleAdminLock = () => {
+        if (!targetTeacherId) return;
+        startTransition(async () => {
+            try {
+                await updateTeacherQualificationsAction(targetTeacherId, selectedQualCourses);
+                await adminLockTeacherQualificationsAction(targetTeacherId);
+                toast.success("Materias guardadas y bloqueadas con éxito");
+                await loadQualifications();
+                if (onAdminActionComplete) onAdminActionComplete();
+            } catch (e: any) {
+                toast.error(e.message || "Error al bloquear materias");
+            }
+        });
+    };
+
+    const handleAdminUnlock = () => {
+        if (!targetTeacherId) return;
+        startTransition(async () => {
+            try {
+                await unlockTeacherQualificationsAction(targetTeacherId);
+                toast.success("Materias desbloqueadas con éxito");
+                await loadQualifications();
+                if (onAdminActionComplete) onAdminActionComplete();
+            } catch (e: any) {
+                toast.error(e.message || "Error al desbloquear materias");
             }
         });
     };
@@ -100,24 +140,40 @@ export function TeacherQualificationsView() {
         );
     }
 
+    const filteredQualPrograms = (isAdminMode && programId) 
+        ? qualPrograms.filter(p => p.id === programId) 
+        : qualPrograms;
+
     return (
         <div className="space-y-6">
             {/* Status alerts */}
             {locked ? (
                 <div className="flex items-start gap-3 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
                     <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-                    <div>
+                    <div className="flex-1">
                         <p className="font-semibold text-sm">Materias Publicadas y Bloqueadas</p>
                         <p className="text-xs opacity-90 mt-0.5">
-                            Las materias que dictas están registradas y bloqueadas para edición. Si necesitas realizar alguna modificación, por favor ponte en contacto con el administrador de la institución para que proceda a desbloquear tu perfil.
+                            {isAdminMode 
+                                ? "El profesor ha publicado sus materias y no puede editarlas." 
+                                : "Las materias que dictas están registradas y bloqueadas para edición. Si necesitas realizar alguna modificación, por favor ponte en contacto con el administrador de la institución para que proceda a desbloquear tu perfil."}
                         </p>
                         {lastModifiedBy && (
                             <p className="text-[11px] mt-2 font-medium bg-emerald-600/10 border border-emerald-600/20 px-2 py-1 rounded-md inline-block">
-                                Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Tú"}) 
+                                Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Profesor"}) 
                                 {updatedAt && ` - ${updatedAt.toLocaleDateString()} ${updatedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
                             </p>
                         )}
                     </div>
+                    {isAdminMode && (
+                        <Button 
+                            size="sm" 
+                            onClick={handleAdminUnlock} 
+                            disabled={isPending}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                        >
+                            Desbloquear
+                        </Button>
+                    )}
                 </div>
             ) : (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-300">
@@ -126,17 +182,19 @@ export function TeacherQualificationsView() {
                         <div>
                             <p className="font-semibold text-sm">Materias en Modo Borrador</p>
                             <p className="text-xs opacity-90 mt-0.5">
-                                Puedes configurar qué materias de tu programa estás en capacidad de dictar. Recuerda hacer clic en **Publicar** para enviarla de forma oficial; esto bloqueará tus cambios para edición.
+                                {isAdminMode
+                                    ? "El profesor aún puede editar sus materias."
+                                    : "Puedes configurar qué materias de tu programa estás en capacidad de dictar. Recuerda hacer clic en **Publicar** para enviarla de forma oficial; esto bloqueará tus cambios para edición."}
                             </p>
                             {lastModifiedBy && (
                                 <p className="text-[11px] mt-2 font-medium bg-amber-600/10 border border-amber-600/20 px-2 py-1 rounded-md inline-block">
-                                    Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Tú"}) 
+                                    Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Profesor"}) 
                                     {updatedAt && ` - ${updatedAt.toLocaleDateString()} ${updatedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
                                 </p>
                             )}
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-auto">
                         <Button 
                             variant="outline" 
                             size="sm" 
@@ -144,35 +202,46 @@ export function TeacherQualificationsView() {
                             disabled={isPending}
                             className="bg-background text-foreground hover:bg-muted"
                         >
-                            Guardar Borrador
+                            {isAdminMode ? "Guardar Cambios" : "Guardar Borrador"}
                         </Button>
-                        <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
-                            <AlertDialogTrigger asChild>
-                                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
-                                    Publicar y Bloquear
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle className="flex items-center gap-2">
-                                        <Lock className="w-5 h-5 text--600 dark:text--400" />
-                                        ¿Confirmas publicar tus materias?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Una vez publicadas, tus materias quedarán **bloqueadas** y no podrás realizar más cambios. Solo un administrador podrá desbloquearlas para que puedas editar nuevamente.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                        onClick={handlePublish}
-                                        className="bg-amber-600 hover:bg-amber-700 text-white"
-                                    >
-                                        Confirmar y Bloquear
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
+                        {isAdminMode ? (
+                            <Button 
+                                size="sm" 
+                                onClick={handleAdminLock} 
+                                disabled={isPending}
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                            >
+                                Aprobar y Bloquear
+                            </Button>
+                        ) : (
+                            <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+                                <AlertDialogTrigger asChild>
+                                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+                                        Publicar y Bloquear
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle className="flex items-center gap-2">
+                                            <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                            ¿Confirmas publicar tus materias?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Una vez publicadas, tus materias quedarán **bloqueadas** y no podrás realizar más cambios. Solo un administrador podrá desbloquearlas para que puedas editar nuevamente.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction 
+                                            onClick={handlePublish}
+                                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                                        >
+                                            Confirmar y Bloquear
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
                     </div>
                 </div>
             )}
@@ -188,13 +257,13 @@ export function TeacherQualificationsView() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6">
-                    {qualPrograms.length === 0 ? (
+                    {filteredQualPrograms.length === 0 ? (
                         <div className="py-8 text-center text-sm text-muted-foreground italic border border-dashed rounded-lg">
-                            No tienes programas de formación asociados en tu perfil.
+                            No tienes programas de formación asociados en tu perfil (o no pertenecen al programa seleccionado).
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {qualPrograms.map(program => (
+                            {filteredQualPrograms.map(program => (
                                 <div key={program.id} className="space-y-3 p-4 bg-muted/5 rounded-xl border border-border/30">
                                     <h4 className="font-bold text-sm text-primary uppercase tracking-wider border-b border-border/30 pb-2">{program.name}</h4>
                                     <div className="space-y-4">

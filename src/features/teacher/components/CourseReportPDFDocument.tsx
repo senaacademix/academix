@@ -304,6 +304,22 @@ const styles = StyleSheet.create({
         padding: 10,
         marginBottom: 10,
     },
+    remarkCardCitation: {
+        backgroundColor: COLORS.blue50,
+        borderColor: '#93c5fd',
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: 10,
+        marginBottom: 10,
+    },
+    remarkCardOther: {
+        backgroundColor: COLORS.gray50,
+        borderColor: COLORS.gray200,
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: 10,
+        marginBottom: 10,
+    },
     remarkHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -328,6 +344,30 @@ const styles = StyleSheet.create({
     remarkBadgeCongrats: {
         backgroundColor: '#dcfce3',
         color: COLORS.green800,
+        fontSize: 7,
+        fontWeight: 700,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        borderRadius: 2,
+        textTransform: 'uppercase',
+        alignSelf: 'flex-start',
+        marginBottom: 2,
+    },
+    remarkBadgeCitation: {
+        backgroundColor: '#dbeafe',
+        color: COLORS.blue900,
+        fontSize: 7,
+        fontWeight: 700,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        borderRadius: 2,
+        textTransform: 'uppercase',
+        alignSelf: 'flex-start',
+        marginBottom: 2,
+    },
+    remarkBadgeOther: {
+        backgroundColor: '#e5e7eb',
+        color: COLORS.secondary,
         fontSize: 7,
         fontWeight: 700,
         paddingHorizontal: 4,
@@ -586,13 +626,26 @@ export const CourseReportPDFDocument = ({
                         {remarks.map(remark => (
                             <View
                                 key={remark.id}
-                                style={remark.type === "ATTENTION" ? styles.remarkCardAttention : styles.remarkCardCongrats}
+                                style={
+                                    remark.type === "ATTENTION" ? styles.remarkCardAttention :
+                                    remark.type === "COMMENDATION" ? styles.remarkCardCongrats :
+                                    remark.type === "CITATION" ? styles.remarkCardCitation :
+                                    styles.remarkCardOther
+                                }
                                 wrap={false}
                             >
                                 <View style={styles.remarkHeader}>
                                     <View style={styles.remarkTitleBlock}>
-                                        <Text style={remark.type === "ATTENTION" ? styles.remarkBadgeAttention : styles.remarkBadgeCongrats}>
-                                            {remark.type === "ATTENTION" ? "Llamado de Atención" : "Felicitación"}
+                                        <Text style={
+                                            remark.type === "ATTENTION" ? styles.remarkBadgeAttention :
+                                            remark.type === "COMMENDATION" ? styles.remarkBadgeCongrats :
+                                            remark.type === "CITATION" ? styles.remarkBadgeCitation :
+                                            styles.remarkBadgeOther
+                                        }>
+                                            {remark.type === "ATTENTION" ? "Llamado de Atención" :
+                                             remark.type === "COMMENDATION" ? "Felicitación" :
+                                             remark.type === "CITATION" ? "Citación" :
+                                             "Otra"}
                                         </Text>
                                         <Text style={styles.remarkTitle}>{remark.title}</Text>
                                     </View>

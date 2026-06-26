@@ -7,15 +7,24 @@ import MDEditor from "@uiw/react-md-editor";
 import { authClient } from "@/lib/auth-client";
 import { getRoleFromUser } from "@/features/auth/services/authService";
 import Link from "next/link";
+import { formatName } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LampContainer } from "@/components/ui/lamp";
 import { motion } from "framer-motion";
 
-export default function HomePage() {
+interface HomePageProps {
+    initialUserName?: string;
+    initialUserRole?: string;
+    initialDate?: string;
+}
+
+export default function HomePage({ initialUserName, initialUserRole, initialDate }: HomePageProps) {
     const [settings, setSettings] = useState<{ institutionName?: string | null }>({});
     const [mounted, setMounted] = useState(false);
     const { data: session } = authClient.useSession();
-    const role = getRoleFromUser(session?.user);
+    
+    const role = initialUserRole || getRoleFromUser(session?.user);
+    const userName = initialUserName || session?.user?.name;
 
     // Prevent hydration mismatch
     useEffect(() => {
@@ -33,21 +42,20 @@ export default function HomePage() {
     }, []);
 
     const getNavigationItems = () => {
-        // Only return items if mounted to prevent hydration mismatch
-        if (!mounted) {
+        const activeRole = role;
+        if (!activeRole) {
             return [];
         }
 
-        if (role === "admin") {
+        if (activeRole === "admin") {
             return [
-                { title: "Estudiantes", url: "/dashboard/admin/users", icon: Users, color: "text-blue-500" },
-                { title: "Programas de Formación", url: "/dashboard/admin/courses", icon: BookOpen, color: "text-green-500" },
-                { title: "Ambientes de Formación", url: "/dashboard/admin/environments", icon: Building2, color: "text-orange-500" },
+                { title: "Gestión de Estudiantes", url: "/dashboard/admin/users", icon: Users, color: "text-blue-500" },
+                { title: "Estructura Académica", url: "/dashboard/admin/courses", icon: BookOpen, color: "text-green-500" },
                 { title: "Banco de Profesores", url: "/dashboard/admin/teachers", icon: GraduationCap, color: "text-yellow-500" },
                 { title: "Programación de Horarios", url: "/dashboard/admin/schedule", icon: Calendar, color: "text-teal-500" },
                 { title: "Configuración", url: "/dashboard/admin/settings", icon: Settings2, color: "text-gray-500" },
             ];
-        } else if (role === "teacher") {
+        } else if (activeRole === "teacher") {
             return [
                 { title: "Mis Grupos", url: "/dashboard/teacher", icon: Users, color: "text-blue-500" },
                 { title: "Horario y Config.", url: "/dashboard/teacher/schedule", icon: CalendarClock, color: "text-purple-500" },
@@ -56,7 +64,6 @@ export default function HomePage() {
             // Student
             return [
                 { title: "Registro Académico", url: "/dashboard/student/records", icon: ClipboardList, color: "text-blue-500" },
-
                 { title: "Horario", url: "/dashboard/student/schedule", icon: CalendarClock, color: "text-purple-500" },
             ];
         }
@@ -86,10 +93,10 @@ export default function HomePage() {
 
                             <div className="mt-6 space-y-2 text-slate-900/90 dark:text-white/90">
                                 <h2 className="text-xl md:text-2xl font-medium drop-shadow-md">
-                                    ¡Hola, {mounted ? (session?.user?.name?.split(' ')[0] || 'Usuario') : 'Usuario'}!
+                                    ¡Hola, {userName ? formatName(userName) : 'Usuario'}!
                                 </h2>
                                 <p className="text-sm md:text-base opacity-90 capitalize drop-shadow-md">
-                                    {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                    {initialDate || (mounted ? new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')}
                                 </p>
                             </div>
                         </motion.div>

@@ -13,6 +13,7 @@ export const courseService = {
         externalUrl?: string;
         docProjectId?: string;
         periodId?: string;
+        weeklyHours?: number;
         schedules?: Array<{
             dayOfWeek: string;
             startTime: string;
@@ -46,6 +47,7 @@ export const courseService = {
         externalUrl?: string;
         docProjectId?: string;
         periodId?: string;
+        weeklyHours?: number;
         schedules?: Array<{
             dayOfWeek: string;
             startTime: string;
@@ -97,6 +99,7 @@ export const courseService = {
         externalUrl?: string | null;
         docProjectId?: string | null;
         periodId?: string | null;
+        weeklyHours?: number | null;
         schedules?: Array<{
             dayOfWeek: string;
             startTime: string;
@@ -193,7 +196,22 @@ export const courseService = {
                         teacherId: teacherId
                     },
                     include: {
-                        schedules: true
+                        schedules: true,
+                        teacher: {
+                            select: {
+                                name: true,
+                                profile: { select: { nombres: true, apellido: true } }
+                            }
+                        },
+                        sharedContent: {
+                            orderBy: { createdAt: "desc" },
+                            select: {
+                                id: true,
+                                title: true,
+                                links: true,
+                                createdAt: true,
+                            }
+                        }
                     }
                 }
             }

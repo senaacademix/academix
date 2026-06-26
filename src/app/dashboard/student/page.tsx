@@ -17,11 +17,19 @@ export default async function Page() {
 
   const themes = await getAvailableThemes();
 
+  const formattedDate = new Date().toLocaleDateString('es-ES', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+  });
+
   return <StudentDashboard
     availableCourses={availableCourses}
     myEnrollments={myEnrollments}
     studentName={session.user.name}
     pendingEnrollments={pendingEnrollments}
     themes={themes}
+    formattedDate={formattedDate}
   />;
 }

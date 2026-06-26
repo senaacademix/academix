@@ -20,13 +20,15 @@ export function StudentDashboard({
     myEnrollments,
     studentName,
     pendingEnrollments = [],
-    themes = []
+    themes = [],
+    formattedDate
 }: {
     availableCourses: any[],
     myEnrollments: any[],
     studentName: string,
     pendingEnrollments?: string[],
-    themes?: any[]
+    themes?: any[],
+    formattedDate?: string
 }) {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -35,6 +37,12 @@ export function StudentDashboard({
     const selectedCourse = searchParams.get("courseId") || "";
     const activeTab = searchParams.get("tab") || "activities";
     const isInsideCourse = !!selectedCourse;
+
+    const [mounted, setMounted] = useState(false);
+    
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // States for password change suggestion
     const [suggestPasswordChange, setSuggestPasswordChange] = useState(false);
@@ -116,10 +124,12 @@ export function StudentDashboard({
         )}>
             {/* Header - Hidden when inside a course */}
             {!isInsideCourse && (
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-bold tracking-tight">¡Hola, {formatName(studentName)}!</h1>
-                    <p className="text-muted-foreground">
-                        Aquí tienes un resumen de tu actividad académica en AcademiX.
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        ¡Hola, {studentName ? formatName(studentName) : 'Estudiante'}!
+                    </h1>
+                    <p className="text-sm text-muted-foreground capitalize">
+                        {formattedDate || (mounted ? new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')} — Aquí tienes un resumen de tu actividad académica en AcademiX.
                     </p>
                 </div>
             )}
@@ -183,8 +193,8 @@ export function StudentDashboard({
                     <Tabs defaultValue="my-courses" className="space-y-6">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <TabsList className="grid w-full sm:w-auto grid-cols-2">
-                                <TabsTrigger value="my-courses">Mis Cursos</TabsTrigger>
-                                <TabsTrigger value="catalog">Catálogo de Cursos</TabsTrigger>
+                                <TabsTrigger value="my-courses">Mis Materias</TabsTrigger>
+                                <TabsTrigger value="catalog">Catálogo de Materias</TabsTrigger>
                             </TabsList>
                         </div>
 

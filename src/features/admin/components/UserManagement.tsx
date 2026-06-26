@@ -45,28 +45,19 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-} from "@/components/ui/sheet";
+
 import {
     Search, Trash2, Eye, UserCog, Users as UsersIcon, UserPlus, ChevronLeft, ChevronRight,
     BookOpen, Calendar, MessageSquare, FileText, CheckCircle2, AlertCircle, X, GraduationCap,
-    Download, FileSpreadsheet, File as FileIcon, Key
+    Key
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, getUserDetailsAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction } from "@/app/admin-actions";
-import { pdf } from "@react-pdf/renderer";
-import * as XLSX from "xlsx";
-import { UserReportDocument } from "./UserReportDocument";
+import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction } from "@/app/admin-actions";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { formatName } from "@/lib/utils";
-import { StudentAnalyticsPanel } from "@/components/analytics/StudentAnalyticsPanel";
+import { StudentRecords } from "@/features/student/components/StudentRecords";
 import { GroupAnalyticsPanel } from "@/components/analytics/GroupAnalyticsPanel";
 import { getGroupAttendanceHistory, getGroupRemarksHistory } from "@/features/teacher/actions/groupActions";
 
@@ -98,15 +89,40 @@ interface UserManagementProps {
     initialUsers: User[];
     totalCount: number;
     initialGroupId?: string;
-    initialGroups?: { id: string, name: string }[];
+    initialGroups?: { id: string, name: string, programId?: string }[];
+    initialPrograms?: { id: string, name: string }[];
 }
 
-export function UserManagement({ initialUsers, totalCount, initialGroupId = "all", initialGroups = [] }: UserManagementProps) {
+export function UserManagement({ 
+    initialUsers, 
+    totalCount, 
+    initialGroupId = "all", 
+    initialGroups = [],
+    initialPrograms = []
+}: UserManagementProps) {
     const [users, setUsers] = useState<User[]>(initialUsers);
     const [searchQuery, setSearchQuery] = useState("");
     const [roleFilter, setRoleFilter] = useState<string>("student");
-    const [groupFilter, setGroupFilter] = useState<string>(initialGroupId);
-    const [groupsList, setGroupsList] = useState<{ id: string, name: string }[]>(initialGroups);
+    const [programFilter, setProgramFilter] = useState<string>(() => {
+        if (initialGroupId && initialGroupId !== "all") {
+            const group = initialGroups.find(g => g.id === initialGroupId);
+            if (group?.programId) return group.programId;
+        }
+        return initialPrograms[0]?.id || "none";
+    });
+    const [groupFilter, setGroupFilter] = useState<string>(() => {
+        if (initialGroupId && initialGroupId !== "all") {
+            return initialGroupId;
+        }
+        const defaultProgramId = initialPrograms[0]?.id;
+        if (defaultProgramId) {
+            const group = initialGroups.find(g => g.programId === defaultProgramId);
+            if (group) return group.id;
+        }
+        return initialGroups[0]?.id || "none";
+    });
+    const [programsList, setProgramsList] = useState<{ id: string, name: string }[]>(initialPrograms);
+    const [groupsList, setGroupsList] = useState<{ id: string, name: string, programId?: string }[]>(initialGroups);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -115,8 +131,7 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
     const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
     const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
-    const [fullUserDetails, setFullUserDetails] = useState<any>(null);
-    const [loadingDetails, setLoadingDetails] = useState(false);
+
     
     // Group analytics state
     const [fullAnalyticsData, setFullAnalyticsData] = useState<any>(null);
@@ -148,8 +163,9 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
 
     // Load group analytics when group filter changes
     useEffect(() => {
-        if (showGroupAnalytics && groupFilter && groupFilter !== "all") {
+        if (showGroupAnalytics && groupFilter && groupFilter !== "all" && groupFilter !== "none") {
             setLoadingGroupAnalytics(true);
+            setFullAnalyticsData(null);
             getComprehensiveGroupAnalyticsAction(groupFilter).then((data) => {
                 setFullAnalyticsData(data);
                 setLoadingGroupAnalytics(false);
@@ -164,13 +180,14 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
 
     // Groups are loaded from props
 
-    const refreshUsers = async (page = 1, overrides?: { role?: string, group?: string, search?: string }) => {
+    const refreshUsers = async (page = 1, overrides?: { role?: string, group?: string, program?: string, search?: string }) => {
         setIsLoadingPage(true);
         try {
             const offset = (page - 1) * usersPerPage;
             // Use overrides if provided, otherwise current state
             const roleIdx = overrides?.role !== undefined ? overrides.role : roleFilter;
             const groupIdx = overrides?.group !== undefined ? overrides.group : groupFilter;
+            const programIdx = overrides?.program !== undefined ? overrides.program : programFilter;
             const searchIdx = overrides?.search !== undefined ? overrides.search : searchQuery;
 
             const { users: newUsers, total } = await getAllUsersAction({
@@ -178,6 +195,7 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
                 offset,
                 role: roleIdx !== "all" ? roleIdx as any : undefined,
                 groupId: groupIdx !== "all" ? groupIdx : undefined,
+                programId: programIdx !== "all" ? programIdx : undefined,
                 search: searchIdx || undefined
             });
             setUsers(newUsers);
@@ -190,16 +208,36 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
         }
     };
 
-    const onFilterChange = (type: 'role' | 'group' | 'search', value: string) => {
-        if (type === 'role') setRoleFilter(value);
-        if (type === 'group') setGroupFilter(value);
-        if (type === 'search') setSearchQuery(value);
+    const onFilterChange = (type: 'role' | 'group' | 'program' | 'search', value: string) => {
+        let currentRole = roleFilter;
+        let currentGroup = groupFilter;
+        let currentProgram = programFilter;
+        let currentSearch = searchQuery;
+
+        if (type === 'role') {
+            setRoleFilter(value);
+            currentRole = value;
+        } else if (type === 'group') {
+            setGroupFilter(value);
+            currentGroup = value;
+        } else if (type === 'program') {
+            setProgramFilter(value);
+            currentProgram = value;
+            const filteredGroups = groupsList.filter(g => g.programId === value);
+            const defaultGroupForProgram = filteredGroups.length > 0 ? filteredGroups[0].id : "none";
+            setGroupFilter(defaultGroupForProgram);
+            currentGroup = defaultGroupForProgram;
+        } else if (type === 'search') {
+            setSearchQuery(value);
+            currentSearch = value;
+        }
 
         startTransition(() => {
             refreshUsers(1, {
-                role: type === 'role' ? value : undefined,
-                group: type === 'group' ? value : undefined,
-                search: type === 'search' ? value : undefined
+                role: currentRole,
+                group: currentGroup,
+                program: currentProgram,
+                search: currentSearch
             });
         });
     };
@@ -402,78 +440,7 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
         });
     };
 
-    const handleExportPDF = async () => {
-        if (!selectedUser || !fullUserDetails) return;
 
-        try {
-            const blob = await pdf(
-                <UserReportDocument user={selectedUser} details={fullUserDetails} />
-            ).toBlob();
-
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `reporte_${formatName(selectedUser.name, selectedUser.profile).replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            toast.success("PDF generado correctamente");
-        } catch (error) {
-            console.error("PDF Error:", error);
-            toast.error("Error al generar PDF");
-        }
-    };
-
-    const handleExportExcel = () => {
-        if (!selectedUser || !fullUserDetails) return;
-
-        const wb = XLSX.utils.book_new();
-
-        // Sheet 1: General Info
-        const infoData = [
-            ["ID", selectedUser.id],
-            ["Nombre", formatName(selectedUser.name, selectedUser.profile)],
-            ["Email", selectedUser.email],
-            ["Rol", selectedUser.role],
-            ["Fecha Registro", format(new Date(selectedUser.createdAt), "dd/MM/yyyy")]
-        ];
-        // Add profile info if exists
-        if (selectedUser.profile) {
-            infoData.push(["Identificación", selectedUser.profile.identificacion || "-"]);
-            infoData.push(["Teléfono", selectedUser.profile.telefono || "-"]);
-        }
-
-        const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-        XLSX.utils.book_append_sheet(wb, wsInfo, "Información General");
-
-        // Sheet 2: Cursos
-        if (fullUserDetails.courses?.length > 0) {
-            const courseData = fullUserDetails.courses.map((c: any) => ({
-                Curso: c.title,
-                FechaInscripcion: format(new Date(c.createdAt), "dd/MM/yyyy"),
-                Estado: c.status === 'APPROVED' ? 'Activo' : c.status
-            }));
-            const wsCourses = XLSX.utils.json_to_sheet(courseData);
-            XLSX.utils.book_append_sheet(wb, wsCourses, "Cursos");
-        }
-
-        // Sheet 3: Asistencia
-        if (fullUserDetails.attendances?.length > 0) {
-            const attendanceData = fullUserDetails.attendances.map((a: any) => ({
-                Fecha: format(new Date(a.date), "dd/MM/yyyy HH:mm"),
-                Curso: a.course?.title || "N/A",
-                Estado: a.status,
-                Justificacion: a.justification || "-"
-            }));
-            const wsAttendance = XLSX.utils.json_to_sheet(attendanceData);
-            XLSX.utils.book_append_sheet(wb, wsAttendance, "Asistencia");
-        }
-
-        XLSX.writeFile(wb, `reporte_${formatName(selectedUser.name, selectedUser.profile).replace(/\s+/g, '_')}.xlsx`);
-        toast.success("Excel generado correctamente");
-    };
 
     return (
         <div className="space-y-6">
@@ -531,16 +498,31 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
                                 className="pl-10"
                             />
                         </div>
+                        <Select value={programFilter} onValueChange={(val) => onFilterChange('program', val)}>
+                            <SelectTrigger className="w-full md:w-[250px]">
+                                <SelectValue placeholder="Filtrar por programa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {programsList.map((program) => (
+                                    <SelectItem key={program.id} value={program.id}>
+                                        {program.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <Select value={groupFilter} onValueChange={(val) => onFilterChange('group', val)}>
                             <SelectTrigger className="w-full md:w-[250px]">
                                 <SelectValue placeholder="Filtrar por grupo" />
                             </SelectTrigger>
                             <SelectContent>
-                                {groupsList.map((group) => (
-                                    <SelectItem key={group.id} value={group.id}>
-                                        {group.name}
-                                    </SelectItem>
-                                ))}
+                                {groupsList
+                                    .filter((g) => programFilter === "all" || g.programId === programFilter)
+                                    .map((group) => (
+                                        <SelectItem key={group.id} value={group.id}>
+                                            {group.name}
+                                        </SelectItem>
+                                    ))
+                                }
                             </SelectContent>
                         </Select>
                         <Button 
@@ -663,27 +645,17 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
                                                     >
                                                         <Mail className="h-4 w-4" />
                                                     </Button></TooltipTrigger><TooltipContent><p>Enviar correo</p></TooltipContent></Tooltip>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => {
-                                                            setSelectedUser(user);
-                                                            setLoadingDetails(true);
-                                                            setDetailsSheetOpen(true);
-                                                            startTransition(async () => {
-                                                                try {
-                                                                    const details = await getUserDetailsAction(user.id);
-                                                                    setFullUserDetails(details);
-                                                                } catch (error) {
-                                                                    toast.error("Error al cargar detalles");
-                                                                } finally {
-                                                                    setLoadingDetails(false);
-                                                                }
-                                                            });
-                                                        }}
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
+                                                    <Tooltip><TooltipTrigger asChild><Button
+                                                         variant="ghost"
+                                                         size="icon"
+                                                         onClick={() => {
+                                                             setSelectedUser(user);
+                                                             setDetailsSheetOpen(true);
+                                                         }}
+                                                         className="text-primary hover:text-primary/80"
+                                                     >
+                                                         <GraduationCap className="h-4 w-4" />
+                                                     </Button></TooltipTrigger><TooltipContent><p>Ver Registro Académico</p></TooltipContent></Tooltip>
                                                     <Tooltip><TooltipTrigger asChild><Button
                                                                                                             variant="ghost"
                                                                                                             size="icon"
@@ -846,410 +818,28 @@ export function UserManagement({ initialUsers, totalCount, initialGroupId = "all
                 </DialogContent>
             </Dialog>
 
-            {/* User Details Sheet */}
-            <Sheet open={detailsSheetOpen} onOpenChange={(open) => {
-                setDetailsSheetOpen(open);
-                if (!open) setFullUserDetails(null);
-            }}>
-                <SheetContent className="w-full! max-w-none! h-full p-0 overflow-hidden" side="right">
-                    <SheetTitle className="sr-only">Detalles del Usuario</SheetTitle>
+            {/* Student Academic Record Dialog */}
+            <Dialog open={detailsSheetOpen} onOpenChange={(open) => !open && setDetailsSheetOpen(false)}>
+                <DialogContent className="!max-w-[100vw] sm:!max-w-[100vw] w-screen h-screen m-0 p-6 !rounded-none overflow-y-auto border-none bg-background flex flex-col">
                     {selectedUser && (
-                        <div className="flex flex-col h-full bg-background">
-                            {/* Sheet Header - Minimalist */}
-                            <div className="absolute top-4 right-4 z-50">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-10 w-10 bg-white/50 backdrop-blur hover:bg-white/80 rounded-full"
-                                    onClick={() => setDetailsSheetOpen(false)}
-                                >
-                                    <X className="h-6 w-6" />
-                                </Button>
-                            </div>
-
-                            {/* Scrollable Content */}
-                            <ScrollArea className="flex-1">
-                                <div className="w-full max-w-7xl mx-auto p-6 md:p-10 space-y-8">
-
-                                    {/* User Header Info - Moved here */}
-                                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b">
-                                        <div className="flex items-center gap-6">
-                                            <UserAvatar
-                                                src={selectedUser.image}
-                                                alt={formatName(selectedUser.name, selectedUser.profile)}
-                                                fallbackText={formatName(selectedUser.name, selectedUser.profile)}
-                                                className="h-24 w-24 text-2xl"
-                                            />
-                                            <div>
-                                                <h1 className="text-3xl font-bold">{formatName(selectedUser.name, selectedUser.profile)}</h1>
-                                                <p className="text-muted-foreground text-lg">{selectedUser.email}</p>
-                                                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                    <Badge variant={getRoleBadgeVariant(selectedUser.role)} className="px-3 py-1 text-sm">
-                                                        {getRoleLabel(selectedUser.role)}
-                                                    </Badge>
-                                                    {selectedUser.group && (
-                                                        <Badge variant="outline" className="px-3 py-1 text-sm bg-primary/5 border-primary/20">
-                                                            Grupo: {selectedUser.group.name}
-                                                        </Badge>
-                                                    )}
-                                                    <span className="text-sm text-muted-foreground ml-2">
-                                                        Registrado: {format(new Date(selectedUser.createdAt), "PPP")}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="flex gap-2">
-                                            <Button variant="outline" onClick={handleExportPDF} disabled={loadingDetails}>
-                                                <FileIcon className="mr-2 h-4 w-4 text-red-500" />
-                                                PDF
-                                            </Button>
-                                            <Button variant="outline" onClick={handleExportExcel} disabled={loadingDetails}>
-                                                <FileSpreadsheet className="mr-2 h-4 w-4 text--600 dark:text--400" />
-                                                Excel
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    <Tabs defaultValue="overview" className="w-full space-y-6">
-                                        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 bg-muted/30">
-                                            <TabsTrigger value="overview" className="py-3">Vista General</TabsTrigger>
-
-                                            {(selectedUser.role === 'teacher' || selectedUser.role === 'admin') && (
-                                                <TabsTrigger value="courses-created" className="py-2">Clases</TabsTrigger>
-                                            )}
-
-                                            {selectedUser.role === 'student' && (
-                                                <>
-                                                    <TabsTrigger value="courses" className="py-2">Cursos</TabsTrigger>
-                                                    <TabsTrigger value="attendance" className="py-2">Asistencia</TabsTrigger>
-                                                    <TabsTrigger value="remarks" className="py-2">Observaciones</TabsTrigger>
-                                                    <TabsTrigger value="analytics" className="py-2 text-primary">Analítica</TabsTrigger>
-                                                </>
-                                            )}
-                                        </TabsList>
-
-                                        <TabsContent value="overview" className="space-y-6">
-                                            <div className="grid gap-6 md:grid-cols-2">
-                                                <Card>
-                                                    <CardHeader>
-                                                        <CardTitle className="flex items-center gap-2">
-                                                            <UserCog className="h-5 w-5" />
-                                                            Información Personal
-                                                        </CardTitle>
-                                                    </CardHeader>
-                                                    <CardContent className="space-y-4">
-                                                        {selectedUser.profile ? (
-                                                            <div className="grid gap-4">
-                                                                <div className="grid grid-cols-2 gap-4">
-                                                                    <div>
-                                                                        <div className="text-sm font-medium text-muted-foreground">Identificación</div>
-                                                                        <div>{selectedUser.profile.identificacion || "No registrada"}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="text-sm font-medium text-muted-foreground">Teléfono</div>
-                                                                        <div>{selectedUser.profile.telefono || "No registrado"}</div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-4">
-                                                                    <div>
-                                                                        <div className="text-sm font-medium text-muted-foreground">Nombres</div>
-                                                                        <div>{selectedUser.profile.nombres || "-"}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="text-sm font-medium text-muted-foreground">Apellidos</div>
-                                                                        <div>{selectedUser.profile.apellido || "-"}</div>
-                                                                    </div>
-                                                                </div>
-                                                                <div>
-                                                                    <div className="text-sm font-medium text-muted-foreground mb-1">Habeas Data</div>
-                                                                    {selectedUser.profile.dataProcessingConsent ? (
-                                                                        <Badge variant="default" className="bg-green-600">Aceptado</Badge>
-                                                                    ) : (
-                                                                        <Badge variant="outline" className="text-orange-500 border-orange-500">Pendiente</Badge>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-center text-muted-foreground py-4">
-                                                                Perfil no completado
-                                                            </div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
-
-                                                <Card>
-                                                    <CardHeader>
-                                                        <CardTitle className="flex items-center gap-2">
-                                                            <CheckCircle2 className="h-5 w-5" />
-                                                            Estado del Sistema
-                                                        </CardTitle>
-                                                    </CardHeader>
-                                                    <CardContent className="space-y-4">
-                                                        <div className="flex justify-between items-center bg-muted/50 p-3 rounded-md">
-                                                            <span className="text-sm font-medium">Cuenta Activa</span>
-                                                            <Switch
-                                                                checked={!selectedUser.banned}
-                                                                onCheckedChange={() => handleToggleBan(selectedUser.id, selectedUser.banned || false)}
-                                                                disabled={isPending}
-                                                            />
-                                                        </div>
-                                                        <div className="flex justify-between items-center bg-muted/50 p-3 rounded-md">
-                                                            <span className="text-sm font-medium">Fecha de Registro</span>
-                                                            <span className="text-sm text-muted-foreground">
-                                                                {format(new Date(selectedUser.createdAt), "PPP")}
-                                                            </span>
-                                                        </div>
-                                                        <div className="grid grid-cols-1 gap-2 mt-4 text-center">
-                                                            <div className="bg-primary/5 p-2 rounded-md">
-                                                                <div className="text-2xl font-bold">
-                                                                    {loadingDetails ? (
-                                                                        <span className="text-sm text-muted-foreground animate-pulse">Cargando...</span>
-                                                                    ) : (
-                                                                        fullUserDetails?.courses?.length ?? selectedUser._count?.enrollments ?? 0
-                                                                    )}
-                                                                </div>
-                                                                <div className="text-xs text-muted-foreground">Cursos</div>
-                                                            </div>
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            </div>
-                                        </TabsContent>
-
-                                        {/* Teachers/Admins: Courses Created Tab */}
-                                        {(selectedUser.role === 'teacher' || selectedUser.role === 'admin') && (
-                                            <TabsContent value="courses-created">
-                                                <Card>
-                                                    <CardHeader>
-                                                        <CardTitle className="flex items-center gap-2">
-                                                            <BookOpen className="h-5 w-5" />
-                                                            Clases Creadas
-                                                        </CardTitle>
-                                                    </CardHeader>
-                                                    <CardContent>
-                                                        {loadingDetails ? (
-                                                            <div className="py-8 text-center text-muted-foreground">Cargando clases...</div>
-                                                        ) : fullUserDetails?.coursesCreated?.length > 0 ? (
-                                                            <Table>
-                                                                <TableHeader>
-                                                                    <TableRow>
-                                                                        <TableHead>Curso</TableHead>
-                                                                        <TableHead>Estudiantes</TableHead>
-                                                                        <TableHead>Actividades</TableHead>
-                                                                        <TableHead>Creado</TableHead>
-                                                                    </TableRow>
-                                                                </TableHeader>
-                                                                <TableBody>
-                                                                    {fullUserDetails.coursesCreated.map((course: any) => (
-                                                                        <TableRow key={course.id}>
-                                                                            <TableCell className="font-medium">
-                                                                                {course.title}
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                {course.teacher?.name || course.teacher?.email || "Sin asignar"}
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                <Badge variant="secondary">
-                                                                                    {course._count?.enrollments || 0}
-                                                                                </Badge>
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                <Badge variant="outline">
-                                                                                    {course._count?.activities || 0}
-                                                                                </Badge>
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                {format(new Date(course.createdAt), "PPP")}
-                                                                            </TableCell>
-                                                                        </TableRow>
-                                                                    ))}
-                                                                </TableBody>
-                                                            </Table>
-                                                        ) : (
-                                                            <div className="py-8 text-center text-muted-foreground">No hay clases creadas</div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
-                                            </TabsContent>
-                                        )}
-
-                                        {/* Students: Enrollment Tabs */}
-                                        {selectedUser.role === 'student' && (
-                                            <>
-                                                <TabsContent value="courses">
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardTitle className="flex items-center gap-2">
-                                                                <BookOpen className="h-5 w-5" />
-                                                                Cursos Inscritos
-                                                            </CardTitle>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            {loadingDetails ? (
-                                                                <div className="py-8 text-center text-muted-foreground">Cargando cursos...</div>
-                                                            ) : fullUserDetails?.courses?.length > 0 ? (
-                                                                <Table>
-                                                                    <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Curso</TableHead>
-                                                                            <TableHead>Profesor</TableHead>
-                                                                            <TableHead>Fecha Registro</TableHead>
-                                                                            <TableHead>Estado</TableHead>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    <TableBody>
-                                                                        {fullUserDetails.courses.map((course: any) => (
-                                                                            <TableRow key={course.id}>
-                                                                                <TableCell className="font-medium">
-                                                                                    {course.title}
-                                                                                </TableCell>
-                                                                                <TableCell>
-                                                                                    {course.teacher?.name || course.teacher?.email || "Sin asignar"}
-                                                                                </TableCell>
-                                                                                <TableCell>
-                                                                                    {format(new Date(course.createdAt), "dd/MM/yyyy")}
-                                                                                </TableCell>
-                                                                                <TableCell>
-                                                                                    <Badge variant={course.status === 'APPROVED' ? 'default' : 'secondary'}>
-                                                                                        {course.status === 'APPROVED' ? 'Activo' : course.status}
-                                                                                    </Badge>
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            ) : (
-                                                                <div className="py-8 text-center text-muted-foreground">No hay cursos inscritos</div>
-                                                            )}
-                                                        </CardContent>
-                                                    </Card>
-                                                </TabsContent>
-
-                                                <TabsContent value="attendance">
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardTitle className="flex items-center gap-2">
-                                                                <Calendar className="h-5 w-5" />
-                                                                Historial de Asistencia
-                                                            </CardTitle>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            {loadingDetails ? (
-                                                                <div className="py-8 text-center text-muted-foreground">Cargando asistencia...</div>
-                                                            ) : fullUserDetails?.attendances?.length > 0 ? (
-                                                                <Table>
-                                                                    <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Fecha</TableHead>
-                                                                            <TableHead>Curso</TableHead>
-                                                                            <TableHead>Estado</TableHead>
-                                                                            <TableHead>Notas</TableHead>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    <TableBody>
-                                                                        {fullUserDetails.attendances.map((record: any) => (
-                                                                            <TableRow key={record.id}>
-                                                                                <TableCell>
-                                                                                    {format(new Date(record.date), "PPP - HH:mm")}
-                                                                                </TableCell>
-                                                                                <TableCell className="font-medium">
-                                                                                    {record.course?.title || "Curso eliminado"}
-                                                                                </TableCell>
-                                                                                <TableCell>
-                                                                                    <Badge className={
-                                                                                        record.status === 'PRESENT' ? 'bg--100 dark:bg--900/30 text-green-800' :
-                                                                                            record.status === 'LATE' ? 'bg--100 dark:bg--900/30 text-yellow-800' :
-                                                                                                    'bg--100 dark:bg--900/30 text-red-800'
-                                                                                    }>
-                                                                                        {record.status === 'PRESENT' ? 'Presente' :
-                                                                                            record.status === 'LATE' ? 'Tarde' : 'Ausente'}
-                                                                                    </Badge>
-                                                                                </TableCell>
-                                                                                <TableCell className="text-sm text-muted-foreground italic">
-                                                                                    {record.justification || "-"}
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            ) : (
-                                                                <div className="py-8 text-center text-muted-foreground">No hay registros de asistencia</div>
-                                                            )}
-                                                        </CardContent>
-                                                    </Card>
-                                                </TabsContent>
-
-                                                <TabsContent value="remarks">
-                                                    <Card>
-                                                        <CardHeader>
-                                                            <CardTitle className="flex items-center gap-2">
-                                                                <MessageSquare className="h-5 w-5" />
-                                                                Observador del Estudiante
-                                                            </CardTitle>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            {loadingDetails ? (
-                                                                <div className="py-8 text-center text-muted-foreground">Cargando observaciones...</div>
-                                                            ) : fullUserDetails?.remarks?.length > 0 ? (
-                                                                <div className="space-y-4">
-                                                                    {fullUserDetails.remarks.map((remark: any) => (
-                                                                        <div key={remark.id} className="border rounded-lg p-4 bg-card/50">
-                                                                            <div className="flex items-start justify-between mb-2">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    {remark.type === 'COMMENDATION' ? (
-                                                                                        <CheckCircle2 className="h-5 w-5 text--600 dark:text--400" />
-                                                                                    ) : (
-                                                                                        <AlertCircle className="h-5 w-5 text--600 dark:text--400" />
-                                                                                    )}
-                                                                                    <h4 className="font-semibold">{remark.title}</h4>
-                                                                                </div>
-                                                                                <span className="text-xs text-muted-foreground">
-                                                                                    {format(new Date(remark.date), "PPP")}
-                                                                                </span>
-                                                                            </div>
-                                                                            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                                                                                {remark.description}
-                                                                            </p>
-                                                                            <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                                                                                <span>Curso: {remark.course.title}</span>
-                                                                                <span>Por: {remark.teacher.name || "Profesor"}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="py-8 text-center text-muted-foreground">No hay observaciones registradas</div>
-                                                            )}
-                                                        </CardContent>
-                                                    </Card>
-                                                </TabsContent>
-
-                                                <TabsContent value="analytics">
-                                                    <Card>
-                                                        <CardContent className="pt-6">
-                                                            {loadingDetails ? (
-                                                                <div className="py-8 text-center text-muted-foreground">Cargando analítica...</div>
-                                                            ) : (
-                                                                <StudentAnalyticsPanel
-                                                                    studentName={formatName(selectedUser.name, selectedUser.profile)}
-                                                                    attendances={fullUserDetails?.attendances || []}
-                                                                    remarks={fullUserDetails?.remarks || []}
-                                                                />
-                                                            )}
-                                                        </CardContent>
-                                                    </Card>
-                                                </TabsContent>
-                                            </>
-                                        )}
-                                    </Tabs>
+                        <div className="space-y-6 flex-1 flex flex-col min-h-0">
+                            <div className="flex justify-between items-center pb-4 border-b">
+                                <div>
+                                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                                        <GraduationCap className="w-6 h-6 text-primary" /> Registro Académico
+                                    </DialogTitle>
+                                    <DialogDescription className="text-sm text-muted-foreground mt-1">
+                                        Historial de {formatName(selectedUser.name, selectedUser.profile)}
+                                    </DialogDescription>
                                 </div>
-                            </ScrollArea>
+                            </div>
+                            <div className="flex-1 overflow-y-auto min-h-0">
+                                <StudentRecords studentId={selectedUser.id} hideTables={false} hideDocumentation={true} />
+                            </div>
                         </div>
                     )}
-                </SheetContent >
-            </Sheet >
+                </DialogContent>
+            </Dialog>
 
             {/* Create User Dialog */}
             < Dialog open={createDialogOpen} onOpenChange={(open) => {

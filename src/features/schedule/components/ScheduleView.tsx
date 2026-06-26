@@ -72,7 +72,7 @@ const formatHour12h = (h24: number) => {
     return `${h12} ${ap}`;
 };
 
-// Paleta de colores para los cursos
+// Paleta de colores para las materias
 const COURSE_COLORS = [
     "bg-blue-500/20 border-blue-500 text--700 dark:text--300 dark:text-blue-300",
     "bg-emerald-500/20 border-emerald-500 text--700 dark:text--300 dark:text-emerald-300",
@@ -453,7 +453,7 @@ export function ScheduleView() {
                         </p>
                         <p className="text-sm mt-1">
                             {activeTab === "schedule" 
-                                ? "Los cursos aún no tienen horarios asignados. Edita un curso y agrega sus días y horas de clase." 
+                                ? "Las materias aún no tienen horarios asignados. Edita una materia y agrega sus días y horas de clase." 
                                 : "No hay eventos ni festivos programados para este rango de fechas."}
                         </p>
                     </div>
@@ -808,7 +808,7 @@ export function ScheduleView() {
                         ) : (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Info className="w-4 h-4" />
-                                <span>Este curso no tiene horarios configurados</span>
+                                <span>Esta materia no tiene horarios configurados</span>
                             </div>
                         )}
                     

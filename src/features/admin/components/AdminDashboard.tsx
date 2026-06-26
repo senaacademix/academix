@@ -58,9 +58,9 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             link: "/dashboard/admin/users"
         },
         {
-            title: "Cursos Activos",
+            title: "Materias Activos",
             value: stats.courses.active,
-            description: `${stats.courses.total} cursos en total`,
+            description: `${stats.courses.total} materias en total`,
             icon: BookOpen,
             color: "text-indigo-500",
             bg: "bg-indigo-500/10",
@@ -208,7 +208,7 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                                                 </span>
                                             </div>
                                             <p className="text-sm text-foreground/80 leading-relaxed">
-                                                Entregó la actividad <span className="font-bold text-primary">"{activity.details.activity}"</span> en el curso <span className="font-medium">"{activity.details.course}"</span>.
+                                                Entregó la actividad <span className="font-bold text-primary">"{activity.details.activity}"</span> en la materia <span className="font-medium">"{activity.details.course}"</span>.
                                             </p>
                                         </div>
                                     </div>

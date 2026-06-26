@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
     title: "Programación de Horarios | AcademiX",
-    description: "Tablero de distribución horaria y gestor de asignación de cursos y profesores.",
+    description: "Tablero de distribución horaria y gestor de asignación de materias y profesores.",
 };
 
 export default async function AdminSchedulePage() {
@@ -41,12 +41,15 @@ export default async function AdminSchedulePage() {
         periods: program.periods.map((period: any) => ({
             id: period.id,
             name: period.name,
-            courses: period.courses.map((c: any) => ({
-                id: c.id,
-                title: c.title,
-                groupId: c.groupId,
-                periodId: c.periodId
-            }))
+            courses: period.courses
+                .filter((c: any) => c.groupId === null)
+                .map((c: any) => ({
+                    id: c.id,
+                    title: c.title,
+                    groupId: c.groupId,
+                    periodId: c.periodId,
+                    weeklyHours: c.weeklyHours
+                }))
         })),
         groups: program.groups.map((group: any) => ({
             id: group.id,
@@ -66,16 +69,20 @@ export default async function AdminSchedulePage() {
             period: group.period ? {
                 id: group.period.id,
                 name: group.period.name,
-                courses: group.period.courses.map((c: any) => ({
-                    id: c.id,
-                    title: c.title,
-                    groupId: c.groupId
-                }))
+                courses: group.period.courses
+                    .filter((c: any) => c.groupId === null)
+                    .map((c: any) => ({
+                        id: c.id,
+                        title: c.title,
+                        groupId: c.groupId,
+                        weeklyHours: c.weeklyHours
+                    }))
             } : null,
             courses: group.courses.map((c: any) => ({
                 id: c.id,
                 title: c.title,
                 teacherId: c.teacherId,
+                weeklyHours: c.weeklyHours,
                 teacher: c.teacher ? {
                     id: c.teacher.id,
                     name: c.teacher.name,
@@ -88,19 +95,18 @@ export default async function AdminSchedulePage() {
                     endTime: s.endTime
                 }))
             }))
-        }))
+        })),
+        environments: program.environments ? program.environments.map((env: any) => ({
+            id: env.id,
+            name: env.name,
+            capacity: env.capacity,
+            location: env.location,
+            resources: env.resources,
+            programId: env.programId
+        })) : []
     }));
 
-    const draftTeachers = await prisma.user.findMany({
-        where: {
-            role: "teacher",
-            OR: [
-                { availabilityLocked: false },
-                { qualifiedCoursesLocked: false }
-            ]
-        },
-        select: { id: true, name: true, email: true }
-    });
+
 
     return (
         <div className="absolute inset-0 overflow-hidden bg-background z-20">
@@ -111,7 +117,7 @@ export default async function AdminSchedulePage() {
                 initialScheduleTitle={settings?.scheduleTitle ?? "Horario Académico"}
                 initialScheduleStartDate={settings?.scheduleStartDate ?? null}
                 initialScheduleEndDate={settings?.scheduleEndDate ?? null}
-                draftTeachers={draftTeachers}
+                initialMaxTeacherHours={settings?.maxTeacherHours ?? 40}
             />
         </div>
     );

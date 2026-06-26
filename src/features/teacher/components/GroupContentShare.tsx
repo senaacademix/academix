@@ -709,7 +709,7 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
                         {contents.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={4} className="h-40 text-center text-muted-foreground italic">
-                                    No has compartido contenido todavía en este curso.
+                                    No has compartido contenido todavía en esta materia.
                                 </TableCell>
                             </TableRow>
                         )}

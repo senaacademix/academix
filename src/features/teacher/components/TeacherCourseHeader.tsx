@@ -8,7 +8,6 @@ import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
     ChevronLeft, 
     Users, 
-    ExternalLink, 
     GraduationCap, 
     BarChart3, 
     Dices,
@@ -111,7 +110,7 @@ export function TeacherCourseHeader({
                                         </Link>
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent side="bottom">Salir del curso</TooltipContent>
+                                <TooltipContent side="bottom">Salir de la materia</TooltipContent>
                             </Tooltip>
                         </div>
                         
@@ -127,30 +126,8 @@ export function TeacherCourseHeader({
                             </div>
                         </div>
                     </div>
-
                     {/* Right utilities */}
                     <div className="flex items-center gap-2 ml-auto">
-                        <div className="h-6 w-[2px] bg-foreground/15 hidden md:block mx-1" />
-                        {courseExternalUrl && (
-                            <div className="hidden lg:flex items-center bg-muted/60 hover:bg-muted/80 transition-colors rounded-full px-1 py-1 h-8 gap-1 border border-foreground/10">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            asChild
-                                            className="h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary transition-all"
-                                        >
-                                            <Link href={courseExternalUrl} target="_blank" rel="noopener noreferrer">
-                                                <ExternalLink className="h-3 w-3" />
-                                            </Link>
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom">Documentación externa</TooltipContent>
-                                </Tooltip>
-                            </div>
-                        )}
-
                         <div className="h-6 w-[2px] bg-foreground/15 mx-1 hidden sm:block" />
                         
                         <div className="flex items-center gap-1">

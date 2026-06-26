@@ -5,6 +5,7 @@ import { AttendanceStatus, RemarkType } from "@/generated/prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import crypto from "crypto";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -39,32 +40,41 @@ export async function resetStudentPassword(studentId: string) {
 
         if (!student) throw new Error("Student not found");
 
-        const defaultPassword = student.profile?.identificacion;
+        const defaultPassword = student.profile?.identificacion?.trim();
 
         if (!defaultPassword) {
-            throw new Error("Student has no identification to use as password");
+            throw new Error("El estudiante no tiene número de identificación registrado en su perfil.");
         }
 
-        // We can use the admin plugin from betterAuth to set the password,
-        // or just update the account. Since betterAuth password hashing is internal,
-        // we might need to rely on the auth instance if we have it here.
-        // If we don't have better-auth admin plugin configured easily here, 
-        // we can update it using better-auth api directly or bcrypt.
-        
-        const { auth } = await import("@/lib/auth");
-        
-        // better-auth admin plugin provides setUserPassword:
-        await auth.api.setUserPassword({
-            headers: new Headers(),
-            body: {
-                userId: studentId,
-                newPassword: defaultPassword
-            }
+        // Hash the password (same logic as student creation / teacher password recovery)
+        const { hashPassword } = await import("better-auth/crypto");
+        const hashedPassword = await hashPassword(defaultPassword);
+
+        // Find and update the Account record or create it if not present
+        const existingAccount = await prisma.account.findFirst({
+            where: { userId: studentId, providerId: "credential" }
         });
-return { success: true };
+
+        if (existingAccount) {
+            await prisma.account.update({
+                where: { id: existingAccount.id },
+                data: { password: hashedPassword }
+            });
+        } else {
+            await prisma.account.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    accountId: crypto.randomUUID(),
+                    providerId: "credential",
+                    userId: studentId,
+                    password: hashedPassword
+                }
+            });
+        }
+        return { success: true };
     } catch (error: any) {
         console.error("Error resetting password:", error);
-return { success: false, error: error.message };
+        return { success: false, error: error.message };
     }
 }
 
@@ -228,6 +238,9 @@ export async function getTeacherComprehensiveGroupAnalyticsAction(groupId: strin
     const group = await prisma.group.findUnique({
         where: { id: groupId },
         include: {
+            program: true,
+            period: true,
+            environment: true,
             students: {
                 select: { id: true, name: true, banned: true, profile: { select: { identificacion: true } } }
             },
@@ -356,6 +369,14 @@ return {
         studentMetrics,
         coursesList,
         groupName: group.name,
+        groupDescription: group.description,
+        program: group.program?.name,
+        period: group.period?.name,
+        environment: group.environment?.name,
+        startDate: group.startDate,
+        endDate: group.endDate,
+        startTime: group.startTime,
+        endTime: group.endTime,
         students: {
             total: totalStudents,
             active: activeStudents,
@@ -367,3 +388,71 @@ return {
         coursesStats
     };
 }
+
+export async function saveSingleAttendanceAction(
+    courseId: string,
+    studentId: string,
+    dateStr: string,
+    status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED",
+    justification?: string
+) {
+    try {
+        const teacher = await requireTeacher();
+        await verifyCourseTeacher(courseId, teacher.id);
+
+        const dateObj = new Date(dateStr);
+        // Avoid timezone shifting issues by setting hours in UTC
+        dateObj.setUTCHours(12, 0, 0, 0);
+
+        if (status === "PRESENT") {
+            // Delete the attendance record for this student and date
+            await prisma.attendance.deleteMany({
+                where: {
+                    courseId,
+                    userId: studentId,
+                    date: dateObj
+                }
+            });
+        } else {
+            // Find existing record
+            const existing = await prisma.attendance.findFirst({
+                where: {
+                    courseId,
+                    userId: studentId,
+                    date: dateObj
+                }
+            });
+
+            const dbStatus = (status === "EXCUSED" || status === "ABSENT") ? "ABSENT" : "LATE";
+            const dbJustification = status === "EXCUSED" ? (justification || "Justificado en planilla") : null;
+
+            if (existing) {
+                await prisma.attendance.update({
+                    where: { id: existing.id },
+                    data: {
+                        status: dbStatus as any,
+                        justification: dbJustification,
+                        arrivalTime: null
+                    }
+                });
+            } else {
+                await prisma.attendance.create({
+                    data: {
+                        courseId,
+                        userId: studentId,
+                        date: dateObj,
+                        status: dbStatus as any,
+                        justification: dbJustification
+                    }
+                });
+            }
+        }
+
+        revalidatePath("/dashboard/teacher");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error saving single attendance:", error);
+        return { success: false, error: error.message };
+    }
+}
+

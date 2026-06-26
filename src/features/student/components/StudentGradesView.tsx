@@ -87,7 +87,7 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                 <FolderTree className="h-12 w-12 text-muted-foreground/30 mb-4" />
                 <h3 className="text-lg font-semibold">Sin estructura de notas</h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                    El profesor aún no ha configurado las categorías de calificación para este curso.
+                    El profesor aún no ha configurado las categorías de calificación para esta materia.
                 </p>
             </div>
         );
@@ -204,7 +204,7 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                                             <div>
                                                 <CardTitle className="text-xl font-bold">{cat.name}</CardTitle>
                                                 <CardDescription className="text-xs font-bold text-primary/70 uppercase tracking-tighter">
-                                                    Peso en Curso: {cat.weight}%
+                                                    Peso en Materia: {cat.weight}%
                                                 </CardDescription>
                                             </div>
                                         </div>

@@ -140,6 +140,7 @@ model Course {
   externalUrl          String? // Optional external course URL (e.g., Google Classroom, Moodle)
   icon                 String?
   usePercentageWeights Boolean   @default(true)
+  weeklyHours          Float?    @default(0)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   
@@ -210,6 +211,8 @@ model Attendance {
 enum RemarkType {
   ATTENTION
   COMMENDATION
+  CITATION
+  OTHER
 }
 
 model Remark {
@@ -224,6 +227,7 @@ model Remark {
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   teacherId   String
   teacher     User       @relation("TeacherRemarks", fields: [teacherId], references: [id], onDelete: Cascade)
+  viewedAt    DateTime?  // When the student first opened the remark detail
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -302,6 +306,7 @@ model SystemSettings {
   scheduleTitle               String?           @default("Horario Académico")
   scheduleStartDate           DateTime?
   scheduleEndDate             DateTime?
+  maxTeacherHours             Int               @default(40)
   
   updatedAt             DateTime         @updatedAt
 
@@ -374,6 +379,7 @@ model Program {
   periods     Period[]
   groups      Group[]
   teachers    User[]     @relation("ProgramTeachers")
+  environments TrainingEnvironment[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -459,15 +465,19 @@ model TrainingEnvironment {
   updatedAt   DateTime @updatedAt
   groups      Group[]
 
+  programId   String?
+  program     Program?  @relation(fields: [programId], references: [id], onDelete: Cascade)
+
   @@map("training_environment")
 }
 
 model Activity {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  weight      Float    // Porcentaje de peso (ej. 20 para 20%)
-  date        DateTime @default(now())
+  id                  String   @id @default(cuid())
+  title               String
+  description         String?
+  weight              Float    // Porcentaje de peso (ej. 20 para 20%)
+  date                DateTime @default(now())
+  allowSubmissionLink Boolean  @default(false)
   
   courseId    String
   course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -481,9 +491,10 @@ model Activity {
 }
 
 model StudentGrade {
-  id          String   @id @default(cuid())
-  score       Float    // Nota de 0 a 5
-  feedback    String?
+  id             String   @id @default(cuid())
+  score          Float    // Nota de 0 a 5
+  feedback       String?
+  submissionLink String?  // Enlace de entrega enviado por el estudiante
   
   activityId  String
   activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)

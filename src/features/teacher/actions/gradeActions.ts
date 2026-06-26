@@ -76,7 +76,7 @@ export async function toggleCourseWeightMode(courseId: string, usePercentageWeig
     }
 }
 
-export async function createActivity(courseId: string, title: string, description: string, weight: number) {
+export async function createActivity(courseId: string, title: string, description: string, weight: number, allowSubmissionLink: boolean = false) {
     try {
         const teacher = await requireTeacherOrAdmin();
         await verifyCourseTeacher(courseId, teacher);
@@ -86,7 +86,8 @@ export async function createActivity(courseId: string, title: string, descriptio
                 courseId,
                 title,
                 description,
-                weight
+                weight,
+                allowSubmissionLink
             }
         });
         revalidatePath("/dashboard/teacher");
@@ -97,7 +98,7 @@ export async function createActivity(courseId: string, title: string, descriptio
     }
 }
 
-export async function updateActivity(activityId: string, title: string, description: string, weight: number) {
+export async function updateActivity(activityId: string, title: string, description: string, weight: number, allowSubmissionLink: boolean = false) {
     try {
         const teacher = await requireTeacherOrAdmin();
         const activity = await prisma.activity.findUnique({ where: { id: activityId }, select: { courseId: true } });
@@ -109,13 +110,36 @@ export async function updateActivity(activityId: string, title: string, descript
             data: {
                 title,
                 description,
-                weight
+                weight,
+                allowSubmissionLink
             }
         });
         revalidatePath("/dashboard/teacher");
         return { success: true };
     } catch (error: any) {
         console.error("Error updating activity:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function submitStudentSubmissionLink(activityId: string, link: string) {
+    try {
+        const session = await getSession();
+        if (!session?.user) throw new Error("Unauthorized");
+        const userId = session.user.id;
+
+        // Validate URL format
+        try { new URL(link); } catch { throw new Error("URL inválida"); }
+
+        await prisma.studentGrade.upsert({
+            where: { activityId_userId: { activityId, userId } },
+            update: { submissionLink: link },
+            create: { activityId, userId, score: 0, submissionLink: link }
+        });
+        revalidatePath("/dashboard/student/records");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error submitting link:", error);
         return { success: false, error: error.message };
     }
 }
@@ -183,19 +207,45 @@ export async function getStudentGrades(userId: string) {
         if (!session?.user) throw new Error("Unauthorized");
         // Ensure student can only fetch their own grades, or admin/teacher fetching
         if (session.user.role === 'student' && session.user.id !== userId) {
-             throw new Error("Unauthorized");
+            throw new Error("Unauthorized");
         }
 
-        // Obtener los cursos del estudiante
+        // ── 1. Materias por inscripción directa (Enrollment) ──────────────────
         const enrollments = await prisma.enrollment.findMany({
             where: { userId, status: 'APPROVED' },
             include: {
                 course: {
                     include: {
+                        teacher: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } },
+                        schedules: { orderBy: { dayOfWeek: 'asc' } },
                         activities: {
+                            orderBy: { createdAt: 'asc' },
                             include: {
-                                grades: {
-                                    where: { userId }
+                                grades: { where: { userId } }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        const directCourses = enrollments.map((e: any) => e.course);
+
+        // ── 2. Materias del grupo al que pertenece el estudiante ──────────────
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                groupId: true,
+                group: {
+                    select: {
+                        courses: {
+                            include: {
+                                teacher: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } },
+                                schedules: { orderBy: { dayOfWeek: 'asc' } },
+                                activities: {
+                                    orderBy: { createdAt: 'asc' },
+                                    include: {
+                                        grades: { where: { userId } }
+                                    }
                                 }
                             }
                         }
@@ -203,7 +253,17 @@ export async function getStudentGrades(userId: string) {
                 }
             }
         });
-        return enrollments.map(e => e.course);
+        const groupCourses: any[] = user?.group?.courses ?? [];
+
+        // ── 3. Unir y deduplicar por id ───────────────────────────────────────
+        const allCourses = [...directCourses];
+        for (const gc of groupCourses) {
+            if (!allCourses.some(c => c.id === gc.id)) {
+                allCourses.push(gc);
+            }
+        }
+
+        return allCourses;
     } catch (error) {
         console.error("Error fetching student grades:", error);
         return [];

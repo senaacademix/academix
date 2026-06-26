@@ -33,6 +33,7 @@ export async function getProgramsAction() {
                     availabilityLocked: true,
                     qualifiedCoursesLocked: true,
                     availabilities: true,
+                    profile: true,
                     qualifiedCourses: {
                         select: {
                             id: true,
@@ -104,6 +105,9 @@ export async function getProgramsAction() {
                         }
                     }
                 }
+            },
+            environments: {
+                orderBy: { createdAt: "desc" }
             }
         }
     });
@@ -519,8 +523,8 @@ export async function assignCourseToPeriodAction(courseId: string, periodId: str
         userName: session.user.name || "Admin",
         userRole: "admin",
         description: periodId
-            ? `Curso "${course?.title || 'Desconocido'}" asignado al periodo ID: ${periodId}`
-            : `Curso "${course?.title || 'Desconocido'}" removido de su periodo`,
+            ? `Materia "${course?.title || 'Desconocido'}" asignado al periodo ID: ${periodId}`
+            : `Materia "${course?.title || 'Desconocido'}" removido de su periodo`,
         metadata: { courseId, periodId },
         success: true,
     });
@@ -817,105 +821,7 @@ export async function registerStudentsBulkAction(groupId: string, list: StudentI
     };
 }
 
-export async function resetStudentPasswordToDocAction(studentId: string) {
-    const session = await requireAdmin();
 
-    const student = await prisma.user.findUnique({
-        where: { id: studentId },
-        include: { profile: true }
-    });
-
-    if (!student) {
-        throw new Error("Estudiante no encontrado");
-    }
-
-    if (!student.profile?.identificacion) {
-        throw new Error("El estudiante no tiene número de identificación registrado");
-    }
-
-    const docNumber = student.profile.identificacion.trim();
-
-    // Hash the password (same logic as student creation)
-    const { hashPassword } = await import("better-auth/crypto");
-    const hashedPassword = await hashPassword(docNumber);
-
-    // Update password in credential account
-    await prisma.account.updateMany({
-        where: {
-            userId: studentId,
-            providerId: "credential"
-        },
-        data: {
-            password: hashedPassword
-        }
-    });
-
-    const { auditLogger } = await import("../services/auditLogger");
-    await auditLogger.log({
-        action: "UPDATE",
-        entity: "USER",
-        entityId: studentId,
-        userId: session.user.id,
-        userName: session.user.name || "Admin",
-        userRole: "admin",
-        description: `Contraseña restablecida al número de documento para: ${student.name} (${student.email})`,
-        metadata: { studentId, email: student.email },
-        success: true,
-    });
-
-    revalidatePath("/dashboard/admin/courses");
-    return { success: true };
-}
-
-export async function resetTeacherPasswordToDocAction(teacherId: string) {
-    const session = await requireAdmin();
-
-    const teacher = await prisma.user.findUnique({
-        where: { id: teacherId },
-        include: { profile: true }
-    });
-
-    if (!teacher) {
-        throw new Error("Profesor no encontrado");
-    }
-
-    if (!teacher.profile?.identificacion) {
-        throw new Error("El profesor no tiene número de identificación registrado");
-    }
-
-    const docNumber = teacher.profile.identificacion.trim();
-
-    // Hash the password
-    const { hashPassword } = await import("better-auth/crypto");
-    const hashedPassword = await hashPassword(docNumber);
-
-    // Update password in credential account
-    await prisma.account.updateMany({
-        where: {
-            userId: teacherId,
-            providerId: "credential"
-        },
-        data: {
-            password: hashedPassword
-        }
-    });
-
-    const { auditLogger } = await import("../services/auditLogger");
-    await auditLogger.log({
-        action: "UPDATE",
-        entity: "USER",
-        entityId: teacherId,
-        userId: session.user.id,
-        userName: session.user.name || "Admin",
-        userRole: "admin",
-        description: `Contraseña restablecida al número de documento para: ${teacher.name} (${teacher.email})`,
-        metadata: { teacherId, email: teacher.email },
-        success: true,
-    });
-
-    revalidatePath("/dashboard/admin/courses");
-    return { success: true };
-}
 
 export async function assignTeacherToProgramAction(programId: string, teacherId: string, assign: boolean) {
     const session = await requireAdmin();
@@ -1381,6 +1287,7 @@ export async function scheduleGroupCourseAction(data: {
     groupId: string;
     periodId: string;
     teacherId?: string;
+    weeklyHours?: number;
     schedules: Array<{
         dayOfWeek: DayOfWeek;
         startTime: string;
@@ -1420,6 +1327,7 @@ export async function scheduleGroupCourseAction(data: {
             groupId: data.groupId,
             periodId: data.periodId,
             teacherId: data.teacherId || null,
+            weeklyHours: data.weeklyHours || 0,
             schedules: {
                 create: data.schedules.map(s => ({
                     dayOfWeek: s.dayOfWeek,
@@ -1451,6 +1359,7 @@ export async function updateGroupCourseScheduleAction(courseId: string, data: {
     title: string;
     description?: string;
     teacherId?: string;
+    weeklyHours?: number;
     schedules: Array<{
         dayOfWeek: DayOfWeek;
         startTime: string;
@@ -1500,6 +1409,7 @@ export async function updateGroupCourseScheduleAction(courseId: string, data: {
                 title: data.title,
                 description: data.description,
                 teacherId: data.teacherId || null,
+                weeklyHours: data.weeklyHours || 0,
             }
         });
 
@@ -1527,7 +1437,7 @@ export async function updateGroupCourseScheduleAction(courseId: string, data: {
         userId: session.user.id,
         userName: session.user.name || "Admin",
         userRole: "admin",
-        description: `Programación y horarios actualizados para curso ID: ${courseId}`,
+        description: `Programación y horarios actualizados para materia ID: ${courseId}`,
         metadata: { courseId },
         success: true,
     });
@@ -1551,7 +1461,7 @@ export async function deleteGroupCourseAction(courseId: string) {
         userId: session.user.id,
         userName: session.user.name || "Admin",
         userRole: "admin",
-        description: `Programación de asignatura eliminada: Curso ID ${courseId}`,
+        description: `Programación de asignatura eliminada: Materia ID ${courseId}`,
         metadata: { courseId },
         success: true,
     });
@@ -1787,8 +1697,8 @@ export async function assignTeacherToCourseAction(courseId: string, teacherId: s
         userName: session.user.name || "Admin",
         userRole: "admin",
         description: teacherId
-            ? `Profesor "${course.teacher?.name || 'Desconocido'}" asignado al curso: ${course.title}`
-            : `Profesor desasignado del curso: ${course.title}`,
+            ? `Profesor "${course.teacher?.name || 'Desconocido'}" asignado a la materia: ${course.title}`
+            : `Profesor desasignado de la materia: ${course.title}`,
         metadata: { courseId, teacherId },
         success: true,
     });
@@ -1892,7 +1802,8 @@ export async function saveScheduleBatchAction(pendingChanges: any[]) {
                 schedulesPublished: ch.schedulesPublished,
                 scheduleTitle: ch.scheduleTitle,
                 scheduleStartDate: ch.scheduleStartDate ? new Date(ch.scheduleStartDate) : null,
-                scheduleEndDate: ch.scheduleEndDate ? new Date(ch.scheduleEndDate) : null
+                scheduleEndDate: ch.scheduleEndDate ? new Date(ch.scheduleEndDate) : null,
+                maxTeacherHours: ch.maxTeacherHours
             });
         }
     }

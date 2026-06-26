@@ -51,7 +51,7 @@ export function CourseCatalog({ courses, pendingEnrollments = [] }: { courses: a
                 </div>
                 <h3 className="text-2xl font-bold text-foreground/80 mb-2">Catálogo Vacío</h3>
                 <p className="text-muted-foreground text-center max-w-md px-6">
-                    No hay nuevos cursos disponibles para inscribirse en este momento. ¡Vuelve pronto!
+                    No hay nuevas materias disponibles para inscribirse en este momento. ¡Vuelve pronto!
                 </p>
             </motion.div>
         );

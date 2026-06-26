@@ -16,7 +16,7 @@ export async function createRemarkAction(formData: FormData) {
         throw new Error("Unauthorized");
     }
 
-    const type = formData.get("type") as "ATTENTION" | "COMMENDATION";
+    const type = formData.get("type") as "ATTENTION" | "COMMENDATION" | "CITATION" | "OTHER";
     const title = formData.get("title") as string;
     const description = formData.get("description") as string;
     const courseId = formData.get("courseId") as string;
@@ -47,7 +47,7 @@ export async function createRemarkAction(formData: FormData) {
         remark.id,
         type,
         student?.name || "Estudiante",
-        course?.title || "Curso",
+        course?.title || "Materia",
         session.user.id,
         session.user.name || "Profesor"
     );
@@ -62,7 +62,7 @@ export async function updateRemarkAction(formData: FormData) {
     }
 
     const remarkId = formData.get("remarkId") as string;
-    const type = formData.get("type") as "ATTENTION" | "COMMENDATION" | null;
+    const type = formData.get("type") as "ATTENTION" | "COMMENDATION" | "CITATION" | "OTHER" | null;
     const title = formData.get("title") as string | null;
     const description = formData.get("description") as string | null;
     const courseId = formData.get("courseId") as string;

@@ -31,7 +31,7 @@ export default async function Page({
     const course = await courseService.getCourseById(courseId);
 
     if (!course) {
-        return <div className="p-8 text-center font-bold">Curso no encontrado</div>;
+        return <div className="p-8 text-center font-bold">Materia no encontrado</div>;
     }
 
     const [

@@ -34,7 +34,7 @@ export async function addStudentToCourseAction(formData: FormData) {
 
     await auditLogger.logEnrollment(
         enrollment.id,
-        course?.title || "Curso",
+        course?.title || "Materia",
         userId,
         student?.name || "Estudiante"
     );
@@ -75,7 +75,7 @@ export async function removeStudentFromCourseAction(formData: FormData) {
     // 🎯 AUDIT LOG
     const { auditLogger } = await import("../../admin/services/auditLogger");
     await auditLogger.logUnenrollment(
-        course?.title || "Curso",
+        course?.title || "Materia",
         userId,
         student?.name || "Estudiante",
         session.user.id,
@@ -136,7 +136,7 @@ export async function updateStudentStatusAction(enrollmentId: string, status: 'A
         userId: session.user.id,
         userName: session.user.name || "Profesor",
         userRole: session.user.role,
-        description: `Estado de matrícula actualizado para ${student?.name || "Estudiante"} en ${course?.title || "Curso"}: ${status}`,
+        description: `Estado de matrícula actualizado para ${student?.name || "Estudiante"} en ${course?.title || "Materia"}: ${status}`,
         metadata: { status, enrollmentId },
         success: true,
     });

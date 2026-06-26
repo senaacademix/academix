@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Calendar, Clock, AlertTriangle, Award, CheckCircle2 } from "lucide-react";
+import { User, Calendar, Clock, AlertTriangle, Award, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -297,22 +297,42 @@ export function StudentAnalyticsPanel({ attendances, remarks, studentName }: Stu
                         <TableRow>
                           <TableHead>Fecha</TableHead>
                           <TableHead>Tipo</TableHead>
+                          <TableHead>Título</TableHead>
+                          <TableHead className="text-center">Estado</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {sortedRemarks.map((rem, i) => (
                           <TableRow key={i}>
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                            <TableCell className="font-medium text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
                                 {format(new Date(rem.date), "PPP p", { locale: es })}
                               </div>
                             </TableCell>
                             <TableCell>
-                              {rem.type === "ATTENTION" ? (
-                                <Badge className="bg-orange-500 hover:bg-orange-600 text-white">Llamado de Atención</Badge>
+                               {rem.type === "ATTENTION" ? (
+                                 <Badge className="bg-red-500 hover:bg-red-600 text-white text-[10px]">Llamado de Atención</Badge>
+                               ) : rem.type === "COMMENDATION" ? (
+                                 <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px]">Felicitación</Badge>
+                               ) : rem.type === "CITATION" ? (
+                                 <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px]">Citación</Badge>
+                               ) : (
+                                 <Badge className="bg-gray-500 hover:bg-gray-600 text-white text-[10px]">Otra</Badge>
+                               )}
+                            </TableCell>
+                            <TableCell className="font-semibold text-xs max-w-[150px] truncate" title={rem.title}>
+                              {rem.title}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {rem.viewedAt ? (
+                                <Badge variant="outline" className="text-[10px] gap-0.5 text-emerald-700 border-emerald-200 bg-emerald-50" title={`Visto el ${format(new Date(rem.viewedAt), "dd/MM/yyyy HH:mm")}`}>
+                                  <Eye className="w-3 h-3" /> Visto
+                                </Badge>
                               ) : (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white">Felicitación</Badge>
+                                <Badge variant="outline" className="text-[10px] gap-0.5 text-amber-700 border-amber-200 bg-amber-50">
+                                  <EyeOff className="w-3 h-3" /> No visto
+                                </Badge>
                               )}
                             </TableCell>
                           </TableRow>

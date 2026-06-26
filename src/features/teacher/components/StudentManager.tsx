@@ -213,7 +213,7 @@ export function StudentManager({
                             </SheetTrigger>
                             <SheetContent side="right" className="w-full max-w-none sm:max-w-none p-0">
                                 <SheetHeader className="px-6 py-4 border-b">
-                                    <SheetTitle>Agregar Estudiante al Curso</SheetTitle>
+                                    <SheetTitle>Agregar Estudiante a la Materia</SheetTitle>
                                     <SheetDescription>
                                         Busca estudiantes por nombre, apellido, identificación o correo electrónico
                                     </SheetDescription>
@@ -380,7 +380,7 @@ export function StudentManager({
                                             className="w-full"
                                         >
                                             <UserPlus className="h-4 w-4 mr-2" />
-                                            Agregar al Curso
+                                            Agregar a la Materia
                                         </Button>
                                     </form>
                                 </SheetFooter>
@@ -425,7 +425,7 @@ export function StudentManager({
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleExportZipReport} disabled={isExportingZip}>
                                 <MoreHorizontal className="mr-2 h-4 w-4" />
-                                Todo el Curso (ZIP)
+                                toda la Materia (ZIP)
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -511,7 +511,7 @@ export function StudentManager({
                                                             <DialogHeader>
                                                                 <DialogTitle>Retirar Estudiante</DialogTitle>
                                                                 <DialogDescription>
-                                                                    Esto retirará a <strong>{formatName(enrollment.user.name, enrollment.user.profile)}</strong> del curso actual.
+                                                                    Esto retirará a <strong>{formatName(enrollment.user.name, enrollment.user.profile)}</strong> de la materia actual.
                                                                     <br /><br />
                                                                     No te preocupes, el estudiante <strong>no será eliminado de la base de datos</strong> y sus registros históricos se conservarán en el sistema.
                                                                     <br /><br />
@@ -533,7 +533,7 @@ export function StudentManager({
                                                                     formData.append("userId", enrollment.user.id);
                                                                     formData.append("courseId", courseId);
                                                                     await removeStudentFromCourseAction(formData);
-                                                                    toast.success("Estudiante retirado del curso exitosamente");
+                                                                    toast.success("Estudiante retirado de la materia exitosamente");
                                                                 }}>
                                                                     <Button
                                                                         id={`delete-btn-${enrollment.user.id}`}

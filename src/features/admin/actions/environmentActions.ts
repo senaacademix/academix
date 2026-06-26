@@ -19,9 +19,10 @@ async function requireAdmin() {
 
 // ============ TRAINING ENVIRONMENTS CRUD ============
 
-export async function getEnvironmentsAction() {
+export async function getEnvironmentsAction(programId?: string) {
     await requireAdmin();
     return await prisma.trainingEnvironment.findMany({
+        where: programId ? { programId } : undefined,
         orderBy: { createdAt: "desc" },
     });
 }
@@ -33,6 +34,7 @@ export async function createEnvironmentAction(data: {
     resources?: string[];
     description?: string;
     isActive?: boolean;
+    programId: string;
 }) {
     await requireAdmin();
 
@@ -44,10 +46,11 @@ export async function createEnvironmentAction(data: {
             resources: data.resources ?? [],
             description: data.description ?? null,
             isActive: data.isActive ?? true,
+            programId: data.programId,
         },
     });
 
-    revalidatePath("/dashboard/admin/environments");
+    revalidatePath("/dashboard/admin/courses");
     return env;
 }
 
@@ -76,7 +79,7 @@ export async function updateEnvironmentAction(
         },
     });
 
-    revalidatePath("/dashboard/admin/environments");
+    revalidatePath("/dashboard/admin/courses");
     return env;
 }
 
@@ -85,6 +88,6 @@ export async function deleteEnvironmentAction(id: string) {
 
     await prisma.trainingEnvironment.delete({ where: { id } });
 
-    revalidatePath("/dashboard/admin/environments");
+    revalidatePath("/dashboard/admin/courses");
     return { success: true };
 }

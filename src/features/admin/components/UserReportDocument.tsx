@@ -145,7 +145,7 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Estadísticas Generales</Text>
                 <View style={styles.row}>
-                    <Text style={styles.label}>Cursos Inscritos:</Text>
+                    <Text style={styles.label}>Materias Inscritos:</Text>
                     <Text style={styles.value}>{details?.courses?.length ?? user._count?.enrollments ?? 0}</Text>
                 </View>
                 {user._count && (
@@ -159,10 +159,10 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
             {/* Courses Table */}
             {details?.courses?.length > 0 && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Cursos Inscritos</Text>
+                    <Text style={styles.sectionTitle}>Materias Inscritos</Text>
                     <View style={styles.table}>
                         <View style={[styles.tableRow, styles.tableHeader]}>
-                            <View style={[styles.tableCol, { width: '50%' }]}><Text style={styles.tableCell}>Curso</Text></View>
+                            <View style={[styles.tableCol, { width: '50%' }]}><Text style={styles.tableCell}>Materia</Text></View>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Fecha</Text></View>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Estado</Text></View>
                         </View>
@@ -184,7 +184,7 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                     <View style={styles.table}>
                         <View style={[styles.tableRow, styles.tableHeader]}>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Fecha</Text></View>
-                            <View style={[styles.tableCol, { width: '40%' }]}><Text style={styles.tableCell}>Curso</Text></View>
+                            <View style={[styles.tableCol, { width: '40%' }]}><Text style={styles.tableCell}>Materia</Text></View>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Estado</Text></View>
                         </View>
                         {details.attendances.map((record: any, index: number) => (
@@ -211,8 +211,13 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Observaciones</Text>
                     {details.remarks.map((remark: any, index: number) => (
-                        <View key={index} style={{ marginBottom: 8, padding: 5, borderLeftWidth: 2, borderLeftColor: remark.type === 'COMMENDATION' ? 'green' : 'orange' }}>
-                            <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{remark.title} ({format(new Date(remark.date), "dd/MM/yyyy")})</Text>
+                        <View key={index} style={{ marginBottom: 8, padding: 5, borderLeftWidth: 2, borderLeftColor: remark.type === 'COMMENDATION' ? '#10b981' : remark.type === 'ATTENTION' ? '#ef4444' : remark.type === 'CITATION' ? '#3b82f6' : '#9ca3af' }}>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold' }}>
+                                {remark.type === 'ATTENTION' ? '[Llamado de Atención] ' :
+                                 remark.type === 'COMMENDATION' ? '[Felicitación] ' :
+                                 remark.type === 'CITATION' ? '[Citación] ' : '[Otra] '}
+                                {remark.title} ({format(new Date(remark.date), "dd/MM/yyyy")})
+                            </Text>
                             <Text style={{ fontSize: 9, marginTop: 2 }}>{remark.description}</Text>
                             <Text style={{ fontSize: 8, color: '#666', marginTop: 2 }}>Por: {formatName(remark.teacher.name, remark.teacher.profile)}</Text>
                         </View>

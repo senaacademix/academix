@@ -282,11 +282,10 @@ export async function adminSaveTeacherAvailabilityAction(teacherId: string, slot
         }
     });
 
-    // Automatically lock it since admin saved it and update tracking
+    // Update tracking
     await prisma.user.update({
         where: { id: teacherId },
         data: { 
-            availabilityLocked: true,
             availabilityLastModifiedById: session.user.id,
             availabilityUpdatedAt: new Date()
         }

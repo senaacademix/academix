@@ -14,21 +14,20 @@ export function PeriodOverviewDialog({
     onOpenChange, 
     programs, 
     pendingChanges,
-    setPendingChanges
+    setPendingChanges,
+    programId,
+    onSave,
+    isSaving
 }: { 
     open: boolean, 
     onOpenChange: (open: boolean) => void, 
     programs: any[], 
     pendingChanges: any[],
-    setPendingChanges: React.Dispatch<React.SetStateAction<any[]>>
+    setPendingChanges: React.Dispatch<React.SetStateAction<any[]>>,
+    programId: string,
+    onSave: () => void,
+    isSaving: boolean
 }) {
-    const [overviewPeriodProgramFilter, setOverviewPeriodProgramFilter] = useState<string>("");
-
-    useEffect(() => {
-        if (open && !overviewPeriodProgramFilter && programs.length > 0) {
-            setOverviewPeriodProgramFilter(programs[0].id);
-        }
-    }, [open, programs, overviewPeriodProgramFilter]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -50,17 +49,17 @@ export function PeriodOverviewDialog({
                     </DialogHeader>
 
                     <div className="flex items-center gap-4 flex-wrap">
-                        <Select value={overviewPeriodProgramFilter} onValueChange={setOverviewPeriodProgramFilter}>
-                            <SelectTrigger className="h-8 text-xs w-[280px] rounded-lg bg-background">
-                                <SelectValue placeholder="Selecciona un programa" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {programs.map(p => (
-                                    <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        
+                        <Button 
+                            onClick={onSave} 
+                            disabled={isSaving || pendingChanges.length === 0}
+                            className={`rounded-full shadow hover:shadow-md transition-all h-8 px-4 text-xs font-bold ${
+                                pendingChanges.length > 0 
+                                    ? "bg-emerald-500 hover:bg-emerald-600 text-white" 
+                                    : "bg-muted text-muted-foreground"
+                            }`}
+                        >
+                            {isSaving ? "Guardando..." : pendingChanges.length > 0 ? "Guardar cambios" : "Guardado"}
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="rounded-full bg-muted/50 hover:bg-muted shrink-0 z-50 w-8 h-8">
                             <X className="w-4 h-4" />
                         </Button>
@@ -70,7 +69,7 @@ export function PeriodOverviewDialog({
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-muted/30">
                     <div className="max-w-7xl mx-auto space-y-6">
-                        {programs.filter(p => p.id === overviewPeriodProgramFilter).map(prog => (
+                        {programs.filter(p => p.id === programId).map(prog => (
                             <div key={prog.id} className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden">
                                 <div className="px-4 py-3 border-b border-border/50 bg-muted/20 flex items-center gap-2">
                                     <span className="font-bold text-sm text-foreground">{prog.name}</span>
@@ -118,7 +117,7 @@ export function PeriodOverviewDialog({
                                 </div>
                             </div>
                         ))}
-                        {programs.filter(p => p.id === overviewPeriodProgramFilter).length === 0 && (
+                        {programs.filter(p => p.id === programId).length === 0 && (
                             <div className="py-12 text-center text-muted-foreground">
                                 <NotebookTabs className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                 <p className="text-sm">No se encontraron programas</p>

@@ -16,11 +16,11 @@ export const adminService = {
                 by: ['role'],
                 _count: true
             }),
-            // Cursos totales
+            // Materias totales
             prisma.course.count(),
             // Entregas totales (stubbed to 0)
             Promise.resolve(0),
-            // Cursos activos (sin fecha de fin o fecha gte a hoy)
+            // Materias activos (sin fecha de fin o fecha gte a hoy)
             prisma.course.count({
                 where: {
                     OR: [
@@ -66,6 +66,7 @@ export const adminService = {
         search?: string;
         courseId?: string;
         groupId?: string;
+        programId?: string;
         limit?: number;
         offset?: number;
     }) {
@@ -78,6 +79,8 @@ export const adminService = {
 
         if (filters?.groupId && filters.groupId !== 'all') {
             where.groupId = filters.groupId;
+        } else if (filters?.programId && filters.programId !== 'all') {
+            where.group = { programId: filters.programId };
         }
 
         if (filters?.courseId && filters.courseId !== 'all') {

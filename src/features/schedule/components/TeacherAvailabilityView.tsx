@@ -14,7 +14,11 @@ import { DayOfWeek } from "@/generated/prisma/client";
 import { 
     getTeacherAvailabilityAction, 
     saveTeacherAvailabilityAction, 
-    publishTeacherAvailabilityAction 
+    publishTeacherAvailabilityAction,
+    getTeacherAvailabilityForAdminAction,
+    adminSaveTeacherAvailabilityAction,
+    adminLockTeacherAvailabilityAction,
+    unlockTeacherAvailabilityAction
 } from "../actions/availabilityActions";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { cn } from "@/lib/utils";
@@ -54,7 +58,7 @@ interface TimeSlot {
     endTime: string; // "HH:mm"
 }
 
-export function TeacherAvailabilityView() {
+export function TeacherAvailabilityView({ teacherId, isAdminMode, onAdminActionComplete }: { teacherId?: string, isAdminMode?: boolean, onAdminActionComplete?: () => void }) {
     const [locked, setLocked] = useState(false);
     const [slots, setSlots] = useState<TimeSlot[]>([]);
     const [loading, setLoading] = useState(true);
@@ -80,7 +84,9 @@ export function TeacherAvailabilityView() {
     const loadAvailability = async () => {
         setLoading(true);
         try {
-            const data = await getTeacherAvailabilityAction();
+            const data = isAdminMode && teacherId 
+                ? await getTeacherAvailabilityForAdminAction(teacherId)
+                : await getTeacherAvailabilityAction();
             setLocked(data.locked);
             setSlots(data.slots);
             setLastModifiedBy((data as any).lastModifiedBy || null);
@@ -209,9 +215,14 @@ export function TeacherAvailabilityView() {
     const handleSaveChanges = () => {
         startTransition(async () => {
             try {
-                await saveTeacherAvailabilityAction(slots);
+                if (isAdminMode && teacherId) {
+                    await adminSaveTeacherAvailabilityAction(teacherId, slots);
+                } else {
+                    await saveTeacherAvailabilityAction(slots);
+                }
                 toast.success("Borrador de disponibilidad guardado exitosamente");
                 await loadAvailability();
+                if (onAdminActionComplete) onAdminActionComplete();
             } catch (e: any) {
                 toast.error(e.message || "Error al guardar los cambios");
             }
@@ -222,14 +233,33 @@ export function TeacherAvailabilityView() {
         startTransition(async () => {
             try {
                 // First save the current slots state to ensure DB matches exactly the UI
-                await saveTeacherAvailabilityAction(slots);
-                // Then publish/lock
-                await publishTeacherAvailabilityAction();
+                if (isAdminMode && teacherId) {
+                    await adminSaveTeacherAvailabilityAction(teacherId, slots);
+                    await adminLockTeacherAvailabilityAction(teacherId);
+                } else {
+                    await saveTeacherAvailabilityAction(slots);
+                    await publishTeacherAvailabilityAction();
+                }
                 toast.success("Disponibilidad publicada y bloqueada con éxito");
                 setPublishDialogOpen(false);
                 await loadAvailability();
+                if (onAdminActionComplete) onAdminActionComplete();
             } catch (e: any) {
                 toast.error(e.message || "Error al publicar la disponibilidad");
+            }
+        });
+    };
+
+    const handleUnlock = () => {
+        if (!isAdminMode || !teacherId) return;
+        startTransition(async () => {
+            try {
+                await unlockTeacherAvailabilityAction(teacherId);
+                toast.success("Disponibilidad desbloqueada con éxito");
+                await loadAvailability();
+                if (onAdminActionComplete) onAdminActionComplete();
+            } catch (e: any) {
+                toast.error(e.message || "Error al desbloquear la disponibilidad");
             }
         });
     };
@@ -246,20 +276,34 @@ export function TeacherAvailabilityView() {
         <div className="space-y-6">
             {/* Status alerts */}
             {locked ? (
-                <div className="flex items-start gap-3 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
-                    <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="font-semibold text-sm">Disponibilidad Publicada y Bloqueada</p>
-                        <p className="text-xs opacity-90 mt-0.5">
-                            Tu disponibilidad horaria semanal está registrada y bloqueada para edición. Si necesitas realizar alguna modificación, por favor ponte en contacto con el administrador de la institución para que proceda a desbloquear tu perfil.
-                        </p>
-                        {lastModifiedBy && (
-                            <p className="text-[11px] mt-2 font-medium bg-emerald-600/10 border border-emerald-600/20 px-2 py-1 rounded-md inline-block">
-                                Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Tú"}) 
-                                {updatedAt && ` - ${updatedAt.toLocaleDateString()} ${updatedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
+                    <div className="flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-sm">Disponibilidad Publicada y Bloqueada</p>
+                            <p className="text-xs opacity-90 mt-0.5">
+                                {isAdminMode 
+                                    ? "El profesor completó su registro y no puede editarlo. Desbloquea para permitir o realizar cambios."
+                                    : "Tu disponibilidad horaria semanal está registrada y bloqueada para edición. Si necesitas realizar alguna modificación, por favor ponte en contacto con el administrador de la institución para que proceda a desbloquear tu perfil."}
                             </p>
-                        )}
+                            {lastModifiedBy && (
+                                <p className="text-[11px] mt-2 font-medium bg-emerald-600/10 border border-emerald-600/20 px-2 py-1 rounded-md inline-block">
+                                    Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Profesor"}) 
+                                    {updatedAt && ` - ${updatedAt.toLocaleDateString()} ${updatedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                                </p>
+                            )}
+                        </div>
                     </div>
+                    {isAdminMode && (
+                        <Button 
+                            size="sm" 
+                            onClick={handleUnlock} 
+                            disabled={isPending}
+                            className="h-8 text-xs font-semibold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                            {isPending ? "Desbloqueando..." : "Desbloquear"}
+                        </Button>
+                    )}
                 </div>
             ) : (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-300">

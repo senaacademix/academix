@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Users, Clock, BookOpen, GraduationCap, ExternalLink, ArrowRight, ArrowLeft, Calendar } from "lucide-react";
+import { MessageSquare, Users, Clock, BookOpen, GraduationCap, ArrowRight, ArrowLeft, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,7 +42,7 @@ export function MyEnrollments({
     if (filteredEnrollments.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-xl bg-muted/5">
-                <p className="text-muted-foreground font-medium">No estás inscrito en ningún curso todavía.</p>
+                <p className="text-muted-foreground font-medium">No estás inscrito en ninguna materia todavía.</p>
             </div>
         );
     }
@@ -165,25 +165,6 @@ export function MyEnrollments({
                                         {/* Right utilities */}
                                         <div className="flex items-center gap-2 ml-auto">
 
-                                            {enrollment.course.externalUrl && (
-                                                <div className="hidden lg:flex items-center bg-muted/60 hover:bg-muted/80 transition-colors rounded-full px-1 py-1 h-8 gap-1 border border-foreground/10">
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                asChild
-                                                                className="h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary transition-all"
-                                                            >
-                                                                <Link href={enrollment.course.externalUrl} target="_blank" rel="noopener noreferrer">
-                                                                    <ExternalLink className="h-3 w-3" />
-                                                                </Link>
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="bottom">Documentación externa</TooltipContent>
-                                                    </Tooltip>
-                                                </div>
-                                            )}
 
 
 
@@ -219,7 +200,7 @@ export function MyEnrollments({
 
                                             <TabsTrigger value="resources" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
                                                 <BookOpen className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Recursos</span>
+                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Documentación</span>
                                             </TabsTrigger>
                                         </TabsList>
                                     </div>

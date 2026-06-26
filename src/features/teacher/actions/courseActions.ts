@@ -34,6 +34,9 @@ export async function createCourseAction(formData: FormData) {
         }
     }
 
+    const weeklyHoursRaw = formData.get("weeklyHours") as string;
+    const weeklyHours = weeklyHoursRaw ? parseFloat(weeklyHoursRaw) : 0;
+
     const docProjectId = docProjectIdRaw === "none" ? undefined : (docProjectIdRaw || undefined);
 
     const course = await courseService.createCourse({
@@ -43,6 +46,7 @@ export async function createCourseAction(formData: FormData) {
         docProjectId,
         periodId,
         schedules,
+        weeklyHours,
     });
 
     // 🎯 AUDIT LOG
@@ -118,6 +122,9 @@ export async function updateCourseAction(formData: FormData) {
     const docProjectIdRaw = formData.get("docProjectId") as string;
     const schedulesStr = formData.get("schedules") as string;
 
+    const weeklyHoursRaw = formData.get("weeklyHours") as string;
+    const weeklyHours = weeklyHoursRaw ? parseFloat(weeklyHoursRaw) : 0;
+
     const docProjectId = docProjectIdRaw === "none" ? null : (docProjectIdRaw || undefined);
 
     // Parse schedules if provided
@@ -139,6 +146,7 @@ export async function updateCourseAction(formData: FormData) {
         docProjectId,
         periodId: periodId === "none" ? null : (periodId || undefined),
         schedules,
+        weeklyHours,
     });
 
     // 🎯 AUDIT LOG
@@ -180,7 +188,7 @@ export async function deleteCourseAction(formData: FormData) {
     const { auditLogger } = await import("../../admin/services/auditLogger");
     await auditLogger.logCourseDelete(
         courseId,
-        course?.title || "Curso",
+        course?.title || "Materia",
         session.user.id,
         session.user.name || "Profesor"
     );

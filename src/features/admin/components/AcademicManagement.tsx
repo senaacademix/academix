@@ -47,8 +47,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
     Search, Trash2, Edit, Plus, Folder, BookOpen, Users, Calendar, 
-    ChevronRight, Layers, Clock, X, Info, GraduationCap, ArrowLeft, ArrowUpRight, ExternalLink, GripVertical,
-    KeyRound, Lock, AlertCircle, Building, Code, Database, Binary, MessageSquare, Terminal,
+    ChevronRight, Layers, Clock, X, Info, GraduationCap, ArrowLeft, ArrowUpRight, GripVertical,
+    AlertCircle, Building, Code, Database, Binary, MessageSquare, Terminal,
     ShieldCheck, Cloud, Rocket, NotebookTabs
 } from "lucide-react";
 import {
@@ -74,7 +74,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { cn } from "@/lib/utils";
 
 // Server Actions
-import { deleteCourseAction, getAllUsersAction } from "@/app/admin-actions";
+import { deleteCourseAction, getAllUsersAction, deleteUserAction } from "@/app/admin-actions";
 import {
     getProgramsAction,
     createProgramAction,
@@ -92,7 +92,6 @@ import {
     reorderCoursesAction,
     registerStudentManualAction,
     registerStudentsBulkAction,
-    resetStudentPasswordToDocAction,
     assignTeacherToProgramAction,
     registerTeacherManualAction,
     registerTeachersBulkAction,
@@ -101,15 +100,27 @@ import {
     scheduleGroupCourseAction,
     updateGroupCourseScheduleAction,
     deleteGroupCourseAction,
-    checkScheduleConflictsAction
+    checkScheduleConflictsAction,
+    updateTeacherAction
 } from "@/features/admin/actions/academicActions";
 import { createCourseAction, updateCourseAction } from "@/features/teacher/actions/courseActions";
 import { 
     getTeacherAvailabilityForAdminAction, 
-    unlockTeacherAvailabilityAction 
+    unlockTeacherAvailabilityAction,
+    adminSaveTeacherAvailabilityAction,
+    adminLockTeacherAvailabilityAction 
 } from "@/features/schedule/actions/availabilityActions";
+import {
+    getTeacherQualificationsAction,
+    unlockTeacherQualificationsAction,
+    adminSaveTeacherQualificationsAction,
+    adminLockTeacherQualificationsAction
+} from "@/features/teacher/actions/qualificationActions";
 import * as XLSX from "xlsx";
+import { TeacherAvailabilityView } from "@/features/schedule/components/TeacherAvailabilityView";
+import { TeacherQualificationsView } from "@/features/teacher/components/TeacherQualificationsView";
 import { DayOfWeek } from "@/generated/prisma/client";
+import { EnvironmentManagement, TrainingEnvironment } from "@/features/admin/components/EnvironmentManagement";
 
 const DAYS_OF_WEEK_ORDERED: { value: DayOfWeek; label: string }[] = [
     { value: "MONDAY", label: "Lunes" },
@@ -176,6 +187,7 @@ interface Program {
     periods: Period[];
     groups: Group[];
     teachers: Teacher[];
+    environments?: TrainingEnvironment[];
 }
 
 interface Period {
@@ -235,6 +247,7 @@ interface Course {
     title: string;
     description: string | null;
     externalUrl: string | null;
+    weeklyHours?: number | null;
     createdAt: Date;
     group?: Group | null;
     periodId: string | null;
@@ -255,6 +268,12 @@ interface Teacher {
     id: string;
     name: string | null;
     email: string;
+    profile?: {
+        identificacion: string;
+        nombres: string;
+        apellido: string;
+        telefono: string | null;
+    } | null;
 }
 
 interface AcademicManagementProps {
@@ -263,19 +282,10 @@ interface AcademicManagementProps {
     totalCount: number;
 }
 
-const handleOpenExternalUrl = (url: string | null | undefined) => {
-    if (!url || url.trim() === "") return;
-    const cleanedUrl = url.trim();
-    const targetUrl = cleanedUrl.startsWith("http://") || cleanedUrl.startsWith("https://") 
-        ? cleanedUrl 
-        : `https://${cleanedUrl}`;
-    window.open(targetUrl, "_blank");
-};
-
 interface SortableCourseItemProps {
     course: Course;
     openEditCourse: (course: Course) => void;
-    triggerDelete: (type: "program" | "period" | "group" | "course", id: string, name: string) => void;
+    triggerDelete: (type: "program" | "period" | "group" | "course" | "teacher", id: string, name: string) => void;
     setSelectedCourseForDesc: (course: Course) => void;
     setDescriptionDialogOpen: (open: boolean) => void;
 }
@@ -333,15 +343,6 @@ function SortableCourseItem({
                                 >
                                     <Info className="h-3.5 w-3.5" />
                                 </Button></TooltipTrigger><TooltipContent><p>Ver Descripción</p></TooltipContent></Tooltip>
-                <Tooltip><TooltipTrigger asChild><Button 
-                                    size="icon" 
-                                    variant="ghost" 
-                                    className={`h-7 w-7 ${course.externalUrl ? "text-primary hover:bg-primary/10" : "text-muted-foreground/30"}`}
-                                    onClick={() => handleOpenExternalUrl(course.externalUrl)}
-                                    disabled={!course.externalUrl}
-                                >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                </Button></TooltipTrigger><TooltipContent><p>{course.externalUrl ? "Ver Información Externa" : "Sin enlace de información externa"}</p></TooltipContent></Tooltip>
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => openEditCourse(course)}>
                     <Edit className="h-3.5 w-3.5" />
                 </Button>
@@ -421,21 +422,19 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     const [courseTitle, setCourseTitle] = useState("");
     const [courseDescription, setCourseDescription] = useState("");
     const [coursePeriodId, setCoursePeriodId] = useState("");
-    const [courseExternalUrl, setCourseExternalUrl] = useState("");
+    const [courseWeeklyHours, setCourseWeeklyHours] = useState<number>(0);
 
     // Description Dialog States
     const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
     const [selectedCourseForDesc, setSelectedCourseForDesc] = useState<Course | null>(null);
 
     // Delete dialog states
-    const [deleteType, setDeleteType] = useState<"program" | "period" | "group" | "course" | null>(null);
+    const [deleteType, setDeleteType] = useState<"program" | "period" | "group" | "course" | "teacher" | "student" | null>(null);
     const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
     const [deleteItemName, setDeleteItemName] = useState("");
     const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
-    // Reset password dialog states
-    const [resetPasswordConfirmOpen, setResetPasswordConfirmOpen] = useState(false);
-    const [studentToReset, setStudentToReset] = useState<{ id: string; name: string; identificacion?: string } | null>(null);
+
 
     // Teacher assignment confirm dialog
     const [teacherConfirmOpen, setTeacherConfirmOpen] = useState(false);
@@ -513,6 +512,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     const [groupCourseToEdit, setGroupCourseToEdit] = useState<Course | null>(null);
     const [groupCourseTitle, setGroupCourseTitle] = useState("");
     const [groupCourseDescription, setGroupCourseDescription] = useState("");
+    const [groupCourseWeeklyHours, setGroupCourseWeeklyHours] = useState<number>(0);
     const [selectedCatalogCourseId, setSelectedCatalogCourseId] = useState("");
     const [showAllTeachersForAssignment, setShowAllTeachersForAssignment] = useState(false);
 
@@ -565,11 +565,24 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     } | null>(null);
     const [excelTeacherFileName, setExcelTeacherFileName] = useState("");
 
+    // Teacher Management States
+    const [editTeacherDialogOpen, setEditTeacherDialogOpen] = useState(false);
+    const [teacherToEdit, setTeacherToEdit] = useState<Teacher | null>(null);
+    const [editTeacherDoc, setEditTeacherDoc] = useState("");
+    const [editTeacherNames, setEditTeacherNames] = useState("");
+    const [editTeacherLastName, setEditTeacherLastName] = useState("");
+    const [editTeacherEmail, setEditTeacherEmail] = useState("");
+    const [editTeacherPhone, setEditTeacherPhone] = useState("");
+
+
+
+    // Teacher Qualifications States
+    const [qualDialogOpen, setQualDialogOpen] = useState(false);
+    const [qualTeacher, setQualTeacher] = useState<Teacher | null>(null);
+
     // Admin availability view states
     const [adminTeacherAvailabilityOpen, setAdminTeacherAvailabilityOpen] = useState(false);
     const [selectedTeacherForAvailability, setSelectedTeacherForAvailability] = useState<Teacher | null>(null);
-    const [adminTeacherAvailabilityData, setAdminTeacherAvailabilityData] = useState<{ locked: boolean; slots: any[] } | null>(null);
-    const [adminAvailabilityLoading, setAdminAvailabilityLoading] = useState(false);
 
     const scheduledTitles = managingGroup?.courses
         ?.filter(c => !groupCourseToEdit || c.id !== groupCourseToEdit.id)
@@ -656,6 +669,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 ...p,
                 createdAt: new Date(p.createdAt),
                 teachers: p.teachers || [],
+                environments: (p.environments || []).map((env: any) => ({
+                    ...env,
+                    createdAt: new Date(env.createdAt),
+                })),
                 periods: (p.periods || []).map((per: any) => ({
                     ...per,
                     createdAt: new Date(per.createdAt),
@@ -712,6 +729,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setGroupCourseToEdit(null);
         setGroupCourseTitle("");
         setGroupCourseDescription("");
+        setGroupCourseWeeklyHours(0);
         setScheduleDayOfWeek("MONDAY");
         
         const slots = getTimeSlots();
@@ -737,6 +755,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setGroupCourseToEdit(course);
         setGroupCourseTitle(course.title);
         setGroupCourseDescription(course.description || "");
+        setGroupCourseWeeklyHours(course.weeklyHours || 0);
         
         const firstSlot = course.schedules?.[0];
         const slots = getTimeSlots();
@@ -801,6 +820,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     await updateGroupCourseScheduleAction(groupCourseToEdit.id, {
                         title: groupCourseTitle,
                         description: "",
+                        weeklyHours: groupCourseWeeklyHours,
                         schedules
                     });
                     toast.success("Horario de clase actualizado con éxito");
@@ -813,6 +833,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     await scheduleGroupCourseAction({
                         title: groupCourseTitle,
                         description: "",
+                        weeklyHours: groupCourseWeeklyHours,
                         groupId: managingGroup!.id,
                         periodId,
                         schedules
@@ -1406,66 +1427,82 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         });
     };
 
-    const openTeacherAvailabilityDialog = async (teacher: Teacher) => {
+    const handleOpenTeacherAvailability = (teacher: Teacher) => {
         setSelectedTeacherForAvailability(teacher);
         setAdminTeacherAvailabilityOpen(true);
-        setAdminAvailabilityLoading(true);
-        try {
-            const data = await getTeacherAvailabilityForAdminAction(teacher.id);
-            setAdminTeacherAvailabilityData(data);
-        } catch (e: any) {
-            toast.error(e.message || "Error al cargar disponibilidad");
-            setAdminTeacherAvailabilityOpen(false);
-        } finally {
-            setAdminAvailabilityLoading(false);
-        }
-    };
-
-    const handleUnlockTeacherAvailability = async () => {
-        if (!selectedTeacherForAvailability) return;
-        startTransition(async () => {
-            try {
-                await unlockTeacherAvailabilityAction(selectedTeacherForAvailability.id);
-                toast.success("Disponibilidad desbloqueada con éxito");
-                // Reload data
-                const data = await getTeacherAvailabilityForAdminAction(selectedTeacherForAvailability.id);
-                setAdminTeacherAvailabilityData(data);
-                await refreshAll();
-            } catch (e: any) {
-                toast.error(e.message || "Error al desbloquear disponibilidad");
-            }
-        });
     };
 
     // ============ GENERAL DELETE HANDLER ============
 
-    const triggerDelete = (type: "program" | "period" | "group" | "course", id: string, name: string) => {
+
+    const handleOpenEditTeacher = (teacher: Teacher) => {
+        setTeacherToEdit(teacher);
+        setEditTeacherDoc(teacher.profile?.identificacion || "");
+        
+        let names = teacher.profile?.nombres || "";
+        let lastName = teacher.profile?.apellido || "";
+        if (!names && teacher.name) {
+            const parts = teacher.name.trim().split(/\s+/);
+            if (parts.length > 1) {
+                names = parts[0];
+                lastName = parts.slice(1).join(" ");
+            } else {
+                names = parts[0];
+            }
+        }
+
+        setEditTeacherNames(names);
+        setEditTeacherLastName(lastName);
+        setEditTeacherEmail(teacher.email || "");
+        setEditTeacherPhone(teacher.profile?.telefono || "");
+        setEditTeacherDialogOpen(true);
+    };
+
+
+    const handleEditTeacherSave = async () => {
+        if (!teacherToEdit) return;
+        if (!editTeacherDoc || !editTeacherNames || !editTeacherLastName || !editTeacherEmail) {
+            toast.error("Por favor completa todos los campos obligatorios");
+            return;
+        }
+
+        startTransition(async () => {
+            try {
+                await updateTeacherAction({
+                    id: teacherToEdit.id,
+                    identificacion: editTeacherDoc,
+                    nombres: editTeacherNames,
+                    apellido: editTeacherLastName,
+                    email: editTeacherEmail,
+                    telefono: editTeacherPhone || undefined,
+                });
+                toast.success("Información del profesor actualizada");
+                setEditTeacherDialogOpen(false);
+                setTeacherToEdit(null);
+                await refreshAll();
+            } catch (error: any) {
+                toast.error(error.message || "Error al actualizar profesor");
+            }
+        });
+    };
+
+
+
+    const handleOpenQual = (teacher: Teacher) => {
+        setQualTeacher(teacher);
+        setQualDialogOpen(true);
+    };
+
+
+
+    const triggerDelete = (type: "program" | "period" | "group" | "course" | "teacher" | "student", id: string, name: string) => {
         setDeleteType(type);
         setDeleteItemId(id);
         setDeleteItemName(name);
         setDeleteConfirmationOpen(true);
     };
 
-    const triggerResetPassword = (id: string, name: string, identificacion?: string) => {
-        setStudentToReset({ id, name, identificacion });
-        setResetPasswordConfirmOpen(true);
-    };
 
-    const handleResetPasswordConfirm = async () => {
-        if (!studentToReset) return;
-        startTransition(async () => {
-            try {
-                await resetStudentPasswordToDocAction(studentToReset.id);
-                toast.success(`Contraseña de ${studentToReset.name} restablecida a su documento: ${studentToReset.identificacion || "(Sin documento)"}`);
-                setResetPasswordConfirmOpen(false);
-                setStudentToReset(null);
-                await refreshAll();
-                await fetchSystemStudents();
-            } catch (error: any) {
-                toast.error(error.message || "Error al restablecer la contraseña");
-            }
-        });
-    };
 
     const handleDeleteConfirm = async () => {
         if (!deleteType || !deleteItemId) return;
@@ -1487,6 +1524,12 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 } else if (deleteType === "course") {
                     await deleteCourseAction(deleteItemId);
                     toast.success("Curso académico eliminado");
+                } else if (deleteType === "teacher") {
+                    await deleteUserAction(deleteItemId);
+                    toast.success("Profesor eliminado del sistema");
+                } else if (deleteType === "student") {
+                    await deleteUserAction(deleteItemId);
+                    toast.success("Estudiante eliminado del sistema");
                 }
                 setDeleteConfirmationOpen(false);
                 await refreshAll();
@@ -1503,7 +1546,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setCourseToEdit(null);
         setCourseTitle("");
         setCourseDescription("");
-        setCourseExternalUrl("");
+        setCourseWeeklyHours(0);
         setCoursePeriodId(periodId);
         setCourseDialogOpen(true);
     };
@@ -1512,7 +1555,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setCourseToEdit(course);
         setCourseTitle(course.title);
         setCourseDescription(course.description || "");
-        setCourseExternalUrl(course.externalUrl || "");
+        setCourseWeeklyHours(course.weeklyHours || 0);
         setCoursePeriodId(course.periodId || "");
         setCourseDialogOpen(true);
     };
@@ -1531,7 +1574,8 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         formData.append("title", courseTitle);
         formData.append("description", courseDescription);
         formData.append("periodId", coursePeriodId);
-        formData.append("externalUrl", courseExternalUrl);
+        formData.append("externalUrl", "");
+        formData.append("weeklyHours", courseWeeklyHours.toString());
         formData.append("startDate", "");
         formData.append("endDate", "");
         formData.append("schedules", "[]");
@@ -1676,11 +1720,12 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
 
                     {/* Program Sub-Navigation Tabs */}
                     <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
-                        <TabsList className="flex w-full max-w-[580px] bg-muted/40 p-1 rounded-xl">
+                        <TabsList className="flex w-full max-w-[680px] bg-muted/40 p-1 rounded-xl">
                             <TabsTrigger value="overview" className="rounded-lg flex-1">Vista General</TabsTrigger>
                             <TabsTrigger value="periods" className="rounded-lg flex-1">Periodos y Cursos</TabsTrigger>
                             <TabsTrigger value="groups" className="rounded-lg flex-1">Grupos y Alumnos</TabsTrigger>
                             <TabsTrigger value="teachers" className="rounded-lg flex-1">Profesores</TabsTrigger>
+                            <TabsTrigger value="environments" className="rounded-lg flex-1">Ambientes</TabsTrigger>
                         </TabsList>
 
                         {/* SUB-TAB: OVERVIEW */}
@@ -1895,22 +1940,16 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                                             <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
                                                                             <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
                                                                             <TableCell className="py-3 text-right">
-                                                                                <Tooltip><TooltipTrigger asChild><Button
-                                                                                                                                                                    size="icon"
-                                                                                                                                                                    variant="ghost"
-                                                                                                                                                                    className="h-7 w-7 text-muted-foreground hover:text-foreground mr-1.5"
-                                                                                                                                                                    onClick={() => triggerResetPassword(student.id, student.name, student.profile?.identificacion)}
-                                                                                                                                                                >
-                                                                                                                                                                    <KeyRound className="h-4 w-4" />
-                                                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Restablecer contraseña a documento</p></TooltipContent></Tooltip>
-                                                                                <Tooltip><TooltipTrigger asChild><Button
-                                                                                                                                                                    size="icon"
-                                                                                                                                                                    variant="ghost"
-                                                                                                                                                                    className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                                                                                                                                                    onClick={() => handleAssignStudent(student.id, false)}
-                                                                                                                                                                >
-                                                                                                                                                                    <X className="h-4 w-4" />
-                                                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Remover del grupo</p></TooltipContent></Tooltip>
+                                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                                    <Tooltip><TooltipTrigger asChild><Button
+                                                                                        size="icon"
+                                                                                        variant="ghost"
+                                                                                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                                                                        onClick={() => triggerDelete("student", student.id, student.name)}
+                                                                                    >
+                                                                                        <Trash2 className="h-4 w-4" />
+                                                                                    </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
+                                                                                </div>
                                                                             </TableCell>
                                                                         </TableRow>
                                                                     ))}
@@ -2036,19 +2075,19 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 <h4 className="text-base font-semibold text-muted-foreground">Profesores de {selectedProgram.name}</h4>
                                 <Button onClick={() => setAssignTeachersDialogOpen(true)} size="sm" className="shadow-sm">
                                     <Plus className="h-4 w-4 mr-1.5" />
-                                    Asociar Profesores
+                                    Registrar Profesor
                                 </Button>
                             </div>
 
                             {(!selectedProgram.teachers || selectedProgram.teachers.length === 0) ? (
                                 <div className="text-center py-16 bg-muted/10 rounded-2xl border border-dashed border-muted/50">
                                     <Users className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                                    <h4 className="font-semibold">Sin Profesores Asociados</h4>
+                                    <h4 className="font-semibold">Sin Profesores</h4>
                                     <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
-                                        Asocia profesores a este programa de formación para que puedan ser asignados a impartir cursos en este programa.
+                                        Registra profesores en este programa de formación para que puedan ser asignados a impartir cursos.
                                     </p>
                                     <Button onClick={() => setAssignTeachersDialogOpen(true)} className="mt-4" size="sm">
-                                        <Plus className="mr-1.5 h-4 w-4" /> Asociar Profesores
+                                        <Plus className="mr-1.5 h-4 w-4" /> Registrar Profesor
                                     </Button>
                                 </div>
                             ) : (
@@ -2057,31 +2096,63 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                         <Table>
                                             <TableHeader className="bg-muted/10">
                                                 <TableRow>
+                                                    <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
                                                     <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
                                                     <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
+                                                    <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
                                                     <TableHead className="py-3 text-xs font-semibold text-right">Acciones</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {selectedProgram.teachers.map(teacher => (
-                                                    <TableRow key={teacher.id} className="hover:bg-muted/5">
+                                                    <TableRow key={teacher.id} className="hover:bg-muted/5 group">
+                                                        <TableCell className="py-3 text-xs font-medium text-foreground">
+                                                            {teacher.profile?.identificacion || "—"}
+                                                        </TableCell>
                                                         <TableCell className="py-3 text-xs font-bold text-foreground">
                                                             {teacher.name || "Sin nombre"}
                                                         </TableCell>
                                                         <TableCell className="py-3 text-xs text-muted-foreground font-sans">
                                                             {teacher.email}
                                                         </TableCell>
+                                                        <TableCell className="py-3 text-xs text-muted-foreground font-sans">
+                                                            {teacher.profile?.telefono || "—"}
+                                                        </TableCell>
                                                         <TableCell className="py-3 text-right">
-                                                            <div className="flex justify-end items-center gap-1.5 ml-auto">
-                                                                <Button 
-                                                                    size="sm" 
-                                                                    variant="ghost" 
-                                                                    className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 flex items-center gap-1.5"
-                                                                    onClick={() => handleAssignTeacher(teacher.id, teacher.name || "Profesor", false)}
+                                                            <div className="flex justify-end items-center gap-1.5 ml-auto opacity-80 group-hover:opacity-100 transition-opacity">
+                                                                <Tooltip><TooltipTrigger asChild><Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
+                                                                    onClick={() => handleOpenEditTeacher(teacher)}
                                                                 >
-                                                                    <X className="h-3.5 w-3.5" />
-                                                                    <span>Desasociar</span>
-                                                                </Button>
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </Button></TooltipTrigger><TooltipContent><p>Editar Información</p></TooltipContent></Tooltip>
+                                                                <Tooltip><TooltipTrigger asChild><Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
+                                                                    onClick={() => handleOpenQual(teacher)}
+                                                                >
+                                                                    <BookOpen className="h-3.5 w-3.5" />
+                                                                </Button></TooltipTrigger><TooltipContent><p>Materias Habilitadas</p></TooltipContent></Tooltip>
+                                                                <Tooltip><TooltipTrigger asChild><Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
+                                                                    onClick={() => handleOpenTeacherAvailability(teacher)}
+                                                                >
+                                                                    <Clock className="h-3.5 w-3.5" />
+                                                                </Button></TooltipTrigger><TooltipContent><p>Ver Disponibilidad</p></TooltipContent></Tooltip>
+
+                                                                <Tooltip><TooltipTrigger asChild><Button 
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                                                    onClick={() => triggerDelete("teacher", teacher.id, teacher.name || "Profesor")}
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button></TooltipTrigger><TooltipContent><p>Eliminar profesor del sistema</p></TooltipContent></Tooltip>
                                                             </div>
                                                         </TableCell>
                                                     </TableRow>
@@ -2091,6 +2162,15 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     </CardContent>
                                 </Card>
                             )}
+                        </TabsContent>
+
+                        {/* SUB-TAB: ENVIRONMENTS */}
+                        <TabsContent value="environments" className="space-y-6 mt-0">
+                            <EnvironmentManagement
+                                initialEnvironments={selectedProgram.environments || []}
+                                programId={selectedProgram.id}
+                                onActionComplete={refreshAll}
+                            />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -2415,50 +2495,230 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 </DialogContent>
             </Dialog>
 
-            {/* ============ DIALOG: ASSOCIATE TEACHERS TO PROGRAM ============ */}
+            {/* ============ DIALOG: REGISTER TEACHER TO PROGRAM ============ */}
             <Dialog open={assignTeachersDialogOpen} onOpenChange={setAssignTeachersDialogOpen}>
                 <DialogContent className="max-w-[550px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Asociar Profesores a {selectedProgram?.name}</DialogTitle>
-                        <DialogDescription>Vincula profesores registrados en el sistema al programa de formación.</DialogDescription>
+                        <DialogTitle>Registrar Profesor en {selectedProgram?.name}</DialogTitle>
+                        <DialogDescription>Crea un profesor manualmente o impórtalo desde Excel. Quedará automáticamente asociado a este programa.</DialogDescription>
                     </DialogHeader>
                     
-                    <div className="space-y-4 mt-2">
-                        <div className="overflow-y-auto py-2 space-y-2 max-h-[50vh] pr-1">
-                            {teachersList.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-6">No hay profesores registrados en el sistema.</p>
-                            ) : (
-                                <div className="border border-muted/40 rounded-xl divide-y divide-muted/20 overflow-hidden bg-muted/5">
-                                    {teachersList.map((teacher) => {
-                                        const isAssociated = selectedProgram?.teachers?.some(t => t.id === teacher.id);
-                                        return (
-                                            <div key={teacher.id} className="flex items-center justify-between p-3 hover:bg-muted/10 transition-colors duration-150">
-                                                <div className="flex flex-col min-w-0 pr-4">
-                                                    <span className="text-xs font-semibold truncate text-foreground/90">{teacher.name || "Sin nombre"}</span>
-                                                    <span className="text-[10px] text-muted-foreground truncate font-sans">{teacher.email}</span>
-                                                </div>
-                                                <Button
-                                                    size="sm"
-                                                    variant={isAssociated ? "destructive" : "default"}
-                                                    className="h-8 text-xs font-bold shrink-0 min-w-[90px]"
-                                                    onClick={() => handleAssignTeacher(teacher.id, teacher.name || "Profesor", !isAssociated)}
-                                                    disabled={isPending}
-                                                >
-                                                    {isAssociated ? "Remover" : "Asociar"}
-                                                </Button>
-                                            </div>
-                                        );
-                                    })}
+                    <Tabs defaultValue="manual" className="w-full mt-2">
+                        <TabsList className="grid w-full grid-cols-2 bg-muted/40 p-1 rounded-xl mb-4">
+                            <TabsTrigger value="manual" className="rounded-lg text-xs">Registro Manual</TabsTrigger>
+                            <TabsTrigger value="excel" className="rounded-lg text-xs">Importar Excel</TabsTrigger>
+                        </TabsList>
+
+                        {/* TAB: MANUAL TEACHER REGISTRATION */}
+                        <TabsContent value="manual" className="space-y-4 mt-0">
+                            <div className="space-y-3 border border-muted/40 p-4 rounded-xl bg-muted/5">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase">Formulario de Registro</span>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1 col-span-2">
+                                        <Label htmlFor="mtNumDoc" className="text-xs">Número de Documento *</Label>
+                                        <Input
+                                            id="mtNumDoc"
+                                            placeholder="Ej: 10245678 (Contraseña inicial)"
+                                            className="h-9 text-xs"
+                                            value={manualTeacherIdentificacion}
+                                            onChange={(e) => setManualTeacherIdentificacion(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <Label htmlFor="mtNombres" className="text-xs">Nombres *</Label>
+                                        <Input
+                                            id="mtNombres"
+                                            placeholder="Ej: Ana María"
+                                            className="h-9 text-xs"
+                                            value={manualTeacherNombres}
+                                            onChange={(e) => setManualTeacherNombres(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <Label htmlFor="mtApellidos" className="text-xs">Apellidos *</Label>
+                                        <Input
+                                            id="mtApellidos"
+                                            placeholder="Ej: López Soto"
+                                            className="h-9 text-xs"
+                                            value={manualTeacherApellido}
+                                            onChange={(e) => setManualTeacherApellido(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1 col-span-2">
+                                        <Label htmlFor="mtEmail" className="text-xs">Correo Electrónico *</Label>
+                                        <Input
+                                            id="mtEmail"
+                                            type="email"
+                                            placeholder="Ej: ana.lopez@correo.com"
+                                            className="h-9 text-xs"
+                                            value={manualTeacherEmail}
+                                            onChange={(e) => setManualTeacherEmail(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1 col-span-2">
+                                        <Label htmlFor="mtTel" className="text-xs">Teléfono / Celular</Label>
+                                        <Input
+                                            id="mtTel"
+                                            placeholder="Ej: 3001234567"
+                                            className="h-9 text-xs"
+                                            value={manualTeacherTelefono}
+                                            onChange={(e) => setManualTeacherTelefono(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    </div>
+
+                                <Button 
+                                    onClick={handleRegisterTeacherManual} 
+                                    className="w-full mt-2 h-9 text-xs"
+                                    disabled={isPending}
+                                >
+                                    {isPending ? "Registrando..." : "Registrar Profesor"}
+                                </Button>
+                            </div>
+                        </TabsContent>
+
+                        {/* TAB: EXCEL TEACHER IMPORT */}
+                        <TabsContent value="excel" className="space-y-4 mt-0">
+                            <div className="space-y-3">
+                                <div className="border border-dashed border-muted/50 rounded-xl p-4 bg-muted/5 text-center relative hover:bg-muted/10 transition-colors duration-150">
+                                    <input 
+                                        type="file" 
+                                        accept=".xlsx, .xls" 
+                                        onChange={handleTeacherExcelFileChange}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        disabled={isPending}
+                                    />
+                                    <div className="py-2">
+                                        <p className="text-xs font-semibold text-foreground/80">
+                                            {excelTeacherFileName ? `Archivo: ${excelTeacherFileName}` : "Haz clic o arrastra un archivo de Excel aquí"}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Soporta .xlsx y .xls</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-muted/10 p-3 rounded-lg text-[10px] text-muted-foreground space-y-1">
+                                    <p className="font-semibold text-foreground/70">Columnas requeridas en la primera hoja:</p>
+                                    <p>• <span className="font-semibold">Identificacion</span> (contraseña inicial)</p>
+                                    <p>• <span className="font-semibold">Email</span> (correo único)</p>
+                                    <p>• <span className="font-semibold">Nombre</span>, <span className="font-semibold">Apellidos</span></p>
+                                    <p className="mt-1 font-semibold text-foreground/70">Columnas opcionales:</p>
+                                    <p>• <span className="font-semibold">Teléfono</span></p>
+                                </div>
+
+                                {excelTeachers.length > 0 && (
+                                    <div className="p-3 bg-primary/10 rounded-lg border border-primary/20 flex justify-between items-center">
+                                        <span className="text-xs font-medium text-primary">Se leyeron {excelTeachers.length} profesores listos para importar.</span>
+                                        <Button 
+                                            size="sm" 
+                                            onClick={handleImportTeacherExcel} 
+                                            disabled={isPending}
+                                            className="h-8 text-xs shrink-0"
+                                        >
+                                            {isPending ? "Importando..." : "Importar Ahora"}
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {importTeacherResult && (
+                                    <div className="border border-muted/30 rounded-xl p-3 bg-muted/5 space-y-2 text-xs">
+                                        <p className="font-bold text-foreground/90 uppercase tracking-wider text-[10px]">Resultado de la Importación:</p>
+                                        <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                                            <div className="bg-green-500/10 border border-green-500/20 p-2 rounded text-green-600 dark:text-green-400">
+                                                <span className="block font-bold text-lg">{importTeacherResult.successCount}</span>
+                                                Registrados con éxito
+                                            </div>
+                                            <div className="bg-yellow-500/10 border border-yellow-500/20 p-2 rounded text-yellow-600 dark:text-yellow-400">
+                                                <span className="block font-bold text-lg">{importTeacherResult.skippedCount}</span>
+                                                Omitidos/Duplicados
+                                            </div>
+                                        </div>
+                                        {importTeacherResult.errors && importTeacherResult.errors.length > 0 && (
+                                            <div className="mt-2">
+                                                <p className="font-semibold text-destructive mb-1 text-[11px]">Detalle de omisiones/errores:</p>
+                                                <ul className="max-h-[100px] overflow-y-auto space-y-1 list-disc pl-4 text-muted-foreground text-[10px]">
+                                                    {importTeacherResult.errors.map((err, idx) => (
+                                                        <li key={idx}>{err}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </TabsContent>
+                    </Tabs>
 
                     <DialogFooter className="mt-4 pt-2 border-t border-muted/20">
                         <Button onClick={() => setAssignTeachersDialogOpen(false)}>Cerrar</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ============ DIALOG: EDIT TEACHER ============ */}
+            <Dialog open={editTeacherDialogOpen} onOpenChange={setEditTeacherDialogOpen}>
+                <DialogContent className="max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Editar Profesor</DialogTitle>
+                        <DialogDescription>Actualiza la información del profesor seleccionado.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-3">
+                        <div className="space-y-2">
+                            <Label htmlFor="edTDoc">Número de Documento *</Label>
+                            <Input id="edTDoc" value={editTeacherDoc} onChange={(e) => setEditTeacherDoc(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edTName">Nombres *</Label>
+                            <Input id="edTName" value={editTeacherNames} onChange={(e) => setEditTeacherNames(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edTLast">Apellidos *</Label>
+                            <Input id="edTLast" value={editTeacherLastName} onChange={(e) => setEditTeacherLastName(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edTEmail">Correo Electrónico *</Label>
+                            <Input id="edTEmail" type="email" value={editTeacherEmail} onChange={(e) => setEditTeacherEmail(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edTTel">Teléfono</Label>
+                            <Input id="edTTel" value={editTeacherPhone} onChange={(e) => setEditTeacherPhone(e.target.value)} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setEditTeacherDialogOpen(false)} disabled={isPending}>Cancelar</Button>
+                        <Button onClick={handleEditTeacherSave} disabled={isPending}>Guardar Cambios</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ============ DIALOG: TEACHER QUALIFICATIONS (MATERIAS) ============ */}
+            <Dialog open={qualDialogOpen} onOpenChange={setQualDialogOpen}>
+                <DialogContent className="max-w-[100vw] sm:max-w-[100vw] w-screen h-[100dvh] max-h-[100dvh] rounded-none m-0 border-0 flex flex-col p-4 sm:p-6">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {qualTeacher ? `Materias de ${qualTeacher.name}` : "Cargando..."}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Selecciona las materias que este docente está calificado para dictar.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-4 max-h-[70vh]">
+                        {qualTeacher && (
+                            <TeacherQualificationsView 
+                                teacherId={qualTeacher.id} 
+                                isAdminMode={true} 
+                                onAdminActionComplete={refreshAll} 
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+
 
             {/* ============ DIALOG: COURSE CRUD ============ */}
             <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
@@ -2488,17 +2748,38 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     rows={2}
                                 />
                             </div>
-                            <div className="space-y-2 col-span-2">
-                                <Label htmlFor="cExternalUrl">Enlace de Información Externa</Label>
-                                <Input
-                                    id="cExternalUrl"
-                                    placeholder="Ej: https://mi-plataforma.com/curso..."
-                                    value={courseExternalUrl}
-                                    onChange={(e) => setCourseExternalUrl(e.target.value)}
-                                />
+                            <div className="space-y-2 col-span-2 md:col-span-1">
+                                <Label htmlFor="cWeeklyHours">Horas Semanales</Label>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <Select value={Math.floor(courseWeeklyHours || 0).toString()} onValueChange={(val) => setCourseWeeklyHours(parseInt(val) + ((courseWeeklyHours || 0) % 1))}>
+                                            <SelectTrigger id="cWeeklyHours" className="h-9">
+                                                <SelectValue placeholder="Horas" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-[200px]">
+                                                {Array.from({ length: 41 }, (_, i) => (
+                                                    <SelectItem key={`h-${i}`} value={i.toString()}>{i} hr</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <Select value={Math.round(((courseWeeklyHours || 0) % 1) * 60).toString()} onValueChange={(val) => setCourseWeeklyHours(Math.floor(courseWeeklyHours || 0) + parseInt(val) / 60)}>
+                                            <SelectTrigger id="cWeeklyMinutes" className="h-9">
+                                                <SelectValue placeholder="Minutos" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="0">0 min</SelectItem>
+                                                <SelectItem value="15">15 min</SelectItem>
+                                                <SelectItem value="30">30 min</SelectItem>
+                                                <SelectItem value="45">45 min</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
                             </div>
                             {selectedProgram && (
-                                <div className="space-y-2 col-span-2">
+                                <div className="space-y-2 col-span-2 md:col-span-1">
                                     <Label htmlFor="cPeriod">Periodo Académico</Label>
                                     <Select value={coursePeriodId} onValueChange={setCoursePeriodId}>
                                         <SelectTrigger>
@@ -2538,20 +2819,6 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     <div className="py-4 text-sm text-foreground/80 whitespace-pre-wrap bg-muted/20 p-4 rounded-xl border border-muted/40 max-h-[250px] overflow-y-auto custom-scrollbar">
                         {selectedCourseForDesc?.description || "Este curso no tiene una descripción detallada registrada."}
                     </div>
-                    {selectedCourseForDesc?.externalUrl && (
-                        <div className="flex items-center justify-between p-3 rounded-lg border border-primary/20 bg-primary/5 text-xs text-primary">
-                            <span className="font-medium">El curso cuenta con enlace de información externa:</span>
-                            <Button 
-                                size="sm" 
-                                variant="outline" 
-                                className="h-7 px-2 border-primary/30 hover:bg-primary/10 text-primary"
-                                onClick={() => handleOpenExternalUrl(selectedCourseForDesc.externalUrl)}
-                            >
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                Abrir Enlace
-                            </Button>
-                        </div>
-                    )}
                     <DialogFooter>
                         <Button onClick={() => setDescriptionDialogOpen(false)}>Cerrar</Button>
                     </DialogFooter>
@@ -2609,35 +2876,11 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* ============ DIALOG: RESET PASSWORD CONFIRMATION ============ */}
-            <AlertDialog open={resetPasswordConfirmOpen} onOpenChange={setResetPasswordConfirmOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Restablecer contraseña?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            ¿Estás seguro de que deseas restablecer la contraseña del estudiante <strong>{studentToReset?.name}</strong>?
-                            Su nueva contraseña será su número de identificación: <strong>{studentToReset?.identificacion || "(Sin identificación)"}</strong>.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={(e) => {
-                                e.preventDefault();
-                                handleResetPasswordConfirm();
-                            }}
-                            className="bg-primary hover:bg-primary/90"
-                            disabled={isPending}
-                        >
-                            {isPending ? "Restableciendo..." : "Confirmar Restablecimiento"}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+
 
             {/* ============ DIALOG: VIEW & UNLOCK TEACHER AVAILABILITY ============ */}
             <Dialog open={adminTeacherAvailabilityOpen} onOpenChange={setAdminTeacherAvailabilityOpen}>
-                <DialogContent className="max-w-[500px] max-h-[85vh] flex flex-col">
+                <DialogContent className="max-w-[100vw] sm:max-w-[100vw] w-screen h-[100dvh] max-h-[100dvh] rounded-none m-0 border-0 flex flex-col p-4 sm:p-6">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Calendar className="w-5 h-5 text-primary" />
@@ -2648,68 +2891,13 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto py-4 space-y-4 max-h-[50vh] pr-1">
-                        {adminAvailabilityLoading ? (
-                            <div className="flex items-center justify-center py-10">
-                                <LoadingSpinner />
-                            </div>
-                        ) : !adminTeacherAvailabilityData ? (
-                            <p className="text-sm text-muted-foreground text-center py-6">No se pudieron cargar los datos.</p>
-                        ) : (
-                            <div className="space-y-4">
-                                {/* Status Banner */}
-                                {adminTeacherAvailabilityData.locked ? (
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
-                                        <div className="flex items-start gap-2 text-xs">
-                                            <Lock className="w-4 h-4 shrink-0 mt-0.5 text--600 dark:text--400" />
-                                            <div>
-                                                <p className="font-semibold">Disponibilidad Bloqueada (Publicada)</p>
-                                                <p className="opacity-90">El profesor completó su registro y no puede editarlo.</p>
-                                            </div>
-                                        </div>
-                                        <Button 
-                                            size="sm" 
-                                            onClick={handleUnlockTeacherAvailability} 
-                                            disabled={isPending}
-                                            className="h-8 text-xs font-semibold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                        >
-                                            {isPending ? "Desbloqueando..." : "Desbloquear"}
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs">
-                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text--600 dark:text--400" />
-                                        <div>
-                                            <p className="font-semibold">Disponibilidad Abierta (Edición)</p>
-                                            <p className="opacity-90">El profesor aún se encuentra en modo borrador y puede seguir modificando sus horarios.</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Slots list grouped by day */}
-                                <div className="space-y-2">
-                                    {DAYS_OF_WEEK_ORDERED.map(({ value: day, label: dayName }) => {
-                                        const daySlots = adminTeacherAvailabilityData.slots.filter(s => s.dayOfWeek === day);
-                                        return (
-                                            <div key={day} className="flex justify-between items-start gap-4 p-2 rounded-lg bg-muted/20 border border-muted/20 text-xs">
-                                                <span className="font-semibold w-20 shrink-0 mt-0.5">{dayName}</span>
-                                                <div className="flex-1 flex flex-wrap gap-1">
-                                                    {daySlots.length === 0 ? (
-                                                        <span className="text-muted-foreground italic text-[11px]">No disponible</span>
-                                                    ) : (
-                                                        daySlots.map((slot, index) => (
-                                                            <Badge key={index} variant="secondary" className="font-mono text-[10px] flex items-center gap-1 py-0 px-1.5">
-                                                                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                                                                {slot.startTime} – {slot.endTime}
-                                                            </Badge>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                    <div className="flex-1 overflow-y-auto p-4 max-h-[70vh]">
+                        {selectedTeacherForAvailability && (
+                            <TeacherAvailabilityView 
+                                teacherId={selectedTeacherForAvailability.id} 
+                                isAdminMode={true} 
+                                onAdminActionComplete={refreshAll} 
+                            />
                         )}
                     </div>
 
@@ -2774,7 +2962,36 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
 
 
 
-
+                        <div className="space-y-1 mt-3">
+                            <Label htmlFor="gcWeeklyHours" className="text-xs">Horas Semanales Asignadas</Label>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <Select value={Math.floor(groupCourseWeeklyHours || 0).toString()} onValueChange={(val) => setGroupCourseWeeklyHours(parseInt(val) + ((groupCourseWeeklyHours || 0) % 1))}>
+                                        <SelectTrigger id="gcWeeklyHours" className="h-9 text-xs">
+                                            <SelectValue placeholder="Horas" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[200px]">
+                                            {Array.from({ length: 41 }, (_, i) => (
+                                                <SelectItem key={`h-${i}`} value={i.toString()}>{i} hr</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex-1">
+                                    <Select value={Math.round(((groupCourseWeeklyHours || 0) % 1) * 60).toString()} onValueChange={(val) => setGroupCourseWeeklyHours(Math.floor(groupCourseWeeklyHours || 0) + parseInt(val) / 60)}>
+                                        <SelectTrigger id="gcWeeklyMinutes" className="h-9 text-xs">
+                                            <SelectValue placeholder="Minutos" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="0">0 min</SelectItem>
+                                            <SelectItem value="15">15 min</SelectItem>
+                                            <SelectItem value="30">30 min</SelectItem>
+                                            <SelectItem value="45">45 min</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
 
                         {/* Schedule slots editor section */}
                         <div className="space-y-3 border border-muted/50 p-4 rounded-xl bg-muted/5">

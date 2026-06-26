@@ -27,7 +27,7 @@ export async function enrollStudentAction(courseId: string) {
 
     await auditLogger.logEnrollment(
         enrollment.id,
-        course?.title || "Curso",
+        course?.title || "Materia",
         session.user.id,
         session.user.name || "Estudiante"
     );

@@ -2,7 +2,7 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,7 +64,7 @@ import {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface TrainingEnvironment {
+export interface TrainingEnvironment {
  id: string;
  name: string;
  capacity: number;
@@ -73,10 +73,13 @@ interface TrainingEnvironment {
  description: string | null;
  isActive: boolean;
  createdAt: Date;
+ programId?: string | null;
 }
 
 interface EnvironmentManagementProps {
  initialEnvironments: TrainingEnvironment[];
+ programId: string;
+ onActionComplete?: () => void;
 }
 
 // ─── Suggested Resources ─────────────────────────────────────────────────────
@@ -119,8 +122,12 @@ const emptyForm = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function EnvironmentManagement({ initialEnvironments }: EnvironmentManagementProps) {
+export function EnvironmentManagement({ initialEnvironments, programId, onActionComplete }: EnvironmentManagementProps) {
  const [environments, setEnvironments] = useState<TrainingEnvironment[]>(initialEnvironments);
+
+ useEffect(() => {
+  setEnvironments(initialEnvironments);
+ }, [initialEnvironments]);
  const [search, setSearch] = useState("");
  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
 
@@ -193,64 +200,68 @@ export function EnvironmentManagement({ initialEnvironments }: EnvironmentManage
  setCustomResource("");
  }
 
- function handleSave() {
- if (!form.name.trim()) {
- toast.error("El nombre es obligatorio");
- return;
- }
- const capacityNum = parseInt(form.capacity);
- if (isNaN(capacityNum) || capacityNum < 1) {
- toast.error("La capacidad debe ser un número mayor a 0");
- return;
- }
+  function handleSave() {
+    if (!form.name.trim()) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
+    const capacityNum = parseInt(form.capacity);
+    if (isNaN(capacityNum) || capacityNum < 1) {
+      toast.error("La capacidad debe ser un número mayor a 0");
+      return;
+    }
 
- startTransition(async () => {
- try {
- if (editingEnv) {
- const updated = await updateEnvironmentAction(editingEnv.id, {
- name: form.name.trim(),
- capacity: capacityNum,
- location: form.location.trim() || null,
- resources: form.resources,
- description: form.description.trim() || null,
- isActive: form.isActive,
- });
- setEnvironments((prev) =>
- prev.map((e) => (e.id === editingEnv.id ? { ...e, ...updated } : e))
- );
- toast.success("Ambiente actualizado correctamente");
- } else {
- const created = await createEnvironmentAction({
- name: form.name.trim(),
- capacity: capacityNum,
- location: form.location.trim() || undefined,
- resources: form.resources,
- description: form.description.trim() || undefined,
- isActive: form.isActive,
- });
- setEnvironments((prev) => [created as TrainingEnvironment, ...prev]);
- toast.success("Ambiente creado correctamente");
- }
- setDialogOpen(false);
- } catch (err) {
- toast.error("Error al guardar el ambiente");
- console.error(err);
- }
- });
- }
+    startTransition(async () => {
+      try {
+        if (editingEnv) {
+          const updated = await updateEnvironmentAction(editingEnv.id, {
+            name: form.name.trim(),
+            capacity: capacityNum,
+            location: form.location.trim() || null,
+            resources: form.resources,
+            description: form.description.trim() || null,
+            isActive: form.isActive,
+          });
+          setEnvironments((prev) =>
+            prev.map((e) => (e.id === editingEnv.id ? { ...e, ...updated } : e))
+          );
+          toast.success("Ambiente actualizado correctamente");
+          onActionComplete?.();
+        } else {
+          const created = await createEnvironmentAction({
+            name: form.name.trim(),
+            capacity: capacityNum,
+            location: form.location.trim() || undefined,
+            resources: form.resources,
+            description: form.description.trim() || undefined,
+            isActive: form.isActive,
+            programId: programId,
+          });
+          setEnvironments((prev) => [created as TrainingEnvironment, ...prev]);
+          toast.success("Ambiente creado correctamente");
+          onActionComplete?.();
+        }
+        setDialogOpen(false);
+      } catch (err) {
+        toast.error("Error al guardar el ambiente");
+        console.error(err);
+      }
+    });
+  }
 
- function handleDelete(id: string) {
- startTransition(async () => {
- try {
- await deleteEnvironmentAction(id);
- setEnvironments((prev) => prev.filter((e) => e.id !== id));
- toast.success("Ambiente eliminado");
- setDeleteId(null);
- } catch {
- toast.error("Error al eliminar el ambiente");
- }
- });
- }
+  function handleDelete(id: string) {
+    startTransition(async () => {
+      try {
+        await deleteEnvironmentAction(id);
+        setEnvironments((prev) => prev.filter((e) => e.id !== id));
+        toast.success("Ambiente eliminado");
+        setDeleteId(null);
+        onActionComplete?.();
+      } catch {
+        toast.error("Error al eliminar el ambiente");
+      }
+    });
+  }
 
  // ─── Render ───────────────────────────────────────────────────────────────
 

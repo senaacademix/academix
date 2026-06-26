@@ -9,7 +9,6 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
     BarChart,
@@ -67,6 +66,25 @@ interface GroupAnalyticsPanelProps {
 }
 
 const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6'];
+
+const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+            <div className="bg-popover text-popover-foreground border rounded-xl p-4 shadow-xl text-xs space-y-2 max-w-[280px]">
+                <p className="font-extrabold text-sm border-b pb-1 text-foreground">{data.name}</p>
+                <div className="space-y-1">
+                    <p className="font-bold text-sm text-indigo-600 dark:text-indigo-400">Puntaje Integral: {data.score} / 100</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest pt-1">Desglose de Puntos:</p>
+                    <p className="flex justify-between gap-4 text-muted-foreground">• Rendimiento (70%): <span className="font-medium text-foreground">{data.academic} pts ({data.gradesAvg > 0 ? data.gradesAvg.toFixed(2) : "N/A"})</span></p>
+                    <p className="flex justify-between gap-4 text-muted-foreground">• Asistencia (20%): <span className="font-medium text-foreground">{data.attendance} pts ({data.absences} F / {data.lates} T)</span></p>
+                    <p className="flex justify-between gap-4 text-muted-foreground">• Disciplina (10%): <span className="font-medium text-foreground">{data.discipline} pts ({data.attentionCalls} LL / {data.commendations} F)</span></p>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
 
 export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoading, analyticsData }: GroupAnalyticsPanelProps) {
     
@@ -173,6 +191,62 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                 fullName: s.name
             }))
             .sort((a, b) => b.nota - a.nota);
+    }, [analyticsData, selectedCourseId]);
+
+    // Student Ranking Chart Data (Rank from best to worst based on Grades, Attendance, and Attention Calls)
+    const rankedStudentsData = useMemo(() => {
+        if (!analyticsData || !analyticsData.studentMetrics) return [];
+
+        return analyticsData.studentMetrics.map(student => {
+            let gradesAvg = 0;
+            let absences = 0;
+            let lates = 0;
+            let attentionCalls = 0;
+            let commendations = 0;
+
+            if (selectedCourseId === "all") {
+                gradesAvg = student.gradesAvg;
+                absences = student.attendances?.absent || 0;
+                lates = student.attendances?.late || 0;
+                attentionCalls = student.remarks?.attention || 0;
+                commendations = student.remarks?.commendation || 0;
+            } else {
+                gradesAvg = student.courseGrades?.[selectedCourseId] || 0;
+                const courseAtt = student.courseAttendances?.[selectedCourseId] || { present: 0, absent: 0, late: 0 };
+                absences = courseAtt.absent;
+                lates = courseAtt.late;
+                const courseRem = student.courseRemarks?.[selectedCourseId] || { attention: 0, commendation: 0 };
+                attentionCalls = courseRem.attention;
+                commendations = courseRem.commendation;
+            }
+
+            // 1. Academic Score (70%): based on gradesAvg (0 to 5).
+            const academicScore = gradesAvg > 0 ? (gradesAvg / 5) * 100 : 0;
+
+            // 2. Attendance Score (20%): 10 points penalty per absence, 4 points per late arrival.
+            const attendanceScore = Math.max(0, 100 - (absences * 10) - (lates * 4));
+
+            // 3. Discipline Score (10%): 15 points penalty per attention call, +5 points bonus per commendation.
+            const disciplineScore = Math.min(100, Math.max(0, 100 - (attentionCalls * 15) + (commendations * 5)));
+
+            // Composite Score
+            const compositeScore = parseFloat(
+                ((academicScore * 0.7) + (attendanceScore * 0.2) + (disciplineScore * 0.1)).toFixed(1)
+            );
+
+            return {
+                name: student.name,
+                score: compositeScore,
+                academic: parseFloat(academicScore.toFixed(1)),
+                attendance: parseFloat(attendanceScore.toFixed(1)),
+                discipline: parseFloat(disciplineScore.toFixed(1)),
+                gradesAvg,
+                absences,
+                lates,
+                attentionCalls,
+                commendations
+            };
+        }).sort((a, b) => b.score - a.score); // Sort from best to worst
     }, [analyticsData, selectedCourseId]);
 
     if (!open && !inline) return null;
@@ -311,7 +385,52 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                 </CardContent>
                             </Card>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Student Ranking Chart (from best to worst) */}
+                                {rankedStudentsData.length > 0 && (
+                                <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <GraduationCap className="w-5 h-5 text-indigo-500" />
+                                            Ranking de Estudiantes (Rendimiento Integral)
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Estudiantes ordenados de mayor a menor puntaje integral. El cálculo pondera: Calificaciones (70%), Asistencia (20%) y Disciplina (10%).
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="w-full" style={{ height: `${Math.max(400, rankedStudentsData.length * 38)}px` }}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart 
+                                                data={rankedStudentsData} 
+                                                layout="vertical"
+                                                margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                                                <XAxis type="number" domain={[0, 100]} axisLine={false} tickLine={false} />
+                                                <YAxis 
+                                                    dataKey="name" 
+                                                    type="category" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    fontSize={11} 
+                                                    width={130}
+                                                    tickFormatter={(name) => name.split(' ')[0] + (name.split(' ').length > 1 ? ' ' + name.split(' ')[1] : '')}
+                                                />
+                                                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }} />
+                                                <Bar dataKey="score" name="Puntaje Integral" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                                                    {rankedStudentsData.map((entry, index) => {
+                                                        let color = '#ef4444'; // Red (< 60)
+                                                        if (entry.score >= 80) color = '#10b981'; // Green (>= 80)
+                                                        else if (entry.score >= 60) color = '#f59e0b'; // Amber (>= 60)
+                                                        return <Cell key={`cell-${index}`} fill={color} />;
+                                                    })}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </CardContent>
+                                </Card>
+                                )}
+
                                 {/* Academic Performance Chart */}
                                 {selectedCourseId === "all" ? (
                                 <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
@@ -320,7 +439,7 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                             <GraduationCap className="w-5 h-5 text-indigo-500" />
                                             Rendimiento Académico Global
                                         </CardTitle>
-                                        <CardDescription>Promedio de calificaciones ponderadas en las actividades de cada curso.</CardDescription>
+                                        <CardDescription>Promedio de calificaciones ponderadas en las actividades de cada materia.</CardDescription>
                                     </CardHeader>
                                     <CardContent className="h-[300px] w-full">
                                         {coursesData.length > 0 && coursesData.some(c => c.totalNotas > 0) ? (
@@ -460,7 +579,7 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                                                         labelFormatter={(label: string, payload: any[]) => payload[0]?.payload?.fullName || label}
                                                     />
-                                                    <Legend />
+                                                    <Legend verticalAlign="top" height={36} />
                                                     <Bar dataKey="ausente" name="Ausente" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} maxBarSize={40} />
                                                     <Bar dataKey="tarde" name="Llegada Tarde" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} />
                                                 </BarChart>
@@ -504,64 +623,6 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                         )}
                                     </CardContent>
                                 </Card>
-
-                                {/* Individual Student Metrics Table */}
-                                {analyticsData.studentMetrics && analyticsData.studentMetrics.length > 0 && (
-                                    <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800 mt-6">
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <Users className="w-5 h-5 text-indigo-500" />
-                                                Rendimiento Individual
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Asistencia, observaciones y promedio de notas de cada estudiante.
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="rounded-md border">
-                                                <Table>
-                                                    <TableHeader className="bg-muted/50">
-                                                        <TableRow>
-                                                            <TableHead>Estudiante</TableHead>
-                                                            <TableHead className="text-center">Asistencias</TableHead>
-                                                            <TableHead className="text-center">Observaciones</TableHead>
-                                                            <TableHead className="text-center">Promedio Notas</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {analyticsData.studentMetrics.map(student => (
-                                                            <TableRow key={student.id}>
-                                                                <TableCell>
-                                                                    <div className="font-medium">{student.name}</div>
-                                                                    <div className="text-xs text-muted-foreground">{student.identificacion}</div>
-                                                                </TableCell>
-                                                                <TableCell className="text-center">
-                                                                    <div className="flex items-center justify-center gap-2 text-xs">
-                                                                        <span className="text-emerald-600 dark:text-emerald-400 font-medium" title="Presente">P: {student.attendances.present}</span>
-                                                                        <span className="text-amber-500 font-medium" title="Tarde">T: {student.attendances.late}</span>
-                                                                        <span className="text-red-500 font-medium" title="Ausente">A: {student.attendances.absent}</span>
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell className="text-center">
-                                                                    <div className="flex items-center justify-center gap-2 text-xs">
-                                                                        <span className="text-blue-500 font-medium" title="Felicitaciones">F: {student.remarks.commendation}</span>
-                                                                        <span className="text-red-500 font-medium" title="Llamados de atención">LL: {student.remarks.attention}</span>
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell className="text-center font-bold">
-                                                                    <span className={student.gradesAvg >= 3.0 ? "text-emerald-600" : student.gradesAvg > 0 ? "text-red-500" : "text-muted-foreground"}>
-                                                                        {student.gradesAvg > 0 ? student.gradesAvg.toFixed(2) : "-"}
-                                                                    </span>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )}
-
                             </div>
                         </div>
                     )}

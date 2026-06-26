@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon } from "lucide-react";
+import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatName } from "@/lib/utils";
-import { getStudentRecords, justifyAttendanceAction } from "../actions/studentActions";
+import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation } from "../actions/studentActions";
+import { getStudentGrades, submitStudentSubmissionLink } from "@/features/teacher/actions/gradeActions";
+import { authClient } from "@/lib/auth-client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -17,27 +20,105 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import MDEditor from "@uiw/react-md-editor";
 
-export function StudentRecords() {
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title as ChartTitle,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  RadialLinearScale,
+} from "chart.js";
+import { Pie, Bar, Doughnut, PolarArea } from "react-chartjs-2";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ChartTitle,
+  ChartTooltip,
+  ChartLegend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  RadialLinearScale
+);
+
+interface StudentRecordsProps {
+    studentId?: string;
+    hideTables?: boolean;
+    hideDocumentation?: boolean;
+}
+
+export function StudentRecords({ studentId, hideTables = false, hideDocumentation = false }: StudentRecordsProps = {}) {
     const [records, setRecords] = useState<{ attendances: any[], remarks: any[] } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    
+    const [courses, setCourses] = useState<any[]>([]);
+    const [gradesLoading, setGradesLoading] = useState(true);
+    const [docCourses, setDocCourses] = useState<any[]>([]);
+    const [docLoading, setDocLoading] = useState(true);
+
+    // Submission link dialog
+    const [submissionDialog, setSubmissionDialog] = useState<{ open: boolean; activityId: string; activityTitle: string; currentLink: string } | null>(null);
+    const [submissionLinkInput, setSubmissionLinkInput] = useState("");
+    const [isSubmittingLink, startSubmitLink] = useTransition();
+
+    // Activity detail dialog
+    const [activityDetail, setActivityDetail] = useState<{ title: string; description: string; allowSubmissionLink: boolean; activityId: string; grade: any | null } | null>(null);
+
+    // Remark detail dialog
+    const [remarkDetail, setRemarkDetail] = useState<any | null>(null);
+
     // Justification State
     const [isPending, startTransition] = useTransition();
     const [justifyingId, setJustifyingId] = useState<string | null>(null);
     const [justificationText, setJustificationText] = useState("");
     const [justificationUrl, setJustificationUrl] = useState("");
+    const [viewingJustification, setViewingJustification] = useState<{ justification: string; url?: string | null; date: string; statusName: string } | null>(null);
 
     useEffect(() => {
         loadRecords();
-    }, []);
+        loadGrades();
+        loadDocumentation();
+    }, [studentId]);
 
     const loadRecords = () => {
-        getStudentRecords()
+        getStudentRecords(studentId)
             .then(data => setRecords(data))
             .catch(console.error)
             .finally(() => setIsLoading(false));
-    }
+    };
+
+    const loadGrades = async () => {
+        try {
+            const targetId = studentId || (await authClient.getSession())?.data?.user?.id;
+            if (targetId) {
+                const data = await getStudentGrades(targetId);
+                setCourses(data);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setGradesLoading(false);
+        }
+    };
+
+    const loadDocumentation = async () => {
+        try {
+            const data = await getStudentDocumentation(studentId);
+            setDocCourses(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setDocLoading(false);
+        }
+    };
 
     const handleJustifySubmit = () => {
         if (!justifyingId) return;
@@ -53,12 +134,269 @@ export function StudentRecords() {
                 setJustifyingId(null);
                 setJustificationText("");
                 setJustificationUrl("");
-                loadRecords(); // Reload data
+                loadRecords();
             } catch (error: any) {
                 toast.error(error.message || "Error al enviar la justificación");
             }
         });
     };
+
+    const handleSubmitLink = () => {
+        if (!submissionDialog) return;
+        if (!submissionLinkInput.trim()) {
+            toast.error("El enlace no puede estar vacío");
+            return;
+        }
+        startSubmitLink(async () => {
+            const res = await submitStudentSubmissionLink(submissionDialog.activityId, submissionLinkInput.trim());
+            if (res.success) {
+                toast.success("Enlace de entrega enviado correctamente");
+                setSubmissionDialog(null);
+                loadGrades();
+            } else {
+                toast.error(res.error || "Error al enviar el enlace");
+            }
+        });
+    };
+
+    const DAY_LABELS: Record<string, string> = {
+        MONDAY: "Lun", TUESDAY: "Mar", WEDNESDAY: "Mié",
+        THURSDAY: "Jue", FRIDAY: "Vie", SATURDAY: "Sáb", SUNDAY: "Dom"
+    };
+
+    const formatTeacherName = (teacher: any): string => {
+        if (!teacher) return "Sin asignar";
+        const p = teacher.profile;
+        if (p?.firstName && p?.lastName) return `${p.firstName} ${p.lastName}`;
+        return teacher.name || "Sin asignar";
+    };
+
+    const { attendances = [], remarks = [] } = records || {};
+
+    const gradesAvgChartData = useMemo(() => {
+        const labels = courses.map(c => c.title);
+        const data = courses.map(course => {
+            let totalScore = 0;
+            let totalWeight = 0;
+            course.activities.forEach((act: any) => {
+                const grade = act.grades[0];
+                if (grade && grade.score > 0) {
+                    totalScore += grade.score * (act.weight / 100);
+                    totalWeight += act.weight;
+                }
+            });
+            return totalWeight > 0 ? parseFloat((totalScore / (totalWeight / 100)).toFixed(2)) : 0;
+        });
+
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "Promedio por Materia",
+                    data,
+                    backgroundColor: "rgba(16, 185, 129, 0.6)",
+                    borderColor: "rgb(16, 185, 129)",
+                    borderWidth: 1.5,
+                    borderRadius: 8,
+                }
+            ]
+        };
+    }, [courses]);
+
+    const gradesDistChartData = useMemo(() => {
+        let low = 0;
+        let mid = 0;
+        let high = 0;
+
+        courses.forEach(course => {
+            course.activities.forEach((act: any) => {
+                const grade = act.grades[0];
+                if (grade && grade.score > 0) {
+                    if (grade.score < 3.0) low++;
+                    else if (grade.score <= 4.0) mid++;
+                    else high++;
+                }
+            });
+        });
+
+        return {
+            labels: ["Bajo (< 3.0)", "Básico (3.0 - 4.0)", "Alto (> 4.0)"],
+            datasets: [
+                {
+                    data: [low, mid, high],
+                    backgroundColor: [
+                        "rgba(239, 68, 68, 0.6)",
+                        "rgba(245, 158, 11, 0.6)",
+                        "rgba(16, 185, 129, 0.6)"
+                    ],
+                    borderColor: [
+                        "rgb(239, 68, 68)",
+                        "rgb(245, 158, 11)",
+                        "rgb(16, 185, 129)"
+                    ],
+                    borderWidth: 1,
+                }
+            ]
+        };
+    }, [courses]);
+
+    const gradesCompletionChartData = useMemo(() => {
+        const labels = courses.map(c => c.title);
+        const data = courses.map(course => {
+            const total = course.activities.length;
+            if (total === 0) return 0;
+            const graded = course.activities.filter((act: any) => act.grades[0] && act.grades[0].score > 0).length;
+            return Math.round((graded / total) * 100);
+        });
+
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "% Actividades Realizadas",
+                    data,
+                    backgroundColor: "rgba(59, 130, 246, 0.6)",
+                    borderColor: "rgb(59, 130, 246)",
+                    borderWidth: 1.5,
+                    borderRadius: 8,
+                }
+            ]
+        };
+    }, [courses]);
+
+    const attendanceByCourseChartData = useMemo(() => {
+        const courseMap: Record<string, { absent: number; late: number }> = {};
+        courses.forEach(c => {
+            courseMap[c.id] = { absent: 0, late: 0 };
+        });
+
+        attendances.forEach(att => {
+            if (courseMap[att.course.id]) {
+                if (att.status === "ABSENT") courseMap[att.course.id].absent++;
+                if (att.status === "LATE") courseMap[att.course.id].late++;
+            }
+        });
+
+        const labels = courses.map(c => c.title);
+        const absents = courses.map(c => courseMap[c.id]?.absent || 0);
+        const lates = courses.map(c => courseMap[c.id]?.late || 0);
+
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "Inasistencias",
+                    data: absents,
+                    backgroundColor: "rgba(239, 68, 68, 0.6)",
+                    borderColor: "rgb(239, 68, 68)",
+                    borderWidth: 1,
+                    borderRadius: 8,
+                },
+                {
+                    label: "Llegadas Tarde",
+                    data: lates,
+                    backgroundColor: "rgba(245, 158, 11, 0.6)",
+                    borderColor: "rgb(245, 158, 11)",
+                    borderWidth: 1,
+                    borderRadius: 8,
+                }
+            ]
+        };
+    }, [courses, attendances]);
+
+    const attendanceJustificationChartData = useMemo(() => {
+        let justified = 0;
+        let unjustified = 0;
+
+        attendances.forEach(att => {
+            if (att.status === "ABSENT" || att.status === "LATE") {
+                if (att.justification) justified++;
+                else unjustified++;
+            }
+        });
+
+        return {
+            labels: ["Justificadas", "Sin Justificar"],
+            datasets: [
+                {
+                    data: [justified, unjustified],
+                    backgroundColor: [
+                        "rgba(16, 185, 129, 0.6)",
+                        "rgba(239, 68, 68, 0.6)"
+                    ],
+                    borderColor: [
+                        "rgb(16, 185, 129)",
+                        "rgb(239, 68, 68)"
+                    ],
+                    borderWidth: 1,
+                }
+            ]
+        };
+    }, [attendances]);
+
+    const remarksTypeChartData = useMemo(() => {
+        let attention = 0;
+        let commendation = 0;
+        let citation = 0;
+        let other = 0;
+
+        remarks.forEach(rem => {
+            if (rem.type === "ATTENTION") attention++;
+            else if (rem.type === "COMMENDATION") commendation++;
+            else if (rem.type === "CITATION") citation++;
+            else other++;
+        });
+
+        return {
+            labels: ["Llamados de Atención", "Felicitaciones", "Citaciones", "Otras"],
+            datasets: [
+                {
+                    data: [attention, commendation, citation, other],
+                    backgroundColor: [
+                        "rgba(239, 68, 68, 0.6)",
+                        "rgba(16, 185, 129, 0.6)",
+                        "rgba(59, 130, 246, 0.6)",
+                        "rgba(156, 163, 175, 0.6)"
+                    ],
+                    borderColor: [
+                        "rgb(239, 68, 68)",
+                        "rgb(16, 185, 129)",
+                        "rgb(59, 130, 246)",
+                        "rgb(156, 163, 175)"
+                    ],
+                    borderWidth: 1,
+                }
+            ]
+        };
+    }, [remarks]);
+
+    const remarksReadChartData = useMemo(() => {
+        let viewed = 0;
+        let unviewed = 0;
+
+        remarks.forEach(rem => {
+            if (rem.viewedAt) viewed++;
+            else unviewed++;
+        });
+
+        return {
+            labels: ["Leídas / Vistas", "No Leídas / Pendientes"],
+            datasets: [
+                {
+                    data: [viewed, unviewed],
+                    backgroundColor: [
+                        "rgba(16, 185, 129, 0.6)",
+                        "rgba(245, 158, 11, 0.6)"
+                    ],
+                    borderColor: [
+                        "rgb(16, 185, 129)",
+                        "rgb(245, 158, 11)"
+                    ],
+                    borderWidth: 1,
+                }
+            ]
+        };
+    }, [remarks]);
 
     if (isLoading) {
         return (
@@ -68,14 +406,234 @@ export function StudentRecords() {
         );
     }
 
-    const { attendances = [], remarks = [] } = records || {};
-
-    // Filter problematic attendances (late, absent without justification)
     const issueAttendances = attendances.filter(a => (a.status === 'ABSENT' || a.status === 'LATE') && !a.justification);
+
+    const analyticsContent = (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+            
+            {/* Section 1: Calificaciones */}
+            <div className="space-y-4">
+                <h3 className="text-xl font-black text-foreground flex items-center gap-2 px-1">
+                    <GraduationCap className="w-5 h-5 text-emerald-500" />
+                    Análisis de Calificaciones y Rendimiento
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Bar Chart: Promedios */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Promedio Acumulado por Materia</CardTitle>
+                            <CardDescription className="text-xs">Nota ponderada acumulada por asignatura.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            {courses.length > 0 ? (
+                                <Bar 
+                                    data={gradesAvgChartData}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false }
+                                        },
+                                        scales: {
+                                            y: { min: 0, max: 5, ticks: { stepSize: 1 } }
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <p className="text-xs text-muted-foreground">Sin datos</p>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Doughnut Chart: Distribución */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Distribución de Notas Obtenidas</CardTitle>
+                            <CardDescription className="text-xs">Rangos de desempeño en actividades calificadas.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            <div className="w-full h-full max-h-[220px] flex items-center justify-center">
+                                <Doughnut 
+                                    data={gradesDistChartData}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Horizontal Bar Chart: Completitud */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Progreso de Actividades Evaluadas</CardTitle>
+                            <CardDescription className="text-xs">% de actividades con nota registrada.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            {courses.length > 0 ? (
+                                <Bar 
+                                    data={gradesCompletionChartData}
+                                    options={{
+                                        indexAxis: 'y' as const,
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false }
+                                        },
+                                        scales: {
+                                            x: { min: 0, max: 100, ticks: { callback: (value) => `${value}%` } }
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <p className="text-xs text-muted-foreground">Sin datos</p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/* Section 2: Asistencia */}
+            <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-xl font-black text-foreground flex items-center gap-2 px-1">
+                    <Clock className="w-5 h-5 text-amber-500" />
+                    Control de Asistencia y Puntualidad
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Stacked Bar: Faltas por materia */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Alertas de Asistencia por Materia</CardTitle>
+                            <CardDescription className="text-xs">Inasistencias y llegadas tarde acumuladas.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            {attendances.length > 0 ? (
+                                <Bar 
+                                    data={attendanceByCourseChartData}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        scales: {
+                                            x: { stacked: true },
+                                            y: { stacked: true, ticks: { stepSize: 1 } }
+                                        },
+                                        plugins: {
+                                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <div className="text-center py-8 text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
+                                    ¡Sin alertas de asistencia! Asistencia perfecta en todas las materias.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Doughnut: Justificados vs Sin Justificar */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Estado de Justificaciones</CardTitle>
+                            <CardDescription className="text-xs">Tasa de resolución de faltas y retardos.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            {attendances.length > 0 ? (
+                                <div className="w-full h-full max-h-[220px] flex items-center justify-center">
+                                    <Doughnut 
+                                        data={attendanceJustificationChartData}
+                                        options={{
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: {
+                                                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
+                                    No se registran faltas que requieran justificación.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/* Section 3: Observaciones */}
+            <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-xl font-black text-foreground flex items-center gap-2 px-1">
+                    <ShieldAlert className="w-5 h-5 text-red-500" />
+                    Historial de Observaciones
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Polar Area: Tipo de observaciones */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Distribución por Tipo de Observación</CardTitle>
+                            <CardDescription className="text-xs">Clasificación disciplinaria y académica recibida.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            {remarks.length > 0 ? (
+                                <div className="w-full h-full max-h-[220px] flex items-center justify-center">
+                                    <PolarArea 
+                                        data={remarksTypeChartData}
+                                        options={{
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: {
+                                                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                    Sin observaciones registradas.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Pie Chart: Visto vs No visto */}
+                    <Card className="border shadow-sm">
+                        <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-bold">Control de Lectura y Acuse de Recibo</CardTitle>
+                            <CardDescription className="text-xs">Observaciones visualizadas frente a pendientes.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 h-[280px] flex items-center justify-center">
+                            {remarks.length > 0 ? (
+                                <div className="w-full h-full max-h-[220px] flex items-center justify-center">
+                                    <Pie 
+                                        data={remarksReadChartData}
+                                        options={{
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            plugins: {
+                                                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                    Sin observaciones registradas.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </motion.div>
+    );
 
     return (
         <div className="space-y-8">
-            {/* Header info cards */}
+            {/* Summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                     <CardHeader className="p-4 pb-2">
@@ -104,179 +662,763 @@ export function StudentRecords() {
                 </Card>
             </div>
 
-            <Tabs defaultValue="attendance" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
-                    <TabsTrigger value="attendance">Asistencia</TabsTrigger>
-                    <TabsTrigger value="remarks">Observaciones</TabsTrigger>
-                </TabsList>
+            {hideTables ? (
+                analyticsContent
+            ) : (
+                <Tabs defaultValue="attendance" className="space-y-6">
+                    <TabsList className={hideDocumentation ? "grid w-full grid-cols-4" : "grid w-full grid-cols-5"}>
+                        <TabsTrigger value="attendance" className="flex items-center gap-1.5">
+                            <Clock className="w-4 h-4 hidden sm:block" />
+                            Asistencia
+                        </TabsTrigger>
+                        <TabsTrigger value="grades" className="flex items-center gap-1.5">
+                            <GraduationCap className="w-4 h-4 hidden sm:block" />
+                            Calificaciones
+                        </TabsTrigger>
+                        {!hideDocumentation && (
+                            <TabsTrigger value="documentation" className="flex items-center gap-1.5">
+                                <BookOpen className="w-4 h-4 hidden sm:block" />
+                                Documentación
+                            </TabsTrigger>
+                        )}
+                        <TabsTrigger value="remarks" className="flex items-center gap-1.5">
+                            <ShieldAlert className="w-4 h-4 hidden sm:block" />
+                            Observaciones
+                        </TabsTrigger>
+                        <TabsTrigger value="analytics" className="flex items-center gap-1.5">
+                            <BarChart3 className="w-4 h-4 hidden sm:block" />
+                            Analítica
+                        </TabsTrigger>
+                    </TabsList>
 
-                {/* ATTENDANCE TAB */}
-                <TabsContent value="attendance" className="m-0 border-none p-0 outline-none">
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-4">
-                        {attendances.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
-                                <Calendar className="w-12 h-12 mb-4 opacity-50 text-green-500" />
-                                <p className="font-semibold text-base text-green-600">¡Asistencia Perfecta!</p>
-                                <p className="text-sm text-center mt-1">No tienes registros de inasistencias ni llegadas tarde.</p>
-                            </div>
-                        ) : (
-                            <Card className="overflow-hidden">
-                                <div className="grid grid-cols-1 divide-y">
-                                    {attendances.map(att => {
-                                        const isJustified = !!att.justification;
-                                        const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE');
-
-                                        return (
-                                            <div key={att.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 hover:bg-muted/10 transition-colors gap-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                                                        att.status === 'LATE' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' :
-                                                        'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                                                    }`}>
-                                                        {att.status === 'LATE' ? <Clock className="w-5 h-5" /> :
-                                                         <XSquare className="w-5 h-5" />}
+                    {/* ── ATTENDANCE (table per course) ────────────────────── */}
+                    <TabsContent value="attendance" className="m-0 border-none p-0 outline-none">
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                            {attendances.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
+                                    <Calendar className="w-12 h-12 mb-4 opacity-50 text-green-500" />
+                                    <p className="font-semibold text-base text-green-600">¡Asistencia Perfecta!</p>
+                                    <p className="text-sm text-center mt-1">No tienes registros de inasistencias ni llegadas tarde.</p>
+                                </div>
+                            ) : (() => {
+                                const byCourse: Record<string, { course: any; entries: any[] }> = {};
+                                for (const att of attendances) {
+                                    if (!byCourse[att.course.id]) byCourse[att.course.id] = { course: att.course, entries: [] };
+                                    byCourse[att.course.id].entries.push(att);
+                                }
+                                return Object.values(byCourse).map(({ course, entries }) => {
+                                    const unjustified = entries.filter(a => !a.justification).length;
+                                    return (
+                                        <Card key={course.id} className="overflow-hidden border-border/50 shadow-sm">
+                                            <CardHeader className="bg-muted/10 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-lg font-black text-foreground">{course.title}</h3>
+                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                        <GraduationCap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="text-sm text-muted-foreground">{formatTeacherName(course.teacher)}</span>
                                                     </div>
-                                                    <div>
-                                                        <div className="font-bold text-foreground">{att.course.title}</div>
-                                                        <div className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2">
-                                                            <span>{format(new Date(att.date), "EEEE, d 'de' MMMM", { locale: es })}</span>
-                                                            {att.arrivalTime && <span>• Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</span>}
+                                                    {course.schedules && course.schedules.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                                            {course.schedules.map((sch: any) => (
+                                                                <span key={sch.id} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                                                    <Calendar className="w-2.5 h-2.5" />
+                                                                    {DAY_LABELS[sch.dayOfWeek] ?? sch.dayOfWeek} {sch.startTime}–{sch.endTime}
+                                                                </span>
+                                                            ))}
                                                         </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col items-end shrink-0">
+                                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sin Justificar</span>
+                                                    <span className={`text-3xl font-black ${unjustified > 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{unjustified}</span>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="p-0">
+                                                <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
+                                                    <TableHeader className="bg-muted/5">
+                                                        <TableRow>
+                                                            <TableHead>Fecha</TableHead>
+                                                            <TableHead className="w-[120px] text-center">Estado</TableHead>
+                                                            <TableHead className="w-[130px] text-center">Justificación</TableHead>
+                                                            <TableHead className="w-[120px] text-center">Acción</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {entries.map(att => {
+                                                            const isJustified = !!att.justification;
+                                                            const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE');
+                                                            return (
+                                                                <TableRow key={att.id}>
+                                                                    <TableCell>
+                                                                        <div className="font-semibold">{format(new Date(att.date), "EEE d MMM yyyy", { locale: es })}</div>
+                                                                        {att.arrivalTime && <div className="text-xs text-muted-foreground mt-0.5">Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</div>}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-center">
+                                                                        <Badge variant="outline" className={`text-xs font-bold ${att.status === 'LATE' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-red-600 border-red-200 bg-red-50'}`}>
+                                                                            {att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'}
+                                                                        </Badge>
+                                                                    </TableCell>
+                                                                    <TableCell className="text-center">
+                                                                        {isJustified ? (
+                                                                            <div className="flex flex-col items-center gap-1">
+                                                                                <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 gap-1">
+                                                                                    <CheckCircle2 className="w-3 h-3" /> Justificado
+                                                                                </Badge>
+                                                                                {att.justificationUrl && (
+                                                                                    <a href={att.justificationUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                                                                        <LinkIcon className="w-3 h-3" /> Soporte
+                                                                                    </a>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground">Sin justificar</span>
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-center">
+                                                                        {canJustify ? (
+                                                                            <Dialog open={justifyingId === att.id} onOpenChange={(open) => {
+                                                                                if (open) { setJustifyingId(att.id); setJustificationText(""); setJustificationUrl(""); }
+                                                                                else setJustifyingId(null);
+                                                                            }}>
+                                                                                <DialogTrigger asChild>
+                                                                                    <Button size="sm" variant="outline" className="h-7 text-xs font-semibold">Justificar</Button>
+                                                                                </DialogTrigger>
+                                                                                <DialogContent>
+                                                                                    <DialogHeader>
+                                                                                        <DialogTitle>Justificar {att.status === 'LATE' ? 'Retardo' : 'Ausencia'}</DialogTitle>
+                                                                                        <DialogDescription>Explica el motivo y adjunta un enlace a tu soporte. Una vez enviada, no podrás modificarla.</DialogDescription>
+                                                                                    </DialogHeader>
+                                                                                    <div className="space-y-4 py-4">
+                                                                                        <div className="space-y-2">
+                                                                                            <Label>Motivo *</Label>
+                                                                                            <Textarea placeholder="Explica el motivo..." value={justificationText} onChange={e => setJustificationText(e.target.value)} />
+                                                                                        </div>
+                                                                                        <div className="space-y-2">
+                                                                                            <Label>Enlace al soporte (Opcional)</Label>
+                                                                                            <Input placeholder="https://drive.google.com/..." type="url" value={justificationUrl} onChange={e => setJustificationUrl(e.target.value)} />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <DialogFooter>
+                                                                                        <Button variant="outline" onClick={() => setJustifyingId(null)} disabled={isPending}>Cancelar</Button>
+                                                                                        <Button onClick={handleJustifySubmit} disabled={isPending}>{isPending ? "Enviando..." : "Enviar Justificación"}</Button>
+                                                                                    </DialogFooter>
+                                                                                </DialogContent>
+                                                                            </Dialog>
+                                                                        ) : isJustified ? (
+                                                                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                                                                onClick={() => setViewingJustification({
+                                                                                    justification: att.justification || "",
+                                                                                    url: att.justificationUrl,
+                                                                                    date: att.date,
+                                                                                    statusName: att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'
+                                                                                })}
+                                                                            >
+                                                                                <FileText className="w-3 h-3" /> Ver
+                                                                            </Button>
+                                                                        ) : (
+                                                                            <span className="text-muted-foreground text-xs">—</span>
+                                                                        )}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                });
+                            })()}
+                        </motion.div>
+                    </TabsContent>
+
+                    {/* ── GRADES ─────────────────────────────────────────────── */}
+                    <TabsContent value="grades" className="m-0 border-none p-0 outline-none">
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                            {gradesLoading ? (
+                                <div className="flex justify-center items-center h-48">
+                                    <LoadingSpinner />
+                                </div>
+                            ) : courses.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
+                                    <BookOpen className="w-12 h-12 mb-4 opacity-50" />
+                                    <p className="font-semibold text-base">Sin Materias</p>
+                                    <p className="text-sm text-center mt-1">No estás inscrito en ninguna materia actualmente.</p>
+                                </div>
+                            ) : (
+                                courses.map(course => {
+                                    let totalScore = 0;
+                                    let totalWeight = 0;
+
+                                    course.activities.forEach((act: any) => {
+                                        const grade = act.grades[0];
+                                        if (grade && grade.score > 0) {
+                                            totalScore += grade.score * (act.weight / 100);
+                                            totalWeight += act.weight;
+                                        }
+                                    });
+
+                                    const currentAverage = totalWeight > 0
+                                        ? (totalScore / (totalWeight / 100)).toFixed(2)
+                                        : "-";
+                                    const avgNum = parseFloat(currentAverage);
+
+                                    return (
+                                        <Card key={course.id} className="overflow-hidden border-border/50 shadow-sm">
+                                            <CardHeader className="bg-muted/10 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-lg font-black text-foreground">{course.title}</h3>
+
+                                                    {/* Teacher */}
+                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                        <GraduationCap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="text-sm text-muted-foreground">{formatTeacherName(course.teacher)}</span>
+                                                    </div>
+
+                                                    {/* Schedules */}
+                                                    {course.schedules && course.schedules.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                                            {course.schedules.map((sch: any) => (
+                                                                <span
+                                                                    key={sch.id}
+                                                                    className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20"
+                                                                >
+                                                                    <Calendar className="w-2.5 h-2.5" />
+                                                                    {DAY_LABELS[sch.dayOfWeek] ?? sch.dayOfWeek} {sch.startTime}–{sch.endTime}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col items-end shrink-0">
+                                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Promedio</span>
+                                                    <span className={`text-3xl font-black ${!isNaN(avgNum) && avgNum < 3.0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                        {currentAverage}
+                                                    </span>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="p-0">
+                                                {course.activities.length === 0 ? (
+                                                    <div className="p-8 text-center text-muted-foreground text-sm">
+                                                        El profesor aún no ha asignado actividades evaluativas en esta materia.
+                                                    </div>
+                                                ) : (
+                                                    <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
+                                                        <TableHeader className="bg-muted/5">
+                                                            <TableRow>
+                                                                <TableHead>Actividad</TableHead>
+                                                                <TableHead className="w-[80px] text-center">Peso</TableHead>
+                                                                <TableHead className="w-[100px] text-center">Nota</TableHead>
+                                                                <TableHead className="w-[150px] text-center">Entrega</TableHead>
+                                                                <TableHead className="w-[110px] text-center">Detalle</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {course.activities.map((act: any) => {
+                                                                const grade = act.grades[0];
+                                                                return (
+                                                                    <TableRow key={act.id}>
+                                                                        {/* Actividad */}
+                                                                        <TableCell>
+                                                                            <div className="font-semibold">{act.title}</div>
+                                                                            {act.allowSubmissionLink && (
+                                                                                <Badge variant="outline" className="mt-1 text-[10px] text-primary border-primary/30 bg-primary/5 gap-1">
+                                                                                    <Link2 className="w-2.5 h-2.5" />Acepta entrega
+                                                                                </Badge>
+                                                                            )}
+                                                                        </TableCell>
+
+                                                                        {/* Peso */}
+                                                                        <TableCell className="text-center text-muted-foreground font-medium">
+                                                                            {act.weight}%
+                                                                        </TableCell>
+
+                                                                        {/* Nota */}
+                                                                        <TableCell className="text-center">
+                                                                            {grade && grade.score > 0 ? (
+                                                                                <Badge variant="outline" className={grade.score < 3.0 ? "text-red-600 bg-red-50 border-red-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"}>
+                                                                                    {grade.score.toFixed(1)}
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <span className="text-muted-foreground text-xs italic">Pendiente</span>
+                                                                            )}
+                                                                        </TableCell>
+
+                                                                        {/* Entrega */}
+                                                                        <TableCell className="text-center">
+                                                                            {act.allowSubmissionLink ? (
+                                                                                grade?.submissionLink ? (
+                                                                                    <div className="flex flex-col items-center gap-1">
+                                                                                        <a href={grade.submissionLink} target="_blank" rel="noopener noreferrer" className="text-primary text-xs hover:underline flex items-center gap-1 font-medium">
+                                                                                            <ExternalLink className="w-3 h-3" /> Ver entrega
+                                                                                        </a>
+                                                                                        <Button size="sm" variant="ghost" className="h-6 text-xs px-2 text-muted-foreground"
+                                                                                            onClick={() => { setSubmissionLinkInput(grade.submissionLink); setSubmissionDialog({ open: true, activityId: act.id, activityTitle: act.title, currentLink: grade.submissionLink }); }}>
+                                                                                            Editar
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-primary/50 text-primary hover:bg-primary/5"
+                                                                                        onClick={() => { setSubmissionLinkInput(""); setSubmissionDialog({ open: true, activityId: act.id, activityTitle: act.title, currentLink: "" }); }}>
+                                                                                        <Link2 className="w-3 h-3" /> Enviar
+                                                                                    </Button>
+                                                                                )
+                                                                            ) : (
+                                                                                <span className="text-muted-foreground text-xs">—</span>
+                                                                            )}
+                                                                        </TableCell>
+
+                                                                        {/* Detalle */}
+                                                                        <TableCell className="text-center">
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                className="h-7 text-xs gap-1.5"
+                                                                                onClick={() => setActivityDetail({
+                                                                                    title: act.title,
+                                                                                    description: act.description || "",
+                                                                                    allowSubmissionLink: act.allowSubmissionLink ?? false,
+                                                                                    activityId: act.id,
+                                                                                    grade: grade ?? null
+                                                                                })}
+                                                                            >
+                                                                                <FileText className="w-3 h-3" />
+                                                                                Ver
+                                                                            </Button>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                        </TableBody>
+                                                    </Table>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })
+                            )}
+                        </motion.div>
+                    </TabsContent>
+
+                    {/* ── DOCUMENTATION (links per course) ────────────────────── */}
+                    {!hideDocumentation && <TabsContent value="documentation" className="m-0 border-none p-0 outline-none">
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                            {docLoading ? (
+                                <div className="flex items-center justify-center p-12">
+                                    <LoadingSpinner className="w-8 h-8 text-primary" />
+                                </div>
+                            ) : docCourses.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
+                                    <BookOpen className="w-12 h-12 mb-4 opacity-40" />
+                                    <p className="font-semibold text-base">Sin materias inscritas</p>
+                                    <p className="text-sm text-center mt-1">No tienes materias activas con documentación disponible.</p>
+                                </div>
+                            ) : (
+                                docCourses.map((course: any) => {
+                                    const links = course.sharedContent.flatMap((sc: any) =>
+                                        (Array.isArray(sc.links) ? sc.links : [])
+                                            .filter((l: any) => l?.url)
+                                            .map((l: any) => ({
+                                                id: sc.id + l.url,
+                                                title: l.label || sc.title,
+                                                url: l.url,
+                                                createdAt: new Date(sc.createdAt),
+                                            }))
+                                    );
+                                    return (
+                                        <Card key={course.id} className="overflow-hidden border-border/50 shadow-sm">
+                                            <CardHeader className="bg-muted/10 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-lg font-black text-foreground">{course.title}</h3>
+                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                        <GraduationCap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="text-sm text-muted-foreground">{formatTeacherName(course.teacher)}</span>
                                                     </div>
                                                 </div>
-                                                
-                                                <div className="flex flex-col sm:items-end gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        {isJustified && (
-                                                            <Badge variant="outline" className="text--600 dark:text--400 border--200 dark:border--800/50 bg--50 dark:bg--950/20 font-bold">
-                                                                Justificado
-                                                            </Badge>
-                                                        )}
-                                                        <Badge variant="outline" className={`font-bold ${
-                                                            att.status === 'LATE' ? 'text-amber-600 border-amber-200 bg-amber-50' :
-                                                            'text-red-600 border-red-200 bg-red-50'
-                                                        }`}>
-                                                            {att.status === 'LATE' ? 'Llegada Tarde' :
-                                                            'Ausencia'}
-                                                        </Badge>
+                                                <div className="flex flex-col items-end shrink-0">
+                                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recursos</span>
+                                                    <span className={`text-3xl font-black ${links.length > 0 ? "text-primary" : "text-muted-foreground/40"}`}>{links.length}</span>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="p-4">
+                                                {links.length === 0 ? (
+                                                    <div className="flex items-center gap-3 py-6 text-center justify-center text-muted-foreground">
+                                                        <BookOpen className="w-5 h-5 opacity-40 shrink-0" />
+                                                        <p className="text-sm">El profesor aún no ha publicado recursos en esta materia.</p>
                                                     </div>
-
-                                                    {canJustify && (
-                                                        <Dialog open={justifyingId === att.id} onOpenChange={(open) => {
-                                                            if (open) {
-                                                                setJustifyingId(att.id);
-                                                                setJustificationText("");
-                                                                setJustificationUrl("");
-                                                            } else {
-                                                                setJustifyingId(null);
-                                                            }
-                                                        }}>
-                                                            <DialogTrigger asChild>
-                                                                <Button size="sm" variant="outline" className="h-8 text-xs font-semibold">
-                                                                    Justificar
-                                                                </Button>
-                                                            </DialogTrigger>
-                                                            <DialogContent>
-                                                                <DialogHeader>
-                                                                    <DialogTitle>Justificar {att.status === 'LATE' ? 'Retardo' : 'Ausencia'}</DialogTitle>
-                                                                    <DialogDescription>
-                                                                        Explica el motivo y adjunta un enlace a tu soporte (ej. Google Drive). Una vez enviada, no podrás modificarla.
-                                                                    </DialogDescription>
-                                                                </DialogHeader>
-                                                                <div className="space-y-4 py-4">
-                                                                    <div className="space-y-2">
-                                                                        <Label>Motivo de la justificación *</Label>
-                                                                        <Textarea 
-                                                                            placeholder="Explica brevemente el motivo de tu ausencia o retardo..."
-                                                                            value={justificationText}
-                                                                            onChange={(e) => setJustificationText(e.target.value)}
-                                                                        />
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {links.map((link: any) => (
+                                                            <a
+                                                                key={link.id}
+                                                                href={link.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="group flex items-center justify-between p-3 rounded-xl border bg-card hover:border-primary hover:bg-primary/5 hover:shadow-sm transition-all"
+                                                            >
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    <div className="p-2 bg-primary/10 rounded-lg shrink-0 group-hover:bg-primary/20 transition-colors">
+                                                                        <Link2 className="w-4 h-4 text-primary" />
                                                                     </div>
-                                                                    <div className="space-y-2">
-                                                                        <Label>Enlace al soporte (Opcional)</Label>
-                                                                        <Input 
-                                                                            placeholder="https://drive.google.com/..."
-                                                                            type="url"
-                                                                            value={justificationUrl}
-                                                                            onChange={(e) => setJustificationUrl(e.target.value)}
-                                                                        />
-                                                                        <p className="text-xs text-muted-foreground">Asegúrate de que el enlace sea público o accesible para el docente.</p>
+                                                                    <div className="min-w-0">
+                                                                        <p className="font-semibold text-sm group-hover:text-primary transition-colors">{link.title}</p>
+                                                                        <p className="text-xs text-muted-foreground truncate max-w-sm mt-0.5">{link.url}</p>
                                                                     </div>
                                                                 </div>
-                                                                <DialogFooter>
-                                                                    <Button variant="outline" onClick={() => setJustifyingId(null)} disabled={isPending}>
-                                                                        Cancelar
-                                                                    </Button>
-                                                                    <Button onClick={handleJustifySubmit} disabled={isPending}>
-                                                                        {isPending ? "Enviando..." : "Enviar Justificación"}
-                                                                    </Button>
-                                                                </DialogFooter>
-                                                            </DialogContent>
-                                                        </Dialog>
-                                                    )}
+                                                                <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 ml-3 transition-colors" />
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })
+                            )}
+                        </motion.div>
+                    </TabsContent>}
 
-                                                    {isJustified && (
-                                                        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md max-w-sm mt-1">
-                                                            <div className="font-semibold text-foreground mb-1">Motivo:</div>
-                                                            <p className="mb-1">{att.justification}</p>
-                                                            {att.justificationUrl && (
-                                                                <a href={att.justificationUrl} target="_blank" rel="noopener noreferrer" className="text--600 dark:text--400 hover:underline flex items-center gap-1 mt-1">
-                                                                    <LinkIcon className="w-3 h-3" /> Ver soporte
-                                                                </a>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+
+                    {/* ── REMARKS (table per course) ──────────────────────────── */}
+                    <TabsContent value="remarks" className="m-0 border-none p-0 outline-none">
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                            {remarks.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
+                                    <BadgeCheck className="w-12 h-12 mb-4 opacity-50" />
+                                    <p className="font-semibold text-base">Sin observaciones</p>
+                                    <p className="text-sm text-center mt-1">No tienes felicitaciones ni llamados de atención registrados.</p>
                                 </div>
-                            </Card>
-                        )}
-                    </motion.div>
-                </TabsContent>
+                            ) : (() => {
+                                const REMARK_COLORS: Record<string, string> = {
+                                    ATTENTION: "text-red-600 border-red-200 bg-red-50 dark:bg-red-950/20",
+                                    COMMENDATION: "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20",
+                                    CITATION: "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/20",
+                                    OTHER: "text-gray-600 border-gray-200 bg-gray-50 dark:bg-gray-950/20",
+                                };
+                                const REMARK_LABELS: Record<string, string> = {
+                                    ATTENTION: "Llamado de Atención", COMMENDATION: "Felicitación",
+                                    CITATION: "Citación", OTHER: "Otra"
+                                };
+                                const byCourse: Record<string, { course: any; remarks: any[] }> = {};
+                                for (const r of remarks) {
+                                    if (!byCourse[r.course.id]) byCourse[r.course.id] = { course: r.course, remarks: [] };
+                                    byCourse[r.course.id].remarks.push(r);
+                                }
+                                return Object.values(byCourse).map(({ course, remarks: courseRemarks }) => {
+                                    const unseen = courseRemarks.filter(r => !r.viewedAt).length;
+                                    return (
+                                        <Card key={course.id} className="overflow-hidden border-border/50 shadow-sm">
+                                            <CardHeader className="bg-muted/10 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-lg font-black text-foreground">{course.title}</h3>
+                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                        <GraduationCap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="text-sm text-muted-foreground">{formatTeacherName(course.teacher)}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end shrink-0">
+                                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sin leer</span>
+                                                    <span className={`text-3xl font-black ${unseen > 0 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{unseen}</span>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="p-0">
+                                                <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
+                                                    <TableHeader className="bg-muted/5">
+                                                        <TableRow>
+                                                            <TableHead className="w-[140px]">Tipo</TableHead>
+                                                            <TableHead>Título</TableHead>
+                                                            <TableHead className="w-[110px] text-center">Fecha</TableHead>
+                                                            <TableHead className="w-[100px] text-center">Estado</TableHead>
+                                                            <TableHead className="w-[90px] text-center">Detalle</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {courseRemarks.map(remark => (
+                                                            <TableRow key={remark.id} className={!remark.viewedAt ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}>
+                                                                <TableCell>
+                                                                    <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-wider ${REMARK_COLORS[remark.type] ?? REMARK_COLORS.OTHER}`}>
+                                                                        {REMARK_LABELS[remark.type] ?? "Otra"}
+                                                                    </Badge>
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <div className="font-semibold">{remark.title}</div>
+                                                                    <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                                                        <GraduationCap className="w-3 h-3 shrink-0" />
+                                                                        {formatName(remark.teacher.name, remark.teacher.profile)}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-center text-sm text-muted-foreground font-medium">
+                                                                    {format(new Date(remark.date), "dd MMM yyyy", { locale: es })}
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    {remark.viewedAt ? (
+                                                                        <Badge variant="outline" className="text-xs gap-1 text-emerald-700 border-emerald-200 bg-emerald-50">
+                                                                            <Eye className="w-3 h-3" /> Visto
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="text-xs gap-1 text-amber-700 border-amber-200 bg-amber-50">
+                                                                            <EyeOff className="w-3 h-3" /> No leído
+                                                                        </Badge>
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+                                                                        onClick={() => {
+                                                                            setRemarkDetail(remark);
+                                                                            if (!remark.viewedAt) {
+                                                                                markRemarkViewed(remark.id)
+                                                                                    .then(() => {
+                                                                                        // optimistically update local state
+                                                                                        setRecords(prev => prev ? {
+                                                                                            ...prev,
+                                                                                            remarks: prev.remarks.map(r => r.id === remark.id ? { ...r, viewedAt: new Date().toISOString() } : r)
+                                                                                        } : prev);
+                                                                                    })
+                                                                                    .catch(console.error);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <Eye className="w-3 h-3" /> Ver
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                });
+                            })()}
+                        </motion.div>
+                    </TabsContent>
 
-                {/* REMARKS TAB */}
-                <TabsContent value="remarks" className="m-0 border-none p-0 outline-none">
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-4">
-                        {remarks.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
-                                <BadgeCheck className="w-12 h-12 mb-4 opacity-50" />
-                                <p className="font-semibold text-base">Sin observaciones</p>
-                                <p className="text-sm text-center mt-1">No tienes felicitaciones ni llamados de atención registrados.</p>
+                    {/* ── ANALYTICS (charts only) ────────────────────────────── */}
+                    <TabsContent value="analytics" className="m-0 border-none p-0 outline-none">
+                        {analyticsContent}
+                    </TabsContent>
+                </Tabs>
+            )}
+
+            {/* Activity Detail Modal — full screen */}
+            <Dialog open={!!activityDetail} onOpenChange={open => { if (!open) setActivityDetail(null); }}>
+                <DialogContent className="!fixed !inset-0 !max-w-none !max-h-none !w-screen !h-screen !rounded-none !translate-x-0 !translate-y-0 flex flex-col p-0 gap-0">
+
+                    {/* Header */}
+                    <DialogHeader className="shrink-0 px-6 py-4 border-b bg-background flex flex-row items-center gap-3">
+                        <FileText className="w-5 h-5 text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-xl font-black leading-tight">{activityDetail?.title}</DialogTitle>
+                            <DialogDescription className="text-xs mt-0.5">Descripción e instrucciones de la actividad.</DialogDescription>
+                        </div>
+                        <Button variant="outline" size="sm" className="shrink-0" onClick={() => setActivityDetail(null)}>
+                            Cerrar
+                        </Button>
+                    </DialogHeader>
+
+                    {/* Scrollable body */}
+                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+
+                        {/* Description */}
+                        {activityDetail?.description ? (
+                            <div className="prose prose-sm max-w-none border rounded-lg p-5 bg-muted/5" data-color-mode="auto">
+                                <MDEditor.Markdown
+                                    source={activityDetail.description}
+                                    style={{ background: 'transparent', color: 'inherit' }}
+                                />
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {remarks.map(remark => (
-                                    <Card key={remark.id} className="relative overflow-hidden transition-all hover:shadow-md">
-                                        <CardContent className="p-5">
-                                            <div className="flex justify-between items-start mb-3">
-                                            <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-wider ${
-                                                remark.type === 'ATTENTION' ? 'text--600 dark:text--400 bg--50 dark:bg--950/20 border--200 dark:border--800/50' : 'text--600 dark:text--400 bg--50 dark:bg--950/20 border--200 dark:border--800/50'
-                                            }`}>
-                                                {remark.type === 'ATTENTION' ? 'Llamado de Atención' : 'Felicitación'}
-                                            </Badge>
-                                            <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                                                <Calendar className="w-3 h-3" />
-                                                {format(new Date(remark.date), "dd MMM, yyyy", { locale: es })}
-                                            </span>
-                                        </div>
-                                        <h4 className="font-black text-lg text-foreground mb-2 leading-tight">{remark.title}</h4>
-                                        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                            {remark.description}
-                                        </p>
-                                            <div className="text-xs font-medium text-muted-foreground flex items-center justify-between border-t border-border/50 pt-3">
-                                                <span className="truncate max-w-[120px]">{remark.course.title}</span>
-                                                <span className="opacity-60 truncate">Por: {formatName(remark.teacher.name, remark.teacher.profile)}</span>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
+                            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                                <FileText className="w-12 h-12 mb-3 opacity-40" />
+                                <p className="text-sm">El profesor no ha agregado instrucciones para esta actividad.</p>
                             </div>
                         )}
-                    </motion.div>
-                </TabsContent>
-            </Tabs>
+
+                        {/* Submission Link section */}
+                        {activityDetail?.allowSubmissionLink && (
+                            <div className="p-5 rounded-lg border bg-primary/5 border-primary/20 space-y-3 max-w-2xl">
+                                <div className="flex items-center gap-2">
+                                    <Link2 className="w-4 h-4 text-primary shrink-0" />
+                                    <span className="font-semibold text-sm">Entrega requerida</span>
+                                    {activityDetail.grade?.submissionLink && (
+                                        <Badge variant="outline" className="ml-auto text-emerald-700 border-emerald-300 bg-emerald-50 text-xs">
+                                            Entregado
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Esta actividad requiere que envíes un enlace con tu trabajo (Google Drive, GitHub, Notion, etc.).
+                                </p>
+
+                                {activityDetail.grade?.submissionLink ? (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 p-2 rounded-md bg-background border text-sm">
+                                            <ExternalLink className="w-3.5 h-3.5 text-primary shrink-0" />
+                                            <a href={activityDetail.grade.submissionLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex-1 text-xs">
+                                                {activityDetail.grade.submissionLink}
+                                            </a>
+                                        </div>
+                                        <Button size="sm" variant="outline" className="w-full gap-2"
+                                            onClick={() => {
+                                                setSubmissionLinkInput(activityDetail.grade.submissionLink);
+                                                setSubmissionDialog({ open: true, activityId: activityDetail.activityId, activityTitle: activityDetail.title, currentLink: activityDetail.grade.submissionLink });
+                                                setActivityDetail(null);
+                                            }}>
+                                            <Link2 className="w-4 h-4" /> Actualizar enlace
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Button className="w-full gap-2"
+                                        onClick={() => {
+                                            setSubmissionLinkInput("");
+                                            setSubmissionDialog({ open: true, activityId: activityDetail.activityId, activityTitle: activityDetail.title, currentLink: "" });
+                                            setActivityDetail(null);
+                                        }}>
+                                        <Link2 className="w-4 h-4" /> Enviar Enlace de Entrega
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Submission Link Dialog */}
+            <Dialog open={!!submissionDialog} onOpenChange={open => { if (!open) setSubmissionDialog(null); }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Link2 className="w-5 h-5 text-primary" />
+                            Enviar Enlace de Entrega
+                        </DialogTitle>
+                        <DialogDescription>
+                            Actividad: <strong>{submissionDialog?.activityTitle}</strong>. Pega el enlace de tu trabajo (Google Drive, GitHub, etc.).
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <Label htmlFor="submission-url">URL de la entrega *</Label>
+                        <Input
+                            id="submission-url"
+                            type="url"
+                            placeholder="https://drive.google.com/..."
+                            value={submissionLinkInput}
+                            onChange={e => setSubmissionLinkInput(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">Asegúrate de que el enlace sea accesible para el docente (sin restricciones de acceso).</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSubmissionDialog(null)} disabled={isSubmittingLink}>Cancelar</Button>
+                        <Button onClick={handleSubmitLink} disabled={isSubmittingLink} className="gap-2">
+                            <Link2 className="w-4 h-4" />
+                            {isSubmittingLink ? "Enviando..." : "Confirmar Entrega"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Observation Detail Modal — full screen */}
+            <Dialog open={!!remarkDetail} onOpenChange={open => { if (!open) setRemarkDetail(null); }}>
+                <DialogContent className="!fixed !inset-0 !max-w-none !max-h-none !w-screen !h-screen !rounded-none !translate-x-0 !translate-y-0 flex flex-col p-0 gap-0">
+                    {/* Header */}
+                    <DialogHeader className="shrink-0 px-6 py-4 border-b bg-background flex flex-row items-center gap-3">
+                        <ShieldAlert className="w-5 h-5 text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-xl font-black leading-tight">{remarkDetail?.title}</DialogTitle>
+                            <DialogDescription className="text-xs mt-0.5">
+                                Observación de {remarkDetail?.course?.title} — Docente: {remarkDetail ? formatTeacherName(remarkDetail.teacher) : ""}
+                            </DialogDescription>
+                        </div>
+                        <Button variant="outline" size="sm" className="shrink-0" onClick={() => setRemarkDetail(null)}>
+                            Cerrar
+                        </Button>
+                    </DialogHeader>
+
+                    {/* Scrollable body */}
+                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                        <div className="max-w-3xl space-y-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tipo:</span>
+                                {remarkDetail && (
+                                    <Badge variant="outline" className={`text-xs font-bold uppercase tracking-wider ${
+                                        remarkDetail.type === 'ATTENTION' ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-950/20' :
+                                        remarkDetail.type === 'COMMENDATION' ? 'text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20' :
+                                        remarkDetail.type === 'CITATION' ? 'text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/20' :
+                                        'text-gray-600 border-gray-200 bg-gray-50 dark:bg-gray-950/20'
+                                    }`}>
+                                        {remarkDetail.type === 'ATTENTION' ? 'Llamado de Atención' :
+                                         remarkDetail.type === 'COMMENDATION' ? 'Felicitación' :
+                                         remarkDetail.type === 'CITATION' ? 'Citación' : 'Otra'}
+                                    </Badge>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fecha:</span>
+                                <span className="text-sm font-medium">
+                                    {remarkDetail?.date && format(new Date(remarkDetail.date), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                                </span>
+                            </div>
+
+                            <div className="border-t pt-4 space-y-2">
+                                <h4 className="font-bold text-base">Descripción / Detalle</h4>
+                                <div className="prose prose-sm max-w-none border rounded-lg p-5 bg-muted/5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                                    {remarkDetail?.description}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* View Justification Dialog */}
+            <Dialog open={!!viewingJustification} onOpenChange={open => { if (!open) setViewingJustification(null); }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            Detalle de Justificación
+                        </DialogTitle>
+                        <DialogDescription>
+                            Soporte enviado para el registro de asistencia del{" "}
+                            <strong>
+                                {viewingJustification?.date && format(new Date(viewingJustification.date), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                            </strong>
+                            .
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-1">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest block">Inasistencia / Retardo</span>
+                            <Badge variant="outline" className="text-xs font-bold text-amber-600 border-amber-200 bg-amber-50">
+                                {viewingJustification?.statusName}
+                            </Badge>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest block">Motivo de Justificación</span>
+                            <div className="p-3 bg-muted rounded-lg text-sm border font-medium text-foreground whitespace-pre-wrap">
+                                {viewingJustification?.justification}
+                            </div>
+                        </div>
+                        {viewingJustification?.url && (
+                            <div className="space-y-1.5">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest block">Enlace de Soporte</span>
+                                <a
+                                    href={viewingJustification.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-bold bg-primary/5 border border-primary/20 px-3 py-2 rounded-lg"
+                                >
+                                    <LinkIcon className="w-3.5 h-3.5" />
+                                    Ver Documento Soporte Externo
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setViewingJustification(null)}>Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

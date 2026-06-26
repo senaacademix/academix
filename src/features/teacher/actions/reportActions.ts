@@ -146,7 +146,7 @@ export async function getCourseCompleteDataAction(courseId: string) {
         "Estudiante": remark.user.name || "Sin nombre",
         "Email": remark.user.email,
         "Fecha": new Date(remark.date).toLocaleDateString('es-ES'),
-        "Tipo": remark.type === 'COMMENDATION' ? 'Felicitación' : 'Llamado de Atención',
+        "Tipo": remark.type === 'COMMENDATION' ? 'Felicitación' : remark.type === 'ATTENTION' ? 'Llamado de Atención' : remark.type === 'CITATION' ? 'Citación' : 'Otra',
         "Título": remark.title,
         "Descripción": remark.description
     }));
