@@ -26,7 +26,7 @@ export function BackButton() {
       )}
     >
       <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-      <span className="text-sm font-semibold tracking-tight">Regresar</span>
+      <span className="text-sm font-semibold tracking-tight hidden sm:inline">Regresar</span>
     </Button>
   );
 }

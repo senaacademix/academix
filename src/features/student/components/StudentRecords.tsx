@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatName } from "@/lib/utils";
+import { formatName, cn } from "@/lib/utils";
 import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation } from "../actions/studentActions";
 import { getStudentGrades, submitStudentSubmissionLink } from "@/features/teacher/actions/gradeActions";
 import { authClient } from "@/lib/auth-client";
@@ -666,26 +666,29 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                 analyticsContent
             ) : (
                 <Tabs defaultValue="attendance" className="space-y-6">
-                    <TabsList className={hideDocumentation ? "grid w-full grid-cols-4" : "grid w-full grid-cols-5"}>
-                        <TabsTrigger value="attendance" className="flex items-center gap-1.5">
+                    <TabsList className={cn(
+                        "flex w-full overflow-x-auto justify-start md:grid h-auto p-1 bg-muted/50 rounded-xl gap-1 scrollbar-none",
+                        hideDocumentation ? "md:grid-cols-4" : "md:grid-cols-5"
+                    )}>
+                        <TabsTrigger value="attendance" className="flex items-center gap-1.5 shrink-0">
                             <Clock className="w-4 h-4 hidden sm:block" />
                             Asistencia
                         </TabsTrigger>
-                        <TabsTrigger value="grades" className="flex items-center gap-1.5">
+                        <TabsTrigger value="grades" className="flex items-center gap-1.5 shrink-0">
                             <GraduationCap className="w-4 h-4 hidden sm:block" />
                             Calificaciones
                         </TabsTrigger>
                         {!hideDocumentation && (
-                            <TabsTrigger value="documentation" className="flex items-center gap-1.5">
+                            <TabsTrigger value="documentation" className="flex items-center gap-1.5 shrink-0">
                                 <BookOpen className="w-4 h-4 hidden sm:block" />
                                 Documentación
                             </TabsTrigger>
                         )}
-                        <TabsTrigger value="remarks" className="flex items-center gap-1.5">
+                        <TabsTrigger value="remarks" className="flex items-center gap-1.5 shrink-0">
                             <ShieldAlert className="w-4 h-4 hidden sm:block" />
                             Observaciones
                         </TabsTrigger>
-                        <TabsTrigger value="analytics" className="flex items-center gap-1.5">
+                        <TabsTrigger value="analytics" className="flex items-center gap-1.5 shrink-0">
                             <BarChart3 className="w-4 h-4 hidden sm:block" />
                             Analítica
                         </TabsTrigger>

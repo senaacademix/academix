@@ -450,9 +450,9 @@ const handleOpenAnalytics = async () => {
                 {selectedGroup ? (
                     <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)} className="flex-1 flex flex-col h-full min-h-[600px]">
                         <div className="p-4 border-b bg-muted/10">
-                            <TabsList className="flex w-full h-auto p-1 bg-muted/50 rounded-xl gap-1">
+                            <TabsList className="flex w-full overflow-x-auto justify-start md:justify-center h-auto p-1 bg-muted/50 rounded-xl gap-1 scrollbar-none">
                                 {/* ── ESTUDIANTES ── */}
-                                <TabsTrigger value="students" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                <TabsTrigger value="students" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0">
                                     <span className="flex items-center gap-1">
                                         Estudiantes
                                         <Tooltip>
@@ -477,7 +477,7 @@ const handleOpenAnalytics = async () => {
                                 </TabsTrigger>
 
                                 {/* ── ASISTENCIA ── */}
-                                <TabsTrigger value="attendance" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                <TabsTrigger value="attendance" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0">
                                     <span className="flex items-center gap-1">
                                         Asistencia
                                         <Tooltip>
@@ -503,7 +503,7 @@ const handleOpenAnalytics = async () => {
                                 </TabsTrigger>
 
                                 {/* ── OBSERVACIONES ── */}
-                                <TabsTrigger value="remarks" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                <TabsTrigger value="remarks" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0">
                                     <span className="flex items-center gap-1">
                                         Observaciones
                                         <Tooltip>
@@ -528,7 +528,7 @@ const handleOpenAnalytics = async () => {
                                 </TabsTrigger>
 
                                 {/* ── CALIFICACIONES ── */}
-                                <TabsTrigger value="grades" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                <TabsTrigger value="grades" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0">
                                     <span className="flex items-center gap-1">
                                         Calificaciones
                                         <Tooltip>
@@ -554,7 +554,7 @@ const handleOpenAnalytics = async () => {
                                 </TabsTrigger>
 
                                 {/* ── DOCUMENTACIÓN ── */}
-                                <TabsTrigger value="documentation" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                <TabsTrigger value="documentation" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0">
                                     <span className="flex items-center gap-1">
                                         <BookOpen className="w-3 h-3 shrink-0" />
                                         Documentación
@@ -580,7 +580,7 @@ const handleOpenAnalytics = async () => {
                                 </TabsTrigger>
 
                                 {/* ── ANALÍTICA ── */}
-                                <TabsTrigger value="analytics" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                <TabsTrigger value="analytics" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0">
                                     <span className="flex items-center gap-1">
                                         Analítica
                                         <Tooltip>
@@ -1197,7 +1197,7 @@ const handleOpenAnalytics = async () => {
                                                     <table className="text-xs border-collapse min-w-max w-full">
                                                         <thead>
                                                             <tr className="bg-muted/40 sticky top-0 z-10">
-                                                                <th className="sticky left-0 z-20 bg-muted/60 backdrop-blur-sm text-left px-4 py-3 font-bold text-foreground min-w-[180px] border-b border-r border-border/60">
+                                                                <th className="sticky left-0 z-20 bg-muted text-left px-4 py-3 font-bold text-foreground min-w-[180px] border-b border-r border-border/60">
                                                                     Estudiante
                                                                 </th>
                                                                 {displayedDays.map(d => {
@@ -1212,7 +1212,7 @@ const handleOpenAnalytics = async () => {
                                                                         </th>
                                                                     );
                                                                 })}
-                                                                <th className="sticky right-0 z-20 bg-muted/60 backdrop-blur-sm px-3 py-3 text-center font-bold text-muted-foreground border-b border-l border-border/60 min-w-[80px]">
+                                                                <th className="sticky right-0 z-20 bg-muted px-3 py-3 text-center font-bold text-muted-foreground border-b border-l border-border/60 min-w-[80px]">
                                                                     F / T
                                                                 </th>
                                                             </tr>
@@ -1224,7 +1224,9 @@ const handleOpenAnalytics = async () => {
                                                                 const lates = Object.values(uLookup).filter(v => v.status === "LATE").length;
                                                                 return (
                                                                     <tr key={s.id} className={`group/row transition-colors ${i % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
-                                                                        <td className="sticky left-0 z-10 bg-inherit px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap">
+                                                                        <td className={`sticky left-0 z-10 px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap transition-colors ${
+                                                                            i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
+                                                                        } group-hover/row:bg-muted`}>
                                                                             {formatName(s.name, s.profile)}
                                                                         </td>
                                                                         {displayedDays.map(d => {
@@ -1271,7 +1273,9 @@ const handleOpenAnalytics = async () => {
                                                                                 </td>
                                                                             );
                                                                         })}
-                                                                        <td className="sticky right-0 z-10 bg-inherit px-3 py-2 text-center border-l border-border/40 border-b">
+                                                                        <td className={`sticky right-0 z-10 px-3 py-2 text-center border-l border-border/40 border-b transition-colors ${
+                                                                            i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
+                                                                        } group-hover/row:bg-muted`}>
                                                                             <span className="font-black text-red-600">{absences}</span>
                                                                             <span className="text-muted-foreground mx-1">/</span>
                                                                             <span className="font-black text-amber-600">{lates}</span>

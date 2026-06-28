@@ -184,23 +184,23 @@ export function MyEnrollments({
 
 
 
-                                            <TabsTrigger value="grades" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="grades" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student shrink-0">
                                                 <GraduationCap className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Calificaciones</span>
+                                                <span className="group-data-[state=active]:text-primary">Calificaciones</span>
                                             </TabsTrigger>
 
                                             <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
 
-                                            <TabsTrigger value="remarks" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="remarks" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student shrink-0">
                                                 <MessageSquare className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Observaciones</span>
+                                                <span className="group-data-[state=active]:text-primary">Observaciones</span>
                                             </TabsTrigger>
 
                                             <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
 
-                                            <TabsTrigger value="resources" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="resources" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student shrink-0">
                                                 <BookOpen className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Documentación</span>
+                                                <span className="group-data-[state=active]:text-primary">Documentación</span>
                                             </TabsTrigger>
                                         </TabsList>
                                     </div>

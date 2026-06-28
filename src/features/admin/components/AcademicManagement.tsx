@@ -1718,14 +1718,13 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                         </div>
                     </div>
 
-                    {/* Program Sub-Navigation Tabs */}
                     <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
-                        <TabsList className="flex w-full max-w-[680px] bg-muted/40 p-1 rounded-xl">
-                            <TabsTrigger value="overview" className="rounded-lg flex-1">Vista General</TabsTrigger>
-                            <TabsTrigger value="periods" className="rounded-lg flex-1">Periodos y Cursos</TabsTrigger>
-                            <TabsTrigger value="groups" className="rounded-lg flex-1">Grupos y Alumnos</TabsTrigger>
-                            <TabsTrigger value="teachers" className="rounded-lg flex-1">Profesores</TabsTrigger>
-                            <TabsTrigger value="environments" className="rounded-lg flex-1">Ambientes</TabsTrigger>
+                        <TabsList className="flex w-full max-w-[680px] overflow-x-auto bg-muted/40 p-1 rounded-xl scrollbar-none justify-start md:justify-center">
+                            <TabsTrigger value="overview" className="rounded-lg flex-1 shrink-0">Vista General</TabsTrigger>
+                            <TabsTrigger value="periods" className="rounded-lg flex-1 shrink-0">Periodos y Cursos</TabsTrigger>
+                            <TabsTrigger value="groups" className="rounded-lg flex-1 shrink-0">Grupos y Alumnos</TabsTrigger>
+                            <TabsTrigger value="teachers" className="rounded-lg flex-1 shrink-0">Profesores</TabsTrigger>
+                            <TabsTrigger value="environments" className="rounded-lg flex-1 shrink-0">Ambientes</TabsTrigger>
                         </TabsList>
 
                         {/* SUB-TAB: OVERVIEW */}

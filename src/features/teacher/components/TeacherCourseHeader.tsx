@@ -186,12 +186,12 @@ function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, 
             value={value} 
             onClick={handleClick}
             disabled={isPending}
-            className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active disabled:opacity-40"
+            className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active disabled:opacity-40 shrink-0"
         >
             <span className="group-data-[state=active]:text-primary transition-colors">
                 {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
             </span>
-            <span className="hidden sm:inline group-data-[state=active]:text-primary transition-colors">{label}</span>
+            <span className="group-data-[state=active]:text-primary transition-colors">{label}</span>
             {isPending && <span className="absolute -top-1 -right-1 flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span></span>}
         </TabsTrigger>
     );

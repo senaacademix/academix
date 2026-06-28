@@ -19,7 +19,7 @@ export default async function AdminUsersPage() {
     const { users, total } = await getAllUsersAction({ limit: 20, role: "student", groupId: defaultGroupId !== "all" ? defaultGroupId : undefined });
 
     return (
-        <div className="p-8">
+        <div className="p-4 sm:p-8">
             <UserManagement 
                 initialUsers={users} 
                 totalCount={total} 
