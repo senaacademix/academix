@@ -53,7 +53,7 @@ export default function SignIn() {
     <div className="flex items-center justify-center min-h-screen">
       <div className="mx-auto w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
-          <Image src="/logo.svg" alt="Logo" width={64} height={64} className="mx-auto h-16 w-16" />
+          <Image src="/logo.svg?v=2" alt="Logo" width={64} height={64} className="mx-auto h-16 w-16" />
           <h1 className="text-3xl font-semibold">Bienvenido de nuevo</h1>
           <p className="text-muted-foreground">
             Inicia sesión para acceder a tu panel, ajustes y proyectos.

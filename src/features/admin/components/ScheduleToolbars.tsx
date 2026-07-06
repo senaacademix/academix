@@ -12,7 +12,7 @@ interface ScheduleToolbarsProps {
     setTeacherOverviewOpen: (open: boolean) => void;
     setEnvOverviewOpen: (open: boolean) => void;
     setPeriodOverviewOpen: (open: boolean) => void;
-    setIsEventModalOpen: (open: boolean) => void;
+
     setIsAnalyticsModalOpen: (open: boolean) => void;
     setIsSettingsModalOpen: (open: boolean) => void;
     schedulesPublished: boolean;
@@ -33,7 +33,7 @@ export function ScheduleToolbars({
     setTeacherOverviewOpen,
     setEnvOverviewOpen,
     setPeriodOverviewOpen,
-    setIsEventModalOpen,
+
     setIsAnalyticsModalOpen,
     setIsSettingsModalOpen,
     schedulesPublished,
@@ -116,14 +116,7 @@ export function ScheduleToolbars({
                 <TooltipContent side="bottom" align="center"><p className="text-xs">Actualizar Trimestres</p></TooltipContent>
             </Tooltip>
 
-            <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => setIsEventModalOpen(true)} className="h-7 w-7 rounded border-border/40 shrink-0">
-                        <CalendarDays className="w-3.5 h-3.5 text-primary" />
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" align="center"><p className="text-xs">Eventos y Festivos</p></TooltipContent>
-            </Tooltip>
+
 
             <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
@@ -142,6 +135,7 @@ export function ScheduleToolbars({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" align="center"><p className="text-xs">Configuración</p></TooltipContent>
             </Tooltip>
+
 
             <Button
                 variant="outline"

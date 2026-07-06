@@ -71,6 +71,10 @@ export interface TrainingEnvironment {
 
 export interface Program {
     id: string; name: string; description: string|null;
+    startDate?: string | Date | null;
+    endDate?: string | Date | null;
+    scheduleTitle?: string | null;
+    maxTeacherHours?: number | null;
     teachers: {
         id:string;
         name:string|null;
@@ -102,7 +106,7 @@ export type PendingChange =
     | { type: "DELETE"; courseId: string }
     | { type: "ASSIGN_ENV"; groupId: string; envId: string | null }
     | { type: "ASSIGN_PERIOD"; groupId: string; periodId: string | null }
-    | { type: "UPDATE_SETTINGS"; schedulesPublished: boolean; scheduleTitle?: string; scheduleStartDate?: string; scheduleEndDate?: string };
+    | { type: "UPDATE_SETTINGS"; schedulesPublished: boolean; scheduleTitle?: string; scheduleStartDate?: string; scheduleEndDate?: string; programId?: string };
 
 export function useScheduleState({
     initialPrograms,
@@ -135,6 +139,10 @@ export function useScheduleState({
     const isDirty = pendingChanges.length > 0;
 
     useEffect(() => {
+        if (justSavedRef.current) {
+            justSavedRef.current = false;
+            return;
+        }
         if (!isDirty && !isSaving) {
             setLocalPrograms(JSON.parse(JSON.stringify(initialPrograms)));
             setSchedulesPublished(initialSchedulesPublished);
@@ -149,7 +157,7 @@ export function useScheduleState({
     const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
-    const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+
 
     // Selection
     const [programId, setProgramId] = useState(() => initialPrograms[0]?.id || "");
@@ -205,6 +213,21 @@ export function useScheduleState({
             setLocalPrograms(JSON.parse(JSON.stringify(initialPrograms)));
         }
     }, [initialPrograms, programId]);
+
+    useEffect(() => {
+        const activeProg = localPrograms.find(p => p.id === programId);
+        if (activeProg) {
+            setScheduleStartDate(activeProg.startDate ? new Date(activeProg.startDate).toISOString().split('T')[0] : "");
+            setScheduleEndDate(activeProg.endDate ? new Date(activeProg.endDate).toISOString().split('T')[0] : "");
+            setScheduleTitle(activeProg.scheduleTitle || "");
+            setMaxTeacherHours(activeProg.maxTeacherHours ?? 40);
+        } else {
+            setScheduleStartDate("");
+            setScheduleEndDate("");
+            setScheduleTitle("");
+            setMaxTeacherHours(40);
+        }
+    }, [programId, localPrograms]);
 
     const program = useMemo(() => localPrograms.find(p => p.id === programId), [localPrograms, programId]);
 
@@ -785,11 +808,21 @@ export function useScheduleState({
     }, [localPrograms]);
 
     const triggerSettingsChange = useCallback((title: string, startDate: string, endDate: string, maxHours: number) => {
+        setScheduleTitle(title);
+        setScheduleStartDate(startDate);
+        setScheduleEndDate(endDate);
+        setMaxTeacherHours(maxHours);
+
+        setLocalPrograms(prev => prev.map(p => p.id === programId
+            ? { ...p, startDate, endDate, scheduleTitle: title, maxTeacherHours: maxHours }
+            : p
+        ));
+
         setPendingChanges(prev => {
             const filtered = prev.filter(ch => ch.type !== "UPDATE_SETTINGS");
-            return [...filtered, { type: "UPDATE_SETTINGS" as const, schedulesPublished, scheduleTitle: title, scheduleStartDate: startDate, scheduleEndDate: endDate, maxTeacherHours: maxHours } as any];
+            return [...filtered, { type: "UPDATE_SETTINGS" as const, schedulesPublished, scheduleTitle: title, scheduleStartDate: startDate, scheduleEndDate: endDate, maxTeacherHours: maxHours, programId }];
         });
-    }, [schedulesPublished]);
+    }, [schedulesPublished, programId]);
 
     return {
         // Core optimistic states
@@ -842,8 +875,7 @@ export function useScheduleState({
         setIsSettingsModalOpen,
         publishConfirmOpen,
         setPublishConfirmOpen,
-        isEventModalOpen,
-        setIsEventModalOpen,
+
         isExportingExcel,
 
         // Dialog Schedule Add/Edit State

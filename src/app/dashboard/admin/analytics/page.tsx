@@ -3,17 +3,16 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getProgramsAction } from "@/features/admin/actions/academicActions";
 import { getEnvironmentsAction } from "@/features/admin/actions/environmentActions";
-import { SchedulePlanning } from "@/features/admin/components/SchedulePlanning";
-import prisma from "@/lib/prisma";
+import { AdvancedAnalyticsView } from "@/features/admin/components/AdvancedAnalyticsView";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-    title: "Programación de Horarios | AcademiX",
-    description: "Tablero de distribución horaria y gestor de asignación de materias y profesores.",
+    title: "Reportes y Analítica Avanzada | AcademiX",
+    description: "Tablero interactivo de análisis horaria, carga de instructores y ocupación de aulas.",
 };
 
-export default async function AdminSchedulePage() {
+export default async function AdminAnalyticsPage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
     if (!session || session.user.role !== "admin") {
@@ -22,36 +21,23 @@ export default async function AdminSchedulePage() {
 
     const programs = await getProgramsAction();
     const environments = await getEnvironmentsAction();
-    const settings = await prisma.systemSettings.findUnique({ where: { id: "settings" } });
 
-    // Map programs/groups to match the frontend typescript interface
+    // Map programs/groups to match the frontend AdvancedAnalyticsView data structures
     const mappedPrograms = programs.map((program: any) => ({
         id: program.id,
         name: program.name,
         description: program.description,
+        maxTeacherHours: program.maxTeacherHours,
         startDate: program.startDate ? program.startDate.toISOString() : null,
         endDate: program.endDate ? program.endDate.toISOString() : null,
         teachers: program.teachers.map((t: any) => ({
             id: t.id,
             name: t.name,
             email: t.email,
-            availabilityLocked: t.availabilityLocked,
-            qualifiedCoursesLocked: t.qualifiedCoursesLocked,
-            availabilities: t.availabilities || [],
-            qualifiedCourses: t.qualifiedCourses || []
         })),
         periods: program.periods.map((period: any) => ({
             id: period.id,
             name: period.name,
-            courses: period.courses
-                .filter((c: any) => c.groupId === null)
-                .map((c: any) => ({
-                    id: c.id,
-                    title: c.title,
-                    groupId: c.groupId,
-                    periodId: c.periodId,
-                    weeklyHours: c.weeklyHours
-                }))
         })),
         groups: program.groups.map((group: any) => ({
             id: group.id,
@@ -61,9 +47,6 @@ export default async function AdminSchedulePage() {
             environment: group.environment ? {
                 id: group.environment.id,
                 name: group.environment.name,
-                capacity: group.environment.capacity,
-                location: group.environment.location,
-                resources: group.environment.resources
             } : null,
             startTime: group.startTime,
             endTime: group.endTime,
@@ -71,14 +54,6 @@ export default async function AdminSchedulePage() {
             period: group.period ? {
                 id: group.period.id,
                 name: group.period.name,
-                courses: group.period.courses
-                    .filter((c: any) => c.groupId === null)
-                    .map((c: any) => ({
-                        id: c.id,
-                        title: c.title,
-                        groupId: c.groupId,
-                        weeklyHours: c.weeklyHours
-                    }))
             } : null,
             courses: group.courses.map((c: any) => ({
                 id: c.id,
@@ -108,18 +83,15 @@ export default async function AdminSchedulePage() {
         })) : []
     }));
 
-
-
     return (
-        <div className="absolute inset-0 overflow-hidden bg-background z-20">
-            <SchedulePlanning 
-                initialPrograms={mappedPrograms} 
-                initialEnvironments={environments} 
-                initialSchedulesPublished={settings?.schedulesPublished ?? false}
-                initialScheduleTitle={settings?.scheduleTitle ?? "Horario Académico"}
-                initialScheduleStartDate={settings?.scheduleStartDate ?? null}
-                initialScheduleEndDate={settings?.scheduleEndDate ?? null}
-                initialMaxTeacherHours={settings?.maxTeacherHours ?? 40}
+        <div className="w-full flex-1 flex flex-col bg-background relative overflow-hidden">
+            {/* Background gradients */}
+            <div className="absolute top-[-10%] left-[-10%] w-[35%] h-[35%] rounded-full bg-emerald-500/5 blur-[120px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[35%] h-[35%] rounded-full bg-blue-500/5 blur-[120px] pointer-events-none" />
+            
+            <AdvancedAnalyticsView 
+                programs={mappedPrograms} 
+                environments={environments} 
             />
         </div>
     );

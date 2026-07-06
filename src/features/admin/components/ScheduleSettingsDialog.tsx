@@ -65,20 +65,20 @@ export function ScheduleSettingsDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[600px] p-0 border-border/50 shadow-2xl overflow-hidden bg-background">
                 {/* Header Section */}
-                <div className="relative z-10 px-6 py-5 border-b bg-muted/30 shadow-sm shrink-0 flex items-center justify-between gap-4">
-                    <DialogHeader className="text-left space-y-0">
-                        <DialogTitle className="flex items-center gap-2.5 text-xl font-extrabold tracking-tight m-0">
-                            <div className="p-1.5 bg-gradient-to-br from-primary/20 to-primary/40 rounded-xl shadow-inner border border-primary/10">
-                                <Settings className="w-5 h-5 text-primary" />
-                            </div>
-                            <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary/80 to-primary animate-gradient-x">
-                                Configuración General del Horario
-                            </span>
-                        </DialogTitle>
-                        <DialogDescription className="sr-only">
-                            Ajusta los parámetros globales de la planificación actual.
-                        </DialogDescription>
-                    </DialogHeader>
+                <div className="relative z-10 px-6 py-4 border-b bg-card/80 backdrop-blur-sm shadow-sm shrink-0 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-500/30 shrink-0">
+                            <Settings className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base font-black text-foreground leading-tight flex items-center gap-2">
+                                <span>Configuración General del Horario</span>
+                            </DialogTitle>
+                            <DialogDescription className="text-[11px] text-muted-foreground mt-0">
+                                Configura los parámetros del horario para este Programa de Formación.
+                            </DialogDescription>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="p-6 overflow-y-auto max-h-[70vh]">

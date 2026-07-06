@@ -113,7 +113,7 @@ export async function getProgramsAction() {
     });
 }
 
-export async function createProgramAction(data: { name: string; description?: string }) {
+export async function createProgramAction(data: { name: string; description?: string; startDate?: Date | null; endDate?: Date | null; scheduleTitle?: string | null; maxTeacherHours?: number | null }) {
     const session = await requireAdmin();
     if (!data.name || data.name.trim().length < 2) {
         throw new Error("El nombre del programa debe tener al menos 2 caracteres");
@@ -123,6 +123,10 @@ export async function createProgramAction(data: { name: string; description?: st
         data: {
             name: data.name,
             description: data.description || null,
+            startDate: data.startDate || null,
+            endDate: data.endDate || null,
+            scheduleTitle: data.scheduleTitle || null,
+            maxTeacherHours: data.maxTeacherHours ?? 40,
         }
     });
 
@@ -143,7 +147,7 @@ export async function createProgramAction(data: { name: string; description?: st
     return program;
 }
 
-export async function updateProgramAction(id: string, data: { name: string; description?: string }) {
+export async function updateProgramAction(id: string, data: { name: string; description?: string; startDate?: Date | null; endDate?: Date | null; scheduleTitle?: string | null; maxTeacherHours?: number | null }) {
     const session = await requireAdmin();
     if (!data.name || data.name.trim().length < 2) {
         throw new Error("El nombre del programa debe tener al menos 2 caracteres");
@@ -154,6 +158,10 @@ export async function updateProgramAction(id: string, data: { name: string; desc
         data: {
             name: data.name,
             description: data.description || null,
+            startDate: data.startDate !== undefined ? data.startDate : undefined,
+            endDate: data.endDate !== undefined ? data.endDate : undefined,
+            scheduleTitle: data.scheduleTitle !== undefined ? data.scheduleTitle : undefined,
+            maxTeacherHours: data.maxTeacherHours !== undefined ? (data.maxTeacherHours ?? 40) : undefined,
         }
     });
 
@@ -1800,11 +1808,18 @@ export async function saveScheduleBatchAction(pendingChanges: any[]) {
         for (const ch of settingsChanges) {
             await updateSettingsAction({ 
                 schedulesPublished: ch.schedulesPublished,
-                scheduleTitle: ch.scheduleTitle,
-                scheduleStartDate: ch.scheduleStartDate ? new Date(ch.scheduleStartDate) : null,
-                scheduleEndDate: ch.scheduleEndDate ? new Date(ch.scheduleEndDate) : null,
-                maxTeacherHours: ch.maxTeacherHours
             });
+            if (ch.programId) {
+                await prisma.program.update({
+                    where: { id: ch.programId },
+                    data: {
+                        startDate: ch.scheduleStartDate ? new Date(ch.scheduleStartDate + "T12:00:00") : null,
+                        endDate: ch.scheduleEndDate ? new Date(ch.scheduleEndDate + "T12:00:00") : null,
+                        scheduleTitle: ch.scheduleTitle ?? null,
+                        maxTeacherHours: ch.maxTeacherHours ?? 40,
+                    }
+                });
+            }
         }
     }
 

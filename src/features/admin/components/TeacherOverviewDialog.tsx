@@ -9,20 +9,20 @@ export function TeacherOverviewDialog({ open, onOpenChange }: { open: boolean, o
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-none sm:max-w-none w-screen h-[100dvh] p-0 m-0 !rounded-none border-none flex flex-col bg-background/95 backdrop-blur-3xl overflow-hidden shadow-none z-50">
-                <div className="relative z-10 px-6 py-4 border-b bg-background/40 backdrop-blur-md shadow-sm shrink-0 flex items-center justify-between gap-4">
-                    <DialogHeader className="text-left space-y-0">
-                        <DialogTitle className="flex items-center gap-2.5 text-xl font-extrabold tracking-tight m-0">
-                            <div className="p-1.5 bg-gradient-to-br from-primary/20 to-primary/40 rounded-xl shadow-inner border border-primary/10">
-                                <Users className="w-5 h-5 text-blue-500" />
-                            </div>
-                            <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary/80 to-primary animate-gradient-x">
-                                Vista Docentes
-                            </span>
-                        </DialogTitle>
-                        <DialogDescription className="sr-only">
-                            En construcción...
-                        </DialogDescription>
-                    </DialogHeader>
+                <div className="relative z-10 px-6 py-4 border-b bg-card/80 backdrop-blur-sm shadow-sm shrink-0 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-500/30 shrink-0">
+                            <Users className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base font-black text-foreground leading-tight flex items-center gap-2">
+                                <span>Vista Docentes</span>
+                            </DialogTitle>
+                            <DialogDescription className="text-[11px] text-muted-foreground mt-0">
+                                Sección en construcción para la gestión general de docentes.
+                            </DialogDescription>
+                        </div>
+                    </div>
                     <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="rounded-full bg-muted/50 hover:bg-muted shrink-0 z-50 w-8 h-8">
                         <X className="w-4 h-4" />
                     </Button>

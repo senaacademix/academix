@@ -16,7 +16,7 @@ export async function getScheduleEvents() {
     }
 }
 
-export async function createScheduleEvent(data: { title: string, description?: string | null, startTime?: string | null, endTime?: string | null, startDate: Date, endDate: Date, type: ScheduleEventType }) {
+export async function createScheduleEvent(data: { title: string, description?: string | null, startTime?: string | null, endTime?: string | null, startDate: Date, endDate: Date, type: ScheduleEventType, externalUrl?: string | null }) {
     try {
         const event = await prisma.scheduleEvent.create({
             data: {
@@ -26,7 +26,8 @@ export async function createScheduleEvent(data: { title: string, description?: s
                 endTime: data.endTime,
                 startDate: data.startDate,
                 endDate: data.endDate,
-                type: data.type
+                type: data.type,
+                externalUrl: data.externalUrl
             }
         });
         revalidatePath("/dashboard/admin/schedule");
@@ -47,5 +48,22 @@ export async function deleteScheduleEvent(id: string) {
     } catch (error) {
         console.error("Error deleting schedule event:", error);
         return { success: false, error: "Failed to delete event" };
+    }
+}
+
+export async function deleteEventsBeforeDate(cutoffDate: Date) {
+    try {
+        const result = await prisma.scheduleEvent.deleteMany({
+            where: {
+                startDate: {
+                    lt: cutoffDate
+                }
+            }
+        });
+        revalidatePath("/dashboard/admin/schedule");
+        return { success: true, count: result.count };
+    } catch (error) {
+        console.error("Error deleting events before date:", error);
+        return { success: false, error: "Failed to delete events" };
     }
 }

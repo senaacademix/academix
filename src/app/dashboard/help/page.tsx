@@ -200,10 +200,7 @@ export default async function HelpPage() {
                 </ReactMarkdown>
             </div>
 
-            {/* Footer */}
-            <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
-                <p>¿Necesitas más ayuda? Contacta a tu administrador o profesor.</p>
-            </div>
+
         </div>
     )
 }

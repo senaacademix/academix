@@ -16,10 +16,14 @@ export const settingsService = {
     },
 
     async updateSettings(data: any) {
-        return await prisma.systemSettings.upsert({
+        const settings = await prisma.systemSettings.upsert({
             where: { id: "settings" },
             update: data,
             create: { id: "settings", ...data }
         });
+
+
+
+        return settings;
     }
 };

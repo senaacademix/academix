@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Calendar, Clock, BookOpen, Info, Users, GraduationCap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Clock, BookOpen, Info, Users, GraduationCap, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getScheduleViewAction } from "@/features/schedule/actions/scheduleActions";
 import { useSession } from "@/lib/auth-client";
@@ -16,6 +16,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -268,6 +269,38 @@ export function ScheduleView() {
 
     const noSchedules = activeTab === "schedule" ? events.length === 0 : scheduleEvents.length === 0;
 
+    // Calculate grid start and end hours dynamically based on classes and events
+    let minHour = 6;
+    let maxHour = 20;
+
+    courses.forEach(c => {
+        (c.schedules || []).forEach((s: any) => {
+            if (s.startTime) {
+                const hour = parseInt(s.startTime.split(":")[0], 10);
+                if (hour < minHour) minHour = hour;
+            }
+            if (s.endTime) {
+                const hour = Math.ceil(parseFloat(s.endTime.split(":")[0]) + parseFloat(s.endTime.split(":")[1])/60);
+                if (hour > maxHour) maxHour = hour;
+            }
+        });
+    });
+
+    scheduleEvents.forEach((e: any) => {
+        if (e.startTime) {
+            const hour = parseInt(e.startTime.split(":")[0], 10);
+            if (hour < minHour) minHour = hour;
+        }
+        if (e.endTime) {
+            const hour = Math.ceil(parseFloat(e.endTime.split(":")[0]) + parseFloat(e.endTime.split(":")[1])/60);
+            if (hour > maxHour) maxHour = hour;
+        }
+    });
+
+    minHour = Math.max(0, Math.min(minHour, 6));
+    maxHour = Math.min(24, Math.max(maxHour, 20));
+    const gridHoursLength = maxHour - minHour;
+
     // Calculate teacher hours
     let weeklyHoursStr = "0";
     let periodHoursStr = "0";
@@ -472,7 +505,7 @@ export function ScheduleView() {
                                 const d = startOfDay(day);
                                 return d >= sDate && d <= eDate;
                             });
-                            const dbEventsForDay = activeTab === "events" ? allDbEventsForDay : [];
+                            const dbEventsForDay = allDbEventsForDay;
                             const holidays = dbEventsForDay.filter(e => e.type === "HOLIDAY");
                             const isHoliday = holidays.length > 0;
 
@@ -497,31 +530,47 @@ export function ScheduleView() {
                                     {dbEventsForDay.filter(e => !e.startTime).length > 0 && (
                                         <div className="flex flex-col gap-0.5 mt-1.5 w-full px-0.5">
                                             {dbEventsForDay.filter(e => !e.startTime).map(evt => (
-                                                <Tooltip key={evt.id}>
-                                                    <TooltipTrigger asChild>
+                                                <Popover key={evt.id}>
+                                                    <PopoverTrigger asChild>
                                                         <div className={cn(
-                                                            "text-[10px] leading-tight font-bold text-center rounded py-1 px-1.5 truncate w-full shadow-sm cursor-help transition-all hover:brightness-110",
-                                                            evt.type === "HOLIDAY" ? "bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 text--700 dark:text--300 dark:text-red-300" : "bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-300"
+                                                            "text-[10px] leading-tight font-bold text-center rounded py-1 px-1.5 truncate w-full shadow-sm cursor-pointer transition-all hover:brightness-110",
+                                                            evt.type === "HOLIDAY" ? "bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 text-red-700 dark:text-red-300" : "bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-300"
                                                         )}>
                                                             {evt.startTime && <span className="opacity-70 mr-1">[{evt.startTime}]</span>}
                                                             {evt.title}
                                                         </div>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent className="max-w-xs space-y-1 p-3 shadow-xl border-muted/20">
-                                                        <div className="font-bold text-sm">{evt.title}</div>
-                                                        {(evt.startTime || evt.endTime) && (
-                                                            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                                <Clock className="w-3 h-3" />
-                                                                {evt.startTime || "--:--"} hasta {evt.endTime || "--:--"}
-                                                            </div>
-                                                        )}
-                                                        {evt.description && (
-                                                            <p className="text-xs text-muted-foreground mt-2 break-words">
-                                                                {evt.description}
-                                                            </p>
-                                                        )}
-                                                    </TooltipContent>
-                                                </Tooltip>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-5 shadow-2xl border-muted/20 z-[100]" side="bottom" align="start">
+                                                        <div className="space-y-1">
+                                                            <div className="font-extrabold text-lg leading-tight text-foreground">{evt.title}</div>
+                                                            <div className="text-sm font-semibold text-muted-foreground">{evt.type === "HOLIDAY" ? "Día Festivo" : "Evento Institucional"}</div>
+                                                            {(evt.startTime || evt.endTime) && (
+                                                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
+                                                                    <Clock className="w-4 h-4" />
+                                                                    {evt.startTime || "--:--"} hasta {evt.endTime || "--:--"}
+                                                                </div>
+                                                            )}
+                                                            {evt.description && (
+                                                                <p className="text-sm text-foreground/80 mt-3 bg-muted/40 p-3 rounded-lg border border-border/50 break-words">
+                                                                    {evt.description}
+                                                                </p>
+                                                            )}
+                                                            {evt.externalUrl && (
+                                                                <div className="mt-3">
+                                                                    <a 
+                                                                        href={evt.externalUrl} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer"
+                                                                        className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1 font-semibold"
+                                                                    >
+                                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                                        <span>Ver información externa</span>
+                                                                    </a>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             ))}
                                         </div>
                                     )}
@@ -532,7 +581,7 @@ export function ScheduleView() {
                     <div className="grid grid-cols-8 divide-x min-h-[400px]">
                         {/* Time labels placeholder */}
                         <div className="flex flex-col divide-y text-xs text-muted-foreground">
-                            {Array.from({ length: 14 }, (_, i) => i + 6).map(h => (
+                            {Array.from({ length: gridHoursLength }, (_, i) => i + minHour).map(h => (
                                 <div key={h} className="px-1 py-1 min-h-[40px] flex items-start">{formatHour12h(h)}</div>
                             ))}
                         </div>
@@ -548,7 +597,7 @@ export function ScheduleView() {
                                 const d = startOfDay(day);
                                 return d >= sDate && d <= eDate;
                             });
-                            const dbEventsForDay = activeTab === "events" ? allDbEventsForDay : [];
+                            const dbEventsForDay = allDbEventsForDay;
                             
                             const dayNameString = Object.keys(DAY_INDEX).find(k => DAY_INDEX[k] === ((getDay(day) + 6) % 7)) || "MONDAY";
                             const timeBoundEvents = dbEventsForDay.filter(e => e.startTime && e.endTime).map((e, idx) => ({
@@ -557,9 +606,21 @@ export function ScheduleView() {
                                 courseTitle: e.title,
                                 dayOfWeek: dayNameString,
                                 colorIndex: idx % COURSE_COLORS.length,
-                                course: { id: e.id, title: e.title, description: e.description, teacher: null, group: null, schedules: [] } as any
+                                course: { 
+                                    id: e.id, 
+                                    title: e.title, 
+                                    description: e.description, 
+                                    teacher: null, 
+                                    group: null, 
+                                    schedules: [],
+                                    isEvent: true,
+                                    startTime: e.startTime,
+                                    endTime: e.endTime,
+                                    externalUrl: e.externalUrl,
+                                    type: e.type
+                                } as any
                             }));
-                            const dayEvents = activeTab === "schedule" ? originalDayEvents : timeBoundEvents;
+                            const dayEvents = activeTab === "schedule" ? [...originalDayEvents, ...timeBoundEvents] : timeBoundEvents;
                             const holidays = dbEventsForDay.filter(e => e.type === "HOLIDAY");
                             const isHoliday = holidays.length > 0;
                             const isPast = startOfDay(day) < startOfDay(today);
@@ -578,15 +639,15 @@ export function ScheduleView() {
                                     } : undefined}
                                 >
 
-                                    {Array.from({ length: 14 }, (_, h) => (
+                                    {Array.from({ length: gridHoursLength }, (_, h) => (
                                         <div key={h} className="min-h-[40px] relative" />
                                     ))}
                                     {/* Event blocks */}
                                     {dayEvents.map((event, ei) => {
                                         const [sh, sm] = event.startTime.split(":").map(Number);
                                         const [eh, em] = event.endTime.split(":").map(Number);
-                                        const startMinutes = (sh - 6) * 60 + sm;
-                                        const durationMinutes = (eh - 6) * 60 + em - startMinutes;
+                                        const startMinutes = (sh - minHour) * 60 + sm;
+                                        const durationMinutes = (eh - minHour) * 60 + em - startMinutes;
                                         const top = (startMinutes / 60) * 40;
                                         const height = (durationMinutes / 60) * 40;
                                         return (
@@ -650,7 +711,7 @@ export function ScheduleView() {
                                 const d = startOfDay(day);
                                 return d >= sDate && d <= eDate;
                             });
-                            const dbEventsForDay = activeTab === "events" ? allDbEventsForDay : [];
+                            const dbEventsForDay = allDbEventsForDay;
                             
                             const dayNameString = Object.keys(DAY_INDEX).find(k => DAY_INDEX[k] === ((getDay(day) + 6) % 7)) || "MONDAY";
                             const timeBoundEvents = dbEventsForDay.filter(e => e.startTime && e.endTime).map((e, idx) => ({
@@ -659,9 +720,21 @@ export function ScheduleView() {
                                 courseTitle: e.title,
                                 dayOfWeek: dayNameString,
                                 colorIndex: idx % COURSE_COLORS.length,
-                                course: { id: e.id, title: e.title, description: e.description, teacher: null, group: null, schedules: [] } as any
+                                course: { 
+                                    id: e.id, 
+                                    title: e.title, 
+                                    description: e.description, 
+                                    teacher: null, 
+                                    group: null, 
+                                    schedules: [],
+                                    isEvent: true,
+                                    startTime: e.startTime,
+                                    endTime: e.endTime,
+                                    externalUrl: e.externalUrl,
+                                    type: e.type
+                                } as any
                             }));
-                            const dayEvents = activeTab === "schedule" ? originalDayEvents : timeBoundEvents;
+                            const dayEvents = activeTab === "schedule" ? [...originalDayEvents, ...timeBoundEvents] : timeBoundEvents;
                             const isHoliday = dbEventsForDay.some(e => e.type === "HOLIDAY");
                             const isPast = startOfDay(day) < startOfDay(today);
 
@@ -686,31 +759,47 @@ export function ScheduleView() {
                                     
                                     <div className="flex flex-col gap-0.5 mb-1 shrink-0">
                                         {dbEventsForDay.filter(e => !e.startTime).map(evt => (
-                                            <Tooltip key={evt.id}>
-                                                <TooltipTrigger asChild>
+                                            <Popover key={evt.id}>
+                                                <PopoverTrigger asChild>
                                                     <div className={cn(
-                                                        "text-[9px] font-bold px-1.5 py-0.5 rounded border truncate cursor-help transition-all hover:brightness-110",
-                                                        evt.type === "HOLIDAY" ? "bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/30 text--700 dark:text--300 dark:text-red-300" : "bg-gradient-to-r from-amber-500/15 to-orange-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300"
+                                                        "text-[9px] font-bold px-1.5 py-0.5 rounded border truncate cursor-pointer transition-all hover:brightness-110",
+                                                        evt.type === "HOLIDAY" ? "bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/30 text-red-700 dark:text-red-300" : "bg-gradient-to-r from-amber-500/15 to-orange-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300"
                                                     )}>
                                                         {evt.startTime && <span className="opacity-70 mr-1">[{evt.startTime}]</span>}
                                                         {evt.title}
                                                     </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="max-w-xs space-y-1 p-3 shadow-xl border-muted/20">
-                                                    <div className="font-bold text-sm">{evt.title}</div>
-                                                    {(evt.startTime || evt.endTime) && (
-                                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                            <Clock className="w-3 h-3" />
-                                                            {evt.startTime || "--:--"} hasta {evt.endTime || "--:--"}
-                                                        </div>
-                                                    )}
-                                                    {evt.description && (
-                                                        <p className="text-xs text-muted-foreground mt-2 break-words">
-                                                            {evt.description}
-                                                        </p>
-                                                    )}
-                                                </TooltipContent>
-                                            </Tooltip>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-80 p-5 shadow-2xl border-muted/20 z-[100]" side="right" align="start">
+                                                    <div className="space-y-1">
+                                                        <div className="font-extrabold text-lg leading-tight text-foreground">{evt.title}</div>
+                                                        <div className="text-sm font-semibold text-muted-foreground">{evt.type === "HOLIDAY" ? "Día Festivo" : "Evento Institucional"}</div>
+                                                        {(evt.startTime || evt.endTime) && (
+                                                            <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
+                                                                <Clock className="w-4 h-4" />
+                                                                {evt.startTime || "--:--"} hasta {evt.endTime || "--:--"}
+                                                            </div>
+                                                        )}
+                                                        {evt.description && (
+                                                            <p className="text-sm text-foreground/80 mt-3 bg-muted/40 p-3 rounded-lg border border-border/50 break-words">
+                                                                {evt.description}
+                                                            </p>
+                                                        )}
+                                                        {evt.externalUrl && (
+                                                            <div className="mt-3">
+                                                                <a 
+                                                                    href={evt.externalUrl} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1 font-semibold"
+                                                                >
+                                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                                    <span>Ver información externa</span>
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </PopoverContent>
+                                            </Popover>
                                         ))}
                                     </div>
 
@@ -743,87 +832,139 @@ export function ScheduleView() {
 
             {/* Course Detail Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-[480px]">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <BookOpen className="w-5 h-5" />
-                            {selectedCourse?.title}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {selectedCourse?.description || "Sin descripción"}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 pt-2">
-                        {/* Docente & Grupo */}
-                        <div className="grid grid-cols-2 gap-4">
-
-                            {selectedCourse?.group && (
-                                <div className="space-y-1">
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <GraduationCap className="w-3 h-3" /> Grupo
-                                    </p>
-                                    <p className="text-sm font-medium">{selectedCourse.group.name}</p>
-                                </div>
-                            )}
-                            {selectedCourse?.teacher && (
-                                <div className="space-y-1">
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <Users className="w-3 h-3" /> Docente
-                                    </p>
-                                    <p className="text-sm font-medium">{selectedCourse.teacher.name}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Dates */}
-                        {(selectedCourse?.group?.startDate || selectedCourse?.group?.endDate) && (
-                            <div className="flex gap-4">
-                                {selectedCourse?.group?.startDate && (
+                <DialogContent className="sm:max-w-[480px] rounded-2xl">
+                    {(selectedCourse as any)?.isEvent ? (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-primary" />
+                                    {selectedCourse?.title}
+                                </DialogTitle>
+                                <DialogDescription className="text-sm font-semibold text-muted-foreground">
+                                    {(selectedCourse as any)?.type === "HOLIDAY" ? "Día Festivo" : "Evento Institucional"}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 pt-2">
+                                {/* Time range */}
+                                {((selectedCourse as any)?.startTime || (selectedCourse as any)?.endTime) && (
                                     <div className="space-y-1">
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Inicio</p>
-                                        <p className="text-sm font-medium">{new Date(selectedCourse.group.startDate).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <Clock className="w-3.5 h-3.5" /> Horario
+                                        </p>
+                                        <p className="text-sm font-medium">
+                                            {(selectedCourse as any).startTime || "--:--"} hasta {(selectedCourse as any).endTime || "--:--"}
+                                        </p>
                                     </div>
                                 )}
-                                {selectedCourse?.group?.endDate && (
-                                    <div className="space-y-1">
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Fin</p>
-                                        <p className="text-sm font-medium">{new Date(selectedCourse.group.endDate).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                                
+                                {/* Description */}
+                                <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground">Descripción</p>
+                                    <p className="text-sm text-foreground/80 bg-muted/40 p-3 rounded-lg border border-border/50 break-words">
+                                        {selectedCourse?.description || "Sin descripción"}
+                                    </p>
+                                </div>
+
+                                {/* External URL Button / Link */}
+                                {(selectedCourse as any)?.externalUrl && (
+                                    <div className="pt-2">
+                                        <a 
+                                            href={(selectedCourse as any).externalUrl} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1 font-semibold"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                            <span>Ver información externa</span>
+                                        </a>
                                     </div>
                                 )}
                             </div>
-                        )}
+                        </>
+                    ) : (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2">
+                                    <BookOpen className="w-5 h-5" />
+                                    {selectedCourse?.title}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {selectedCourse?.description || "Sin descripción"}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 pt-2">
+                                {/* Docente & Grupo */}
+                                <div className="grid grid-cols-2 gap-4">
 
-                        {/* Schedules */}
-                        {selectedCourse?.schedules && selectedCourse.schedules.length > 0 ? (
-                            <div className="space-y-2">
-                                <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Horarios</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedCourse.schedules.map((schedule: any, index: number) => (
-                                        <Badge key={index} variant="outline" className={cn("text-sm py-1", COURSE_COLORS[courseColorMap[selectedCourse.id] ?? 0])}>
-                                            {DAY_NAMES_ES_FULL[DAY_INDEX[schedule.dayOfWeek]]} · {toFormat12h(schedule.startTime)} – {toFormat12h(schedule.endTime)}
-                                        </Badge>
-                                    ))}
+                                    {selectedCourse?.group && (
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                <GraduationCap className="w-3 h-3" /> Grupo
+                                            </p>
+                                            <p className="text-sm font-medium">{selectedCourse.group.name}</p>
+                                        </div>
+                                    )}
+                                    {selectedCourse?.teacher && (
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                <Users className="w-3 h-3" /> Docente
+                                            </p>
+                                            <p className="text-sm font-medium">{selectedCourse.teacher.name}</p>
+                                        </div>
+                                    )}
                                 </div>
+
+                                {/* Dates */}
+                                {(selectedCourse?.group?.startDate || selectedCourse?.group?.endDate) && (
+                                    <div className="flex gap-4">
+                                        {selectedCourse?.group?.startDate && (
+                                            <div className="space-y-1">
+                                                <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Inicio</p>
+                                                <p className="text-sm font-medium">{new Date(selectedCourse.group.startDate).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                                            </div>
+                                        )}
+                                        {selectedCourse?.group?.endDate && (
+                                            <div className="space-y-1">
+                                                <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Fin</p>
+                                                <p className="text-sm font-medium">{new Date(selectedCourse.group.endDate).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Schedules */}
+                                {selectedCourse?.schedules && selectedCourse.schedules.length > 0 ? (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Horarios</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedCourse.schedules.map((schedule: any, index: number) => (
+                                                <Badge key={index} variant="outline" className={cn("text-sm py-1", COURSE_COLORS[courseColorMap[selectedCourse.id] ?? 0])}>
+                                                    {DAY_NAMES_ES_FULL[DAY_INDEX[schedule.dayOfWeek]]} · {toFormat12h(schedule.startTime)} – {toFormat12h(schedule.endTime)}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Info className="w-4 h-4" />
+                                        <span>Esta materia no tiene horarios configurados</span>
+                                    </div>
+                                )}
+                            
+                                {selectedCourse?.group && session?.user?.role === "teacher" && (
+                                    <DialogFooter className="mt-4 pt-4 border-t border-border/50">
+                                        <Button 
+                                            className="w-full sm:w-auto font-bold" 
+                                            onClick={() => router.push(`/dashboard/teacher?group=${selectedCourse?.group?.id}`)}
+                                        >
+                                            <Users className="w-4 h-4 mr-2" />
+                                            Ir al Grupo
+                                        </Button>
+                                    </DialogFooter>
+                                )}
                             </div>
-                        ) : (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Info className="w-4 h-4" />
-                                <span>Esta materia no tiene horarios configurados</span>
-                            </div>
-                        )}
-                    
-                        {selectedCourse?.group && session?.user?.role === "teacher" && (
-                            <DialogFooter className="mt-4 pt-4 border-t border-border/50">
-                                <Button 
-                                    className="w-full sm:w-auto font-bold" 
-                                    onClick={() => router.push(`/dashboard/teacher?group=${selectedCourse?.group?.id}`)}
-                                >
-                                    <Users className="w-4 h-4 mr-2" />
-                                    Ir al Grupo
-                                </Button>
-                            </DialogFooter>
-                        )}
-                    </div>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

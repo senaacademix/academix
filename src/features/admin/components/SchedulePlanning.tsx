@@ -32,7 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import { TeacherOverviewDialog } from "@/features/admin/components/TeacherOverviewDialog";
 import { EnvOverviewDialog } from "@/features/admin/components/EnvOverviewDialog";
 import { PeriodOverviewDialog } from "@/features/admin/components/PeriodOverviewDialog";
-import { ScheduleEventDialog } from "./ScheduleEventDialog";
+
 import { ScheduleAnalyticsDialog } from "./ScheduleAnalyticsDialog";
 import { TeacherAvailabilityView } from "@/features/schedule/components/TeacherAvailabilityView";
 import { TeacherQualificationsView } from "@/features/teacher/components/TeacherQualificationsView";
@@ -200,8 +200,7 @@ export function SchedulePlanning({
         setIsSettingsModalOpen,
         publishConfirmOpen,
         setPublishConfirmOpen,
-        isEventModalOpen,
-        setIsEventModalOpen,
+
         isExportingExcel,
 
         // Dialog Schedule Add/Edit State
@@ -756,7 +755,7 @@ export function SchedulePlanning({
                         setTeacherOverviewOpen={setTeacherOverviewOpen}
                         setEnvOverviewOpen={setEnvOverviewOpen}
                         setPeriodOverviewOpen={setPeriodOverviewOpen}
-                        setIsEventModalOpen={setIsEventModalOpen}
+
                         setIsAnalyticsModalOpen={setIsAnalyticsModalOpen}
                         setIsSettingsModalOpen={setIsSettingsModalOpen}
                         schedulesPublished={schedulesPublished}
@@ -1775,12 +1774,7 @@ export function SchedulePlanning({
                 isSaving={isSaving}
             />
 
-            <ScheduleEventDialog
-                open={isEventModalOpen}
-                onOpenChange={setIsEventModalOpen}
-                globalStartDate={scheduleStartDate}
-                globalEndDate={scheduleEndDate}
-            />
+
 
             <ScheduleAnalyticsDialog 
                 open={isAnalyticsModalOpen} 
@@ -1804,12 +1798,12 @@ export function SchedulePlanning({
 
             {/* Admin Editing Dialogs */}
             <Dialog open={!!editingTeacherAvailabilityId} onOpenChange={(open) => !open && setEditingTeacherAvailabilityId(null)}>
-                <DialogContent className="w-screen max-w-none h-screen max-h-none m-0 p-0 rounded-none bg-background border-none overflow-hidden flex flex-col [&>button]:hidden">
+                <DialogContent className="w-screen max-w-none sm:max-w-none h-screen max-h-none m-0 p-0 rounded-none bg-background border-none overflow-hidden flex flex-col [&>button]:hidden">
                     <DialogHeader className="p-4 border-b border-border/50 shrink-0 bg-muted/20 flex flex-row items-center justify-between">
                         <div>
-                            <DialogTitle>Editar Disponibilidad del Docente</DialogTitle>
+                            <DialogTitle>Editar Disponibilidad - {allTeachers.find(t => t.id === editingTeacherAvailabilityId)?.name}</DialogTitle>
                             <DialogDescription>
-                                Modificando la disponibilidad como administrador.
+                                Modificando la disponibilidad semanal de {allTeachers.find(t => t.id === editingTeacherAvailabilityId)?.name} como administrador.
                             </DialogDescription>
                         </div>
                         <Button variant="ghost" onClick={() => setEditingTeacherAvailabilityId(null)}>Cerrar</Button>
@@ -1832,12 +1826,12 @@ export function SchedulePlanning({
             </Dialog>
 
             <Dialog open={!!editingTeacherQualificationsId} onOpenChange={(open) => !open && setEditingTeacherQualificationsId(null)}>
-                <DialogContent className="w-screen max-w-none h-screen max-h-none m-0 p-0 rounded-none bg-background border-none overflow-hidden flex flex-col [&>button]:hidden">
+                <DialogContent className="w-screen max-w-none sm:max-w-none h-screen max-h-none m-0 p-0 rounded-none bg-background border-none overflow-hidden flex flex-col [&>button]:hidden">
                     <DialogHeader className="p-4 border-b border-border/50 shrink-0 bg-muted/20 flex flex-row items-center justify-between">
                         <div>
-                            <DialogTitle>Editar Materias del Docente</DialogTitle>
+                            <DialogTitle>Editar Materias - {allTeachers.find(t => t.id === editingTeacherQualificationsId)?.name}</DialogTitle>
                             <DialogDescription>
-                                Modificando las materias habilitadas como administrador.
+                                Modificando las materias habilitadas para {allTeachers.find(t => t.id === editingTeacherQualificationsId)?.name} como administrador.
                             </DialogDescription>
                         </div>
                         <Button variant="ghost" onClick={() => setEditingTeacherQualificationsId(null)}>Cerrar</Button>
@@ -1859,6 +1853,7 @@ export function SchedulePlanning({
                     </div>
                 </DialogContent>
             </Dialog>
+
         </div>
         </>
     );

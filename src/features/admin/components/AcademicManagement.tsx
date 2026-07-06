@@ -183,6 +183,10 @@ interface Program {
     id: string;
     name: string;
     description: string | null;
+    startDate?: Date | string | null;
+    endDate?: Date | string | null;
+    scheduleTitle?: string | null;
+    maxTeacherHours?: number | null;
     createdAt: Date;
     periods: Period[];
     groups: Group[];
@@ -403,6 +407,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     const [programToEdit, setProgramToEdit] = useState<Program | null>(null);
     const [programName, setProgramName] = useState("");
     const [programDescription, setProgramDescription] = useState("");
+    const [programStartDate, setProgramStartDate] = useState("");
+    const [programEndDate, setProgramEndDate] = useState("");
+    const [programScheduleTitle, setProgramScheduleTitle] = useState("");
+    const [programMaxHours, setProgramMaxHours] = useState(40);
 
     const [periodDialogOpen, setPeriodDialogOpen] = useState(false);
     const [periodToEdit, setPeriodToEdit] = useState<Period | null>(null);
@@ -493,9 +501,9 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
             try {
                 const orderedIds = reorderedCourses.map(c => c.id);
                 await reorderCoursesAction(orderedIds);
-                toast.success("Orden de los cursos actualizado");
+                toast.success("Orden de las materias actualizado");
             } catch (error) {
-                toast.error("Error al reordenar los cursos");
+                toast.error("Error al reordenar las materias");
                 refreshAll();
             }
         }
@@ -879,6 +887,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setProgramToEdit(null);
         setProgramName("");
         setProgramDescription("");
+        setProgramStartDate("");
+        setProgramEndDate("");
+        setProgramScheduleTitle("");
+        setProgramMaxHours(40);
         setProgramDialogOpen(true);
     };
 
@@ -886,6 +898,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setProgramToEdit(program);
         setProgramName(program.name);
         setProgramDescription(program.description || "");
+        setProgramStartDate(program.startDate ? new Date(program.startDate).toISOString().split('T')[0] : "");
+        setProgramEndDate(program.endDate ? new Date(program.endDate).toISOString().split('T')[0] : "");
+        setProgramScheduleTitle(program.scheduleTitle || "");
+        setProgramMaxHours(program.maxTeacherHours ?? 40);
         setProgramDialogOpen(true);
     };
 
@@ -897,16 +913,27 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
 
         startTransition(async () => {
             try {
+                const sDate = programStartDate ? new Date(programStartDate + "T12:00:00") : null;
+                const eDate = programEndDate ? new Date(programEndDate + "T12:00:00") : null;
+
                 if (programToEdit) {
                     await updateProgramAction(programToEdit.id, {
                         name: programName,
-                        description: programDescription
+                        description: programDescription,
+                        startDate: sDate,
+                        endDate: eDate,
+                        scheduleTitle: programScheduleTitle || null,
+                        maxTeacherHours: programMaxHours
                     });
                     toast.success("Programa de formación actualizado");
                 } else {
                     await createProgramAction({
                         name: programName,
-                        description: programDescription
+                        description: programDescription,
+                        startDate: sDate,
+                        endDate: eDate,
+                        scheduleTitle: programScheduleTitle || null,
+                        maxTeacherHours: programMaxHours
                     });
                     toast.success("Programa de formación creado");
                 }
@@ -1523,7 +1550,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     toast.success("Grupo académico eliminado");
                 } else if (deleteType === "course") {
                     await deleteCourseAction(deleteItemId);
-                    toast.success("Curso académico eliminado");
+                    toast.success("Materia académica eliminada");
                 } else if (deleteType === "teacher") {
                     await deleteUserAction(deleteItemId);
                     toast.success("Profesor eliminado del sistema");
@@ -1562,11 +1589,11 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
 
     const handleSaveCourse = async () => {
         if (!courseTitle || courseTitle.trim().length < 3) {
-            toast.error("El título del curso debe tener al menos 3 caracteres");
+            toast.error("El título de la materia debe tener al menos 3 caracteres");
             return;
         }
         if (!coursePeriodId || coursePeriodId === "none") {
-            toast.error("Debes asociar el curso a un periodo académico");
+            toast.error("Debes asociar la materia a un periodo académico");
             return;
         }
 
@@ -1585,15 +1612,15 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 if (courseToEdit) {
                     formData.append("courseId", courseToEdit.id);
                     await updateCourseAction(formData);
-                    toast.success("Curso académico actualizado");
+                    toast.success("Materia académica actualizada");
                 } else {
                     await createCourseAction(formData);
-                    toast.success("Curso creado exitosamente");
+                    toast.success("Materia creada exitosamente");
                 }
                 setCourseDialogOpen(false);
                 await refreshAll();
             } catch (error: any) {
-                toast.error(error.message || "Error al guardar el curso");
+                toast.error(error.message || "Error al guardar la materia");
             }
         });
     };
@@ -1604,7 +1631,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Estructura Académica</h2>
                     <p className="text-muted-foreground">
-                        Gestiona Programas de Formación, Periodos, Grupos y Cursos.
+                        Gestiona Programas de Formación, Periodos, Grupos y Materias.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -1667,7 +1694,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-bold">{totalCourses}</div>
-                                                    <div className="text-[10px] text-muted-foreground uppercase">Cursos</div>
+                                                    <div className="text-[10px] text-muted-foreground uppercase">Materias</div>
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-bold">{totalStudents}</div>
@@ -1719,9 +1746,9 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     </div>
 
                     <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
-                        <TabsList className="flex w-full max-w-[680px] overflow-x-auto bg-muted/40 p-1 rounded-xl scrollbar-none justify-start md:justify-center">
+                        <TabsList className="flex w-full md:max-w-none overflow-x-auto bg-muted/40 p-1 rounded-xl scrollbar-none justify-start md:justify-center">
                             <TabsTrigger value="overview" className="rounded-lg flex-1 shrink-0">Vista General</TabsTrigger>
-                            <TabsTrigger value="periods" className="rounded-lg flex-1 shrink-0">Periodos y Cursos</TabsTrigger>
+                            <TabsTrigger value="periods" className="rounded-lg flex-1 shrink-0">Periodos y Materias</TabsTrigger>
                             <TabsTrigger value="groups" className="rounded-lg flex-1 shrink-0">Grupos y Alumnos</TabsTrigger>
                             <TabsTrigger value="teachers" className="rounded-lg flex-1 shrink-0">Profesores</TabsTrigger>
                             <TabsTrigger value="environments" className="rounded-lg flex-1 shrink-0">Ambientes</TabsTrigger>
@@ -1742,14 +1769,14 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 </Card>
                                 <Card className="bg-muted/10 border-none">
                                     <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Cursos Totales</CardTitle>
+                                        <CardTitle className="text-sm font-medium">Materias Totales</CardTitle>
                                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                                     </CardHeader>
                                     <CardContent className="p-4 pt-0">
                                         <div className="text-2xl font-bold">
                                             {selectedProgram.periods.reduce((acc, p) => acc + p.courses.length, 0)}
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">Cursos creados</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Materias creadas</p>
                                     </CardContent>
                                 </Card>
                                 <Card className="bg-muted/10 border-none">
@@ -1780,7 +1807,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                         {/* SUB-TAB: PERIODS & COURSES */}
                         <TabsContent value="periods" className="space-y-6 mt-0">
                             <div className="flex justify-between items-center pb-2">
-                                <h4 className="text-base font-semibold text-muted-foreground">Periodos y Cursos de {selectedProgram.name}</h4>
+                                <h4 className="text-base font-semibold text-muted-foreground">Periodos y Materias de {selectedProgram.name}</h4>
                                 <Button onClick={openCreatePeriod} size="sm" className="shadow-sm">
                                     <Plus className="h-4 w-4 mr-1.5" />
                                     Agregar Periodo
@@ -1792,7 +1819,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     <Calendar className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
                                     <h4 className="font-semibold">Sin Periodos Académicos</h4>
                                     <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
-                                        Crea el primer periodo académico para este programa para empezar a crear cursos.
+                                        Crea el primer periodo académico para este programa para empezar a crear materias.
                                     </p>
                                     <Button onClick={openCreatePeriod} className="mt-4" size="sm">
                                         <Plus className="mr-1.5 h-4 w-4" /> Crear Periodo
@@ -1823,12 +1850,12 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                 </CardHeader>
                                                 <CardContent className="p-5 space-y-4">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cursos del Periodo ({period.courses.length})</span>
+                                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Materias del Periodo ({period.courses.length})</span>
                                                     </div>
 
                                                     {period.courses.length === 0 ? (
                                                         <div className="text-center py-8 text-muted-foreground text-xs bg-muted/5 border border-dashed border-muted/50 rounded-xl">
-                                                            No hay cursos creados para este periodo.
+                                                            No hay materias creadas para este periodo.
                                                         </div>
                                                     ) : (
                                                         <DndContext
@@ -1860,7 +1887,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                             <CardContent className="px-5 pb-5 pt-0">
                                                 <Button size="sm" variant="outline" className="w-full h-9 text-xs border-dashed border-primary/30 hover:border-primary/60" onClick={() => openCreateCourseForPeriod(period.id)}>
                                                     <Plus className="h-3.5 w-3.5 mr-1.5" />
-                                                    Crear Curso
+                                                    Crear Materia
                                                 </Button>
                                             </CardContent>
                                         </Card>
@@ -2083,7 +2110,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     <Users className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
                                     <h4 className="font-semibold">Sin Profesores</h4>
                                     <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
-                                        Registra profesores en este programa de formación para que puedan ser asignados a impartir cursos.
+                                        Registra profesores en este programa de formación para que puedan ser asignados a impartir materias.
                                     </p>
                                     <Button onClick={() => setAssignTeachersDialogOpen(true)} className="mt-4" size="sm">
                                         <Plus className="mr-1.5 h-4 w-4" /> Registrar Profesor
@@ -2201,6 +2228,47 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 onChange={(e) => setProgramDescription(e.target.value)}
                                 rows={3}
                             />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="progStartDate">Fecha de Inicio</Label>
+                                <Input
+                                    id="progStartDate"
+                                    type="date"
+                                    value={programStartDate}
+                                    onChange={(e) => setProgramStartDate(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="progEndDate">Fecha de Fin</Label>
+                                <Input
+                                    id="progEndDate"
+                                    type="date"
+                                    value={programEndDate}
+                                    onChange={(e) => setProgramEndDate(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="progScheduleTitle">Título del Horario</Label>
+                            <Input
+                                id="progScheduleTitle"
+                                placeholder="Ej: Horario Académico 2026-1"
+                                value={programScheduleTitle}
+                                onChange={(e) => setProgramScheduleTitle(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="progMaxHours">Límite Legal de Horas Semanales por Docente</Label>
+                            <Input
+                                id="progMaxHours"
+                                type="number"
+                                min={1}
+                                max={80}
+                                value={programMaxHours}
+                                onChange={(e) => setProgramMaxHours(Number(e.target.value))}
+                            />
+                            <p className="text-xs text-muted-foreground">Este valor se usará para alertar asignaciones que superen el límite contractual.</p>
                         </div>
                     </div>
                     <DialogFooter>
@@ -2723,13 +2791,13 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
             <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
                 <DialogContent className="max-w-[550px] max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>{courseToEdit ? "Editar Curso Académico" : "Crear Nuevo Curso Académico"}</DialogTitle>
-                        <DialogDescription>Registra un curso e inicializa su planificación.</DialogDescription>
+                        <DialogTitle>{courseToEdit ? "Editar Materia Académica" : "Crear Nueva Materia Académica"}</DialogTitle>
+                        <DialogDescription>Registra una materia e inicializa su planificación.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-3">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2 col-span-2">
-                                <Label htmlFor="cTitle">Título del Curso</Label>
+                                <Label htmlFor="cTitle">Título de la Materia</Label>
                                 <Input
                                     id="cTitle"
                                     placeholder="Ej: Matemáticas Básicas, Algoritmos..."
@@ -2799,7 +2867,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                             Cancelar
                         </Button>
                         <Button onClick={handleSaveCourse} disabled={isPending}>
-                            {courseToEdit ? "Guardar Cambios" : "Crear Curso"}
+                            {courseToEdit ? "Guardar Cambios" : "Crear Materia"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -2813,10 +2881,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                             <Info className="h-5 w-5 text-primary" />
                             {selectedCourseForDesc?.title}
                         </DialogTitle>
-                        <DialogDescription>Descripción y contenido del curso.</DialogDescription>
+                        <DialogDescription>Descripción y contenido de la materia.</DialogDescription>
                     </DialogHeader>
                     <div className="py-4 text-sm text-foreground/80 whitespace-pre-wrap bg-muted/20 p-4 rounded-xl border border-muted/40 max-h-[250px] overflow-y-auto custom-scrollbar">
-                        {selectedCourseForDesc?.description || "Este curso no tiene una descripción detallada registrada."}
+                        {selectedCourseForDesc?.description || "Esta materia no tiene una descripción detallada registrada."}
                     </div>
                     <DialogFooter>
                         <Button onClick={() => setDescriptionDialogOpen(false)}>Cerrar</Button>
@@ -2926,7 +2994,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                             <Label htmlFor="gcCatalogCourse">Seleccionar Asignatura del Catálogo *</Label>
                             {catalogCourses.length === 0 ? (
                                 <div className="p-3 text-xs bg-yellow-500/10 border border-yellow-500/20 text--600 dark:text--400 rounded-xl">
-                                    No hay asignaturas en el catálogo. Agrégalas en la pestaña "Periodos y Cursos".
+                                    No hay asignaturas en el catálogo. Agrégalas en la pestaña "Periodos y Materias".
                                 </div>
                             ) : (
                                 <Select 

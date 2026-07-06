@@ -23,7 +23,7 @@ export async function getScheduleViewAction() {
     if (!settings.schedulesPublished) {
         return {
             courses: [],
-            events: [],
+            events: events,
             scheduleTitle: settings.scheduleTitle,
             scheduleStartDate: settings.scheduleStartDate,
             scheduleEndDate: settings.scheduleEndDate

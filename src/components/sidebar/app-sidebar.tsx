@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { BookOpen, Calendar, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, Settings2, GraduationCap, Building2 } from "lucide-react"
+import { BookOpen, Calendar, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, Settings2, GraduationCap, Building2, CalendarDays, BarChart3 } from "lucide-react"
 
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -85,17 +85,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           isActive: false,
         },
         {
+          title: "Eventos y Festivos",
+          url: "/dashboard/admin/events",
+          icon: CalendarDays,
+          isActive: false,
+        },
+        {
+          title: "Reportes y Analítica",
+          url: "/dashboard/admin/analytics",
+          icon: BarChart3,
+          isActive: false,
+        },
+        {
           title: "Configuración",
           url: "/dashboard/admin/settings",
           icon: Settings2,
           isActive: false,
         },
-        {
-          title: "Licencia de Uso",
-          url: "/dashboard/license",
-          icon: ScrollText,
-          isActive: false,
-        },
+
+
       ]
       : role === "teacher"
         ? [
@@ -115,12 +123,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "Horario y Config.",
             url: "/dashboard/teacher/schedule",
             icon: Calendar,
-            isActive: false,
-          },
-          {
-            title: "Licencia de Uso",
-            url: "/dashboard/license",
-            icon: ScrollText,
             isActive: false,
           },
         ]

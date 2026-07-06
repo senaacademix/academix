@@ -1,516 +1,261 @@
 # 📚 Guía Completa de Ayuda - Administrador
 
-Bienvenido al panel de administración de AcademiX. Esta guía completa te ayudará paso a paso a utilizar todas las funcionalidades disponibles para gestionar la plataforma de manera efectiva.
+Bienvenido al panel de administración de **AcademiX**. Esta guía cubre todas las funcionalidades disponibles para gestionar la plataforma y la planificación de horarios académicos.
 
 ---
 
-## 🚀 Primeros Pasos
+## ⚙️ Flujo Recomendado para Configurar Horarios
 
-### Acceso al Panel de Administración
+Para una planificación exitosa, sigue este orden de pasos:
 
-1. **Inicia sesión** con tu cuenta de administrador
-2. Serás redirigido automáticamente al **Dashboard**
-3. En el menú lateral izquierdo verás todas las opciones disponibles
-
-> [!TIP]
-> Usa el ícono de menú (☰) en la esquina superior izquierda para expandir o contraer el menú lateral.
+```text
+  1. Crear Programas de Formación (con título y configuración de horario)
+               │
+               ▼
+  2. Registrar Periodos y Grupos/Fichas
+               │
+               ▼
+  3. Asignar Docentes al Programa
+               │
+               ▼
+  4. Configurar Disponibilidad y Materias de Docentes
+               │
+               ▼
+  5. Registrar Ambientes Físicos
+               │
+               ▼
+  6. Programar Horarios en el Tablero (Arrastrar y Soltar)
+               │
+               ▼
+  7. Registrar Eventos y Festivos
+               │
+               ▼
+  8. Publicar el Horario al Público
+```
 
 ---
 
-## 🏠 Panel de Inicio
+## 📋 Administración Académica
 
-El panel de inicio es tu centro de control. Aquí encontrarás:
+### Programas de Formación
 
-### Vista General del Sistema
-- **Total de usuarios** activos en la plataforma
-- **Cursos activos** y su estado
-- **Actividad reciente** del sistema
-- **Alertas importantes** que requieren atención
+Un **Programa de Formación** es la entidad principal del sistema. Cada programa tiene su propia configuración independiente de horario.
 
-### Acciones Rápidas
-Desde el inicio puedes acceder rápidamente a:
-- Crear nuevo usuario
-- Ver usuarios recientes
-- Acceder a configuración del sistema
-- Revisar logs de auditoría
-
----
-
-## 👥 Gestión de Usuarios
-
-La gestión de usuarios es una de las funciones más importantes del administrador.
-
-### Ver Lista de Usuarios
-
-**Paso 1:** Haz clic en **"Usuarios"** en el menú lateral
-
-**Paso 2:** Verás una tabla con todos los usuarios que incluye:
-- Nombre completo
-- Correo electrónico
-- Rol actual (Estudiante, Profesor, Administrador)
-- Estado (Activo/Suspendido)
-- Fecha de registro
-
-**Paso 3:** Usa los filtros para encontrar usuarios específicos:
-- Buscar por nombre o email
-- Filtrar por rol
-- Filtrar por estado
-
-> [!NOTE]
-> La lista se actualiza automáticamente cuando haces cambios.
-
-### Crear Nuevo Usuario
-
-**Paso 1:** En la página de Usuarios, haz clic en **"Crear Usuario"**
-
-**Paso 2:** Completa el formulario con la información requerida:
-
-| Campo | Descripción | Ejemplo |
-|-------|-------------|---------|
-| **Nombre** | Nombre completo del usuario | Juan Pérez |
-| **Email** | Correo electrónico (será el usuario de acceso) | juan.perez@ejemplo.com |
-| **Contraseña** | Contraseña inicial (el usuario puede cambiarla después) | Temporal123! |
-| **Rol** | Selecciona: Profesor o Administrador | Profesor |
-
-**Paso 3:** Haz clic en **"Crear"**
-
-**Paso 4:** El usuario recibirá sus credenciales y podrá acceder al sistema
+**Para crear un programa:**
+1. Entra a **Administración Académica** en el menú lateral.
+2. Haz clic en **Nuevo Programa**.
+3. Completa los campos:
+   - **Nombre del Programa** (ej: Análisis y Desarrollo de Software)
+   - **Descripción** (opcional)
+   - **Fecha de Inicio** y **Fecha de Fin** del periodo lectivo — estas fechas determinan el rango del calendario del programa.
+   - **Título del Horario** — nombre que aparecerá en el planificador de horarios (ej: Horario Académico 2026-1).
+   - **Límite Legal de Horas Semanales por Docente** — número máximo de horas semanales permitidas; el sistema alertará si un docente supera este límite.
 
 > [!IMPORTANT]
-> Los estudiantes se crean automáticamente cuando se registran. Solo crea manualmente profesores y administradores.
-
-> [!TIP]
-> Usa contraseñas temporales seguras y pide al usuario que la cambie en su primer acceso.
-
-### Editar Información de Usuario
-
-**Paso 1:** Localiza al usuario en la lista
-
-**Paso 2:** Haz clic en el **ícono de edición** (lápiz) en la fila del usuario
-
-**Paso 3:** Modifica los campos que necesites:
-- Nombre
-- Email
-- Contraseña (si necesitas resetearla)
-
-**Paso 4:** Haz clic en **"Guardar Cambios"**
-
-> [!WARNING]
-> Cambiar el email de un usuario puede afectar su acceso. Asegúrate de informarle.
-
-### Cambiar Rol de Usuario
-
-Puedes promover o cambiar el rol de cualquier usuario.
-
-**Paso 1:** En la lista de usuarios, localiza al usuario
-
-**Paso 2:** Haz clic en el **menú desplegable de rol**
-
-**Paso 3:** Selecciona el nuevo rol:
-- **Estudiante**: Acceso a cursos y actividades
-- **Profesor**: Puede crear y gestionar cursos
-- **Administrador**: Acceso completo al sistema
-
-**Paso 4:** Confirma el cambio en el diálogo que aparece
-
-> [!CAUTION]
-> Cambiar un usuario a Administrador le dará acceso completo al sistema, incluyendo la gestión de otros usuarios.
-
-### Suspender o Activar Usuario
-
-**Para suspender un usuario:**
-
-1. Localiza al usuario en la lista
-2. Haz clic en el **interruptor de estado** (toggle)
-3. Confirma la acción
-4. El usuario no podrá acceder al sistema hasta que lo reactives
-
-**Para reactivar un usuario:**
-
-1. Filtra por usuarios suspendidos
-2. Haz clic en el **interruptor de estado**
-3. El usuario podrá acceder nuevamente
+> Cada programa tiene su propia configuración de horario (título, fechas y límite de horas). Al seleccionar un programa en el planificador, estas configuraciones se cargan automáticamente.
 
 > [!NOTE]
-> Suspender un usuario no elimina sus datos, solo bloquea su acceso.
-
-### Eliminar Usuario
-
-> [!CAUTION]
-> Esta acción es PERMANENTE y no se puede deshacer. Considera suspender al usuario en su lugar.
-
-**Paso 1:** Localiza al usuario en la lista
-
-**Paso 2:** Haz clic en el **ícono de eliminar** (basura)
-
-**Paso 3:** Lee la advertencia cuidadosamente
-
-**Paso 4:** Escribe **"ELIMINAR"** en el campo de confirmación
-
-**Paso 5:** Haz clic en **"Confirmar Eliminación"**
-
-**Consecuencias de eliminar un usuario:**
-- Se eliminan todas sus entregas
-- Se eliminan sus calificaciones
-- Se elimina su historial de actividad
-- Si es profesor, sus cursos quedarán sin profesor asignado
+> Las fechas del programa **solo son referencia para el planificador**. Los eventos y festivos no están restringidos por estas fechas y se pueden registrar libremente en cualquier fecha.
 
 ---
 
-## 📖 Gestión de Cursos
+### Periodos Académicos
 
-Como administrador, puedes ver y gestionar todos los cursos del sistema.
+Los **Periodos** organizan el contenido dentro de un programa (ej: Semestre I, Trimestre 2).
 
-### Ver Todos los Cursos
+1. Dentro del programa, haz clic en **+ Agregar Periodo**.
+2. Asigna un nombre y descripción al periodo.
+3. Los periodos se pueden ordenar con las flechas de navegación (`←` `→`) en las pestañas.
 
-**Paso 1:** Haz clic en **"Cursos"** en el menú lateral
+---
 
-**Paso 2:** Verás todos los cursos con:
-- Nombre del curso
-- Profesor asignado
-- Número de estudiantes inscritos
-- Estado (Activo/Inactivo)
-- Fechas de inicio y fin
+### Grupos / Fichas
 
-### Crear Nuevo Curso
+Los **Grupos** son las fichas de aprendices. Cada grupo pertenece a un programa.
 
-**Paso 1:** Haz clic en **"Crear Curso"**
+1. Dentro del programa, haz clic en **+ Crear Grupo**.
+2. Define el nombre, fechas del grupo y ambiente predeterminado (opcional).
+3. Puedes asignar estudiantes al grupo de forma individual o mediante carga masiva por archivo Excel.
 
-**Paso 2:** Completa la información:
+---
 
-```
-Nombre del curso: Introducción a la Programación
-Descripción: Curso básico de programación en Python
-Profesor: Selecciona de la lista
-Código del curso: PROG-101 (opcional)
-Fecha de inicio: 2025-01-15
-Fecha de fin: 2025-06-30
-```
+### Materias / Cursos
 
-**Paso 3:** Haz clic en **"Crear Curso"**
+Las **Materias** son las asignaturas que se programan en el horario.
 
-### Reasignar Profesor a un Curso
+1. Dentro de un grupo o periodo, haz clic en **+ Agregar Materia**.
+2. Define el nombre, descripción y horas semanales de la materia.
+3. Asigna un docente a cada materia.
 
-**Paso 1:** Abre el curso que deseas modificar
+---
 
-**Paso 2:** Haz clic en **"Editar Curso"**
+## 🗓️ Programación de Horarios
 
-**Paso 3:** En el campo **"Profesor"**, selecciona el nuevo profesor
+### Acceso al Planificador
 
-**Paso 4:** Guarda los cambios
+1. Haz clic en **Programación de Horarios** en el menú lateral.
+2. Selecciona el **Programa de Formación** en la barra lateral izquierda.
+3. Selecciona el **Grupo/Ficha** que deseas programar.
+
+---
+
+### Configuración del Horario por Programa
+
+Para ajustar la configuración del programa activo (título, fechas, límite de horas):
+
+1. En la barra de herramientas superior, haz clic en el ícono ⚙️ **Configuración**.
+2. Modifica los campos necesarios:
+   - **Título del Horario**
+   - **Fecha de Inicio** y **Fecha de Fin** del periodo
+   - **Límite Legal de Horas Semanales por Docente**
+3. Haz clic en **Guardar Configuración**.
 
 > [!NOTE]
-> El nuevo profesor tendrá acceso inmediato al curso y todas sus actividades.
-
-### Eliminar Curso
-
-> [!WARNING]
-> Eliminar un curso eliminará todas sus actividades, entregas y calificaciones.
-
-**Paso 1:** Abre el curso
-
-**Paso 2:** Haz clic en **"Eliminar Curso"**
-
-**Paso 3:** Confirma escribiendo **"ELIMINAR"**
+> Esta configuración es **exclusiva por programa de formación**. Los cambios en un programa no afectan a otros programas.
 
 ---
 
-## 📢 Sistema de Anuncios
+### Programar Clases (Arrastrar y Soltar)
 
-Los anuncios te permiten comunicarte con todos los usuarios de la plataforma.
-
-### Crear Anuncio Global
-
-**Paso 1:** Ve a **"Anuncios"** en el menú
-
-**Paso 2:** Haz clic en **"Nuevo Anuncio"**
-
-**Paso 3:** Completa el formulario:
-
-| Campo | Descripción |
-|-------|-------------|
-| **Título** | Título corto y descriptivo |
-| **Contenido** | Mensaje completo (soporta markdown) |
-| **Público** | Todos / Solo Profesores / Solo Estudiantes |
-| **Prioridad** | Normal / Importante / Urgente |
-
-**Paso 4:** Haz clic en **"Publicar"**
-
-> [!TIP]
-> Usa anuncios importantes solo para información crítica para evitar saturar a los usuarios.
-
-### Ejemplos de Buenos Anuncios
-
-**Mantenimiento del Sistema:**
-```markdown
-# Mantenimiento Programado
-
-El sistema estará en mantenimiento el **sábado 25 de enero** 
-de 2:00 AM a 6:00 AM.
-
-Durante este tiempo no podrás acceder a la plataforma.
-
-Planifica tus entregas con anticipación.
-```
-
-**Nueva Funcionalidad:**
-```markdown
-# Nueva Función: Exportar Calificaciones
-
-Ahora los profesores pueden exportar calificaciones a Excel.
-
-Ve a tu curso → Calificaciones → Exportar
-```
-
-### Editar o Eliminar Anuncios
-
-**Para editar:**
-1. Haz clic en el anuncio
-2. Modifica el contenido
-3. Guarda los cambios
-
-**Para eliminar:**
-1. Haz clic en el ícono de eliminar
-2. Confirma la acción
+1. En el panel derecho verás las **materias disponibles** del grupo seleccionado.
+2. **Arrastra** una materia y **suéltala** en el bloque de hora y día deseado en la cuadrícula.
+3. El sistema valida automáticamente:
+   - ✅ Disponibilidad del docente
+   - ✅ Disponibilidad del ambiente físico
+   - ✅ Conflictos de horario con otros grupos
+   - ✅ Límite de horas semanales del docente
+4. Las alertas aparecerán en rojo si hay conflictos.
 
 ---
 
-## ⚙️ Configuración del Sistema
+### Guardar y Publicar
 
-### Acceder a Configuración
+- Los cambios se guardan en **borrador**. Un contador en la barra superior muestra los cambios pendientes.
+- Haz clic en **Guardar** (botón verde) para consolidar el borrador.
+- Para publicar, haz clic en el botón **Borrador 🔒** → confirma → el horario pasa a **Publicado 🌐** y es visible para estudiantes y docentes.
 
-Ve a **"Sistema"** → **"Configuración"** en el menú lateral
+---
 
-### Configuración de API de Gemini
+### Vistas del Planificador
 
-AcademiX puede usar IA para calificación automática. Configura cómo se usa:
+Desde la barra de herramientas superior puedes acceder a:
 
-#### Modo Global (Recomendado para instituciones)
+| Botón | Función |
+|---|---|
+| 👥 Vista Docentes | Ver disponibilidad y materias habilitadas de cada docente |
+| 🏢 Vista Ambientes | Gestionar aulas y laboratorios |
+| 📋 Periodos | Actualizar asignaciones de periodos por grupo |
+| 📊 Analítica | Estadísticas de horas por docente y programa |
+| ⚙️ Configuración | Ajustar título, fechas y límite de horas del programa activo |
+| 📥 Exportar Excel | Descargar el horario en formato de hoja de cálculo |
 
-**Paso 1:** Selecciona **"Modo Global"**
+---
 
-**Paso 2:** Ingresa tu API Key de Google Gemini:
-```
-AIzaSy... (tu clave API)
-```
+## 📣 Eventos y Festivos
 
-**Paso 3:** Haz clic en **"Guardar"**
+Los eventos son **globales** para todos los programas y son visibles en el calendario de docentes y estudiantes.
 
-**Ventajas:**
-- Un solo punto de configuración
-- Control centralizado de uso
-- Más fácil de gestionar
+### Registrar un Evento
 
-#### Modo Individual
+1. Entra a **Eventos y Festivos** en el menú lateral.
+2. Haz clic en la fecha deseada en el calendario (o usa el selector de fecha en el panel izquierdo).
+3. Selecciona el tipo:
+   - **Día Festivo (Bloqueo Total):** Marca el día como inhábil. Aparece en rojo en todos los calendarios.
+   - **Evento Institucional:** Permite indicar título, descripción, hora de inicio/fin y enlace externo.
+4. Haz clic en **Guardar Registro**.
 
-**Paso 1:** Selecciona **"Modo Individual"**
+### Navegar el Calendario de Eventos
 
-**Paso 2:** Guarda la configuración
+- Usa `‹` `›` para navegar mes a mes.
+- Usa **← Evento anterior** / **Evento siguiente →** para saltar directamente al mes donde está el evento más cercano.
 
-**Paso 3:** Cada usuario deberá ingresar su propia API key en su perfil
+### Eliminar Eventos Anteriores a una Fecha
 
-**Ventajas:**
-- Cada usuario usa su propia cuota
-- Mayor flexibilidad
+Para limpiar eventos obsoletos del pasado:
+
+1. Haz clic en el botón rojo **Eliminar desde fecha** (esquina superior derecha).
+2. Selecciona la fecha de corte — el sistema te mostrará cuántos eventos serán eliminados.
+3. Confirma. Se eliminarán todos los eventos cuya fecha sea igual o anterior a la fecha seleccionada.
+
+> [!CAUTION]
+> Esta acción es **irreversible**. Verifica el conteo de eventos afectados antes de confirmar.
+
+---
+
+## 👥 Gestión de Docentes
+
+### Asignar Docente a un Programa
+
+1. En **Administración Académica**, dentro del programa, entra a la pestaña **Docentes**.
+2. Haz clic en **Asignar Docente** y selecciona el usuario con rol de docente.
+
+### Configurar Disponibilidad del Docente
+
+1. En **Programación de Horarios**, haz clic en el ícono 👥 **Vista Docentes**.
+2. Haz clic en **Disponibilidad** junto al docente.
+3. En la interfaz a pantalla completa, selecciona los días y franjas horarias disponibles.
+4. Haz clic en **Guardar Disponibilidad**.
+
+### Habilitar Materias por Docente
+
+1. En **Vista Docentes**, haz clic en **Materias** junto al docente.
+2. Marca las materias que el docente está habilitado para impartir.
+3. Guarda los cambios.
+
+> [!NOTE]
+> El sistema usa esta configuración para prevenir asignaciones de docentes a materias no calificadas o en horarios en los que no están disponibles.
+
+---
+
+## 🏢 Gestión de Ambientes Físicos
+
+1. En **Programación de Horarios**, haz clic en el ícono 🏢 **Vista Ambientes**.
+2. Agrega los ambientes con: nombre, capacidad, ubicación, recursos disponibles y descripción.
+3. Al programar horarios, el sistema bloquea automáticamente el uso simultáneo de un ambiente para grupos diferentes.
+
+---
+
+## 👤 Gestión de Usuarios
+
+### Ver y Administrar Usuarios
+
+1. Entra a **Usuarios** en el menú lateral.
+2. Verás la tabla completa de usuarios: nombre, email, rol, y estado.
+
+### Crear Docentes Manualmente
+
+1. En la sección de Usuarios, haz clic en **Crear Usuario**.
+2. Ingresa nombre, email y asigna el rol **Docente**.
+
+### Registro Masivo por Excel
+
+Puedes importar estudiantes o docentes en bloque mediante una plantilla Excel:
+1. Descarga la plantilla desde el botón de **Carga Masiva**.
+2. Llena el archivo con los datos requeridos.
+3. Sube el archivo. El sistema creará los usuarios automáticamente.
 
 > [!IMPORTANT]
-> Si cambias de Modo Global a Individual, los usuarios deberán configurar sus propias claves.
-
-### Monitoreo del Sistema
-
-En **"Sistema"** puedes ver:
-
-- **Estado del servidor**: Online/Offline
-- **Uso de recursos**: CPU, Memoria, Disco
-- **Conexiones activas**: Usuarios conectados
-- **Logs del sistema**: Errores y advertencias
-
-> [!TIP]
-> Revisa el monitoreo regularmente para detectar problemas antes de que afecten a los usuarios.
+> Los estudiantes pueden registrarse de manera autónoma. Solo debes crear manualmente a los docentes y administradores adicionales.
 
 ---
 
-## 📋 Auditoría
+## ⚙️ Configuración General del Sistema
 
-El sistema de auditoría registra todas las acciones importantes.
+En **Configuración** del menú lateral puedes ajustar:
 
-### Ver Registro de Auditoría
-
-**Paso 1:** Ve a **"Auditoría"** en el menú
-
-**Paso 2:** Verás un registro cronológico de:
-- Creación/edición/eliminación de usuarios
-- Cambios en cursos
-- Modificaciones de configuración
-- Accesos al sistema
-- Cambios de roles
-
-### Filtrar Auditoría
-
-**Por tipo de acción:**
-```
-Crear | Actualizar | Eliminar | Acceso
-```
-
-**Por usuario:**
-```
-Busca por nombre o email del usuario que realizó la acción
-```
-
-**Por rango de fechas:**
-```
-Desde: 2025-01-01
-Hasta: 2025-01-31
-```
-
-**Por entidad:**
-```
-Usuario | Curso | Actividad | Configuración
-```
-
-### Exportar Registro de Auditoría
-
-**Paso 1:** Aplica los filtros deseados
-
-**Paso 2:** Haz clic en **"Exportar"**
-
-**Paso 3:** Selecciona el formato:
-- CSV (para Excel)
-- PDF (para reportes)
-- JSON (para procesamiento)
-
-> [!NOTE]
-> Los registros de auditoría se conservan permanentemente y no se pueden eliminar.
+| Configuración | Descripción |
+|---|---|
+| **Límite Diario de Accesos** | Número máximo de ingresos diarios permitidos para estudiantes |
+| **Tema Visual** | Modo claro, oscuro o automático (aplica a todos los roles) |
+| **Identidad Visual** | Logo, colores e identidad de la institución |
 
 ---
 
-## 🔧 Tareas Administrativas Comunes
+## 📊 Analítica de Horarios
 
-### Inicio de Semestre
+Accede al panel de **Analítica** (ícono 📊 en la barra del planificador) para visualizar:
 
-**Checklist:**
-- [ ] Crear cuentas de nuevos profesores
-- [ ] Verificar que los cursos estén configurados
-- [ ] Publicar anuncio de bienvenida
-- [ ] Revisar configuración del sistema
-- [ ] Verificar que la API de Gemini funcione
-
-### Fin de Semestre
-
-**Checklist:**
-- [ ] Exportar todas las calificaciones
-- [ ] Hacer respaldo de la base de datos
-- [ ] Archivar cursos completados
-- [ ] Generar reportes de uso
-- [ ] Limpiar usuarios inactivos (opcional)
-
-### Mantenimiento Regular
-
-**Semanal:**
-- Revisar logs del sistema
-- Verificar espacio en disco
-- Revisar registro de auditoría
-
-**Mensual:**
-- Hacer respaldo completo
-- Revisar usuarios suspendidos
-- Actualizar documentación si hay cambios
-
----
-
-## 🆘 Solución de Problemas
-
-### Usuario no puede acceder
-
-**Verifica:**
-1. ¿El usuario está activo? (no suspendido)
-2. ¿El email es correcto?
-3. ¿La contraseña es correcta? (considera resetearla)
-
-**Solución:**
-- Resetea la contraseña del usuario
-- Verifica que no esté suspendido
-- Revisa los logs de auditoría para ver intentos de acceso
-
-### Profesor no ve su curso
-
-**Verifica:**
-1. ¿El curso está asignado a ese profesor?
-2. ¿El profesor tiene el rol correcto?
-
-**Solución:**
-- Reasigna el curso al profesor
-- Verifica el rol del usuario
-
-### Sistema lento
-
-**Verifica:**
-1. Uso de recursos en Sistema → Monitoreo
-2. Número de usuarios conectados
-3. Logs del sistema para errores
-
-**Solución:**
-- Reinicia el servidor si es necesario
-- Contacta soporte técnico si persiste
-
----
-
-## 💡 Mejores Prácticas
-
-### Seguridad
-
-✅ **Haz:**
-- Usa contraseñas fuertes para administradores
-- Revisa regularmente el registro de auditoría
-- Mantén actualizada la plataforma
-- Haz respaldos frecuentes
-
-❌ **No hagas:**
-- Compartir credenciales de administrador
-- Dar rol de admin sin necesidad
-- Ignorar alertas del sistema
-- Eliminar usuarios sin hacer respaldo
-
-### Comunicación
-
-✅ **Haz:**
-- Usa anuncios para información importante
-- Sé claro y conciso
-- Avisa con anticipación sobre mantenimientos
-- Responde dudas de profesores rápidamente
-
-❌ **No hagas:**
-- Abusar de anuncios urgentes
-- Usar lenguaje técnico innecesario
-- Hacer cambios sin avisar
-
-### Gestión de Usuarios
-
-✅ **Haz:**
-- Verifica la información antes de crear usuarios
-- Usa suspensión en lugar de eliminación
-- Documenta cambios importantes de roles
-- Mantén actualizada la información de contacto
-
-❌ **No hagas:**
-- Eliminar usuarios activos
-- Cambiar roles sin consultar
-- Crear usuarios duplicados
-
----
-
-## 📞 Soporte y Ayuda Adicional
-
-Si necesitas ayuda adicional:
-
-1. **Documentación técnica**: Consulta el manual técnico del sistema
-2. **Soporte técnico**: Contacta al equipo de desarrollo
-3. **Comunidad**: Únete al grupo de administradores
-
----
-
-## 🔄 Actualizaciones de esta Guía
-
-Esta guía se actualiza regularmente. Última actualización: Diciembre 2025
-
-¿Encontraste algo que falta o necesita mejora? Contacta al equipo de desarrollo.
+- Horas semanales asignadas por docente
+- Comparativo del límite legal de horas
+- Distribución de carga por programa
+- Ocupación de ambientes físicos

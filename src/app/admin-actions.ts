@@ -593,4 +593,108 @@ return {
     };
 }
 
+export async function getStudentBehaviorAnalyticsAction(filters?: {
+    programId?: string;
+    groupId?: string;
+}) {
+    await requireAdmin();
+
+    const whereClause: any = {
+        role: "student"
+    };
+
+    if (filters?.groupId && filters.groupId !== "ALL") {
+        whereClause.groupId = filters.groupId;
+    } else if (filters?.programId && filters.programId !== "ALL") {
+        whereClause.group = {
+            programId: filters.programId
+        };
+    }
+
+    // Query students
+    const students = await prisma.user.findMany({
+        where: whereClause,
+        include: {
+            group: {
+                include: {
+                    program: true
+                }
+            },
+            studentGrades: {
+                include: {
+                    activity: true
+                }
+            },
+            attendances: true,
+            remarks: true,
+            profile: true
+        }
+    });
+
+    // Process students metrics
+    const studentData = students.map(student => {
+        // Average Grade
+        const scores = student.studentGrades.map(g => g.score);
+        const avgGrade = scores.length > 0 ? Number((scores.reduce((acc, s) => acc + s, 0) / scores.length).toFixed(2)) : 0;
+
+        // Attendances
+        const totalAttendances = student.attendances.length;
+        const absentCount = student.attendances.filter(a => a.status === "ABSENT").length;
+        const lateCount = student.attendances.filter(a => a.status === "LATE").length;
+        const absenceRate = totalAttendances > 0 ? Number(((absentCount / totalAttendances) * 100).toFixed(1)) : 0;
+
+        // Remarks
+        const attentionCount = student.remarks.filter(r => r.type === "ATTENTION").length;
+        const citationCount = student.remarks.filter(r => r.type === "CITATION").length;
+        const commendationCount = student.remarks.filter(r => r.type === "COMMENDATION").length;
+
+        return {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            identificacion: student.profile?.identificacion || "N/A",
+            groupName: student.group?.name || "Sin Grupo",
+            programName: student.group?.program?.name || "Sin Programa",
+            avgGrade,
+            absenceRate,
+            absentCount,
+            lateCount,
+            totalAttendances,
+            attentionCount,
+            citationCount,
+            commendationCount,
+            remarksCount: student.remarks.length
+        };
+    });
+
+    // 1. Top Performing Students (avg grade >= 3.0 and zero warnings/citations)
+    const topStudents = [...studentData]
+        .filter(s => s.avgGrade >= 3.0 && (s.attentionCount + s.citationCount) === 0)
+        .sort((a, b) => b.avgGrade - a.avgGrade)
+        .slice(0, 10);
+
+    // 2. Students at Academic Risk (avg grade < 3.0 & has grades)
+    const academicRiskStudents = [...studentData]
+        .filter(s => s.avgGrade > 0 && s.avgGrade < 3.0)
+        .sort((a, b) => a.avgGrade - b.avgGrade);
+
+    // 3. Students at Absence Risk (absence rate > 15%)
+    const attendanceRiskStudents = [...studentData]
+        .filter(s => s.absenceRate > 15)
+        .sort((a, b) => b.absenceRate - a.absenceRate);
+
+    // 4. Students with Disciplinary Attention / Citation
+    const disciplinaryRiskStudents = [...studentData]
+        .filter(s => (s.attentionCount + s.citationCount) > 0)
+        .sort((a, b) => (b.attentionCount + b.citationCount) - (a.attentionCount + a.citationCount));
+
+    return {
+        topStudents,
+        academicRiskStudents,
+        attendanceRiskStudents,
+        disciplinaryRiskStudents,
+        totalStudentsCount: studentData.length
+    };
+}
+
 // ============ GEMINI API USAGE ============

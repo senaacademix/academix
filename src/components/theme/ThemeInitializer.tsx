@@ -2,19 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-export function ThemeInitializer({ isAdmin }: { isAdmin: boolean }) {
+export function ThemeInitializer() {
   useEffect(() => {
-    if (!isAdmin) {
-      try {
-        localStorage.removeItem("academix-theme");
-        localStorage.removeItem("academix-theme-css-v2");
-        localStorage.removeItem("theme");
-        const styleEl = document.getElementById("academix-dynamic-theme");
-        if (styleEl) styleEl.remove();
-      } catch (e) {}
-      return;
-    }
-
     const applyTheme = async () => {
       const savedThemeId = localStorage.getItem("academix-theme") || "default";
       if (savedThemeId === "default") {

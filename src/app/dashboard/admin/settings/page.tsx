@@ -11,14 +11,11 @@ export default async function SettingsPage() {
         redirect("/dashboard/student");
     }
 
-    const [settings, themes] = await Promise.all([
-        getSystemSettingsAction(),
-        import("@/app/actions/themes").then(m => m.getAvailableThemes())
-    ]);
+    const settings = await getSystemSettingsAction();
 
     return (
         <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
-            <AdminSettings initialSettings={settings as any} themes={themes} />
+            <AdminSettings initialSettings={settings as any} />
         </div>
     );
 }
