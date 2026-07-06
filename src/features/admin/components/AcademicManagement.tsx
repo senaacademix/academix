@@ -140,6 +140,14 @@ const toFormat12h = (t24: string) => {
     return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ap}`;
 };
 
+const formatWeeklyHours = (hours: number | null | undefined) => {
+    if (hours == null || hours === 0) return "";
+    const totalMinutes = Math.round(hours * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
 const getInitials = (name: string | null) => {
     if (!name) return "NN";
     const words = name.trim().split(/\s+/).filter(Boolean);
@@ -252,6 +260,7 @@ interface Course {
     description: string | null;
     externalUrl: string | null;
     weeklyHours?: number | null;
+    badge?: string | null;
     createdAt: Date;
     group?: Group | null;
     periodId: string | null;
@@ -331,8 +340,19 @@ function SortableCourseItem({
                                 >
                                     <GripVertical className="h-4 w-4" />
                                 </div></TooltipTrigger><TooltipContent><p>Arrastrar para ordenar</p></TooltipContent></Tooltip>
-                <div className="min-w-0 pr-2">
+                <div className="min-w-0 pr-2 flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold truncate text-foreground/90">{course.title}</p>
+                    {course.weeklyHours !== undefined && course.weeklyHours !== null && course.weeklyHours > 0 && (
+                        <Badge variant="secondary" className="shrink-0 bg-primary/10 text-primary border-primary/20 text-[10px] font-semibold py-0.5 px-1.5 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatWeeklyHours(course.weeklyHours)}
+                        </Badge>
+                    )}
+                    {course.badge && (
+                        <Badge className="shrink-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold py-0.5 px-1.5">
+                            {course.badge}
+                        </Badge>
+                    )}
                 </div>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
@@ -431,6 +451,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     const [courseDescription, setCourseDescription] = useState("");
     const [coursePeriodId, setCoursePeriodId] = useState("");
     const [courseWeeklyHours, setCourseWeeklyHours] = useState<number>(0);
+    const [courseBadge, setCourseBadge] = useState("");
 
     // Description Dialog States
     const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
@@ -1574,6 +1595,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setCourseTitle("");
         setCourseDescription("");
         setCourseWeeklyHours(0);
+        setCourseBadge("");
         setCoursePeriodId(periodId);
         setCourseDialogOpen(true);
     };
@@ -1583,6 +1605,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setCourseTitle(course.title);
         setCourseDescription(course.description || "");
         setCourseWeeklyHours(course.weeklyHours || 0);
+        setCourseBadge(course.badge || "");
         setCoursePeriodId(course.periodId || "");
         setCourseDialogOpen(true);
     };
@@ -1603,6 +1626,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         formData.append("periodId", coursePeriodId);
         formData.append("externalUrl", "");
         formData.append("weeklyHours", courseWeeklyHours.toString());
+        formData.append("badge", courseBadge);
         formData.append("startDate", "");
         formData.append("endDate", "");
         formData.append("schedules", "[]");
@@ -2860,6 +2884,17 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     </Select>
                                 </div>
                             )}
+                            <div className="space-y-2 col-span-2 md:col-span-1">
+                                <Label htmlFor="cBadge">Leyenda (Badge Opcional)</Label>
+                                <Input
+                                    id="cBadge"
+                                    placeholder="Ej: Virtual, Electiva, Nivelatorio..."
+                                    value={courseBadge}
+                                    onChange={(e) => setCourseBadge(e.target.value)}
+                                    maxLength={25}
+                                    className="h-9"
+                                />
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>
@@ -2881,10 +2916,35 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                             <Info className="h-5 w-5 text-primary" />
                             {selectedCourseForDesc?.title}
                         </DialogTitle>
-                        <DialogDescription>Descripción y contenido de la materia.</DialogDescription>
+                        <DialogDescription>Información detallada de la materia.</DialogDescription>
                     </DialogHeader>
-                    <div className="py-4 text-sm text-foreground/80 whitespace-pre-wrap bg-muted/20 p-4 rounded-xl border border-muted/40 max-h-[250px] overflow-y-auto custom-scrollbar">
-                        {selectedCourseForDesc?.description || "Esta materia no tiene una descripción detallada registrada."}
+                    <div className="space-y-4 py-2">
+                        {/* Meta information row */}
+                        <div className="flex flex-wrap gap-2">
+                            {selectedCourseForDesc?.period && (
+                                <Badge variant="outline" className="bg-muted/30 border-muted text-xs font-semibold px-2 py-0.5">
+                                    Periodo: {selectedCourseForDesc.period.name}
+                                </Badge>
+                            )}
+                            {selectedCourseForDesc?.weeklyHours !== undefined && selectedCourseForDesc?.weeklyHours !== null && selectedCourseForDesc?.weeklyHours > 0 && (
+                                <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-xs font-semibold px-2 py-0.5 flex items-center gap-1">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    {formatWeeklyHours(selectedCourseForDesc.weeklyHours)}
+                                </Badge>
+                            )}
+                            {selectedCourseForDesc?.badge && (
+                                <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-xs font-bold px-2 py-0.5">
+                                    {selectedCourseForDesc.badge}
+                                </Badge>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Descripción</h4>
+                            <div className="text-sm text-foreground/80 whitespace-pre-wrap bg-muted/20 p-4 rounded-xl border border-muted/40 max-h-[250px] overflow-y-auto custom-scrollbar">
+                                {selectedCourseForDesc?.description || "Esta materia no tiene una descripción detallada registrada."}
+                            </div>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button onClick={() => setDescriptionDialogOpen(false)}>Cerrar</Button>

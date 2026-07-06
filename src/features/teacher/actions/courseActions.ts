@@ -23,6 +23,7 @@ export async function createCourseAction(formData: FormData) {
     const docProjectIdRaw = formData.get("docProjectId") as string;
     const schedulesStr = formData.get("schedules") as string;
     const periodId = (formData.get("periodId") as string) || undefined;
+    const badge = (formData.get("badge") as string) || undefined;
 
     // Parse schedules if provided
     let schedules;
@@ -47,6 +48,7 @@ export async function createCourseAction(formData: FormData) {
         periodId,
         schedules,
         weeklyHours,
+        badge,
     });
 
     // 🎯 AUDIT LOG
@@ -121,6 +123,7 @@ export async function updateCourseAction(formData: FormData) {
     const externalUrl = formData.get("externalUrl") as string;
     const docProjectIdRaw = formData.get("docProjectId") as string;
     const schedulesStr = formData.get("schedules") as string;
+    const badge = formData.get("badge") as string;
 
     const weeklyHoursRaw = formData.get("weeklyHours") as string;
     const weeklyHours = weeklyHoursRaw ? parseFloat(weeklyHoursRaw) : 0;
@@ -147,6 +150,7 @@ export async function updateCourseAction(formData: FormData) {
         periodId: periodId === "none" ? null : (periodId || undefined),
         schedules,
         weeklyHours,
+        badge: badge || null,
     });
 
     // 🎯 AUDIT LOG

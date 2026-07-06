@@ -14,6 +14,7 @@ export const courseService = {
         docProjectId?: string;
         periodId?: string;
         weeklyHours?: number;
+        badge?: string | null;
         schedules?: Array<{
             dayOfWeek: string;
             startTime: string;
@@ -48,6 +49,7 @@ export const courseService = {
         docProjectId?: string;
         periodId?: string;
         weeklyHours?: number;
+        badge?: string | null;
         schedules?: Array<{
             dayOfWeek: string;
             startTime: string;
@@ -100,6 +102,7 @@ export const courseService = {
         docProjectId?: string | null;
         periodId?: string | null;
         weeklyHours?: number | null;
+        badge?: string | null;
         schedules?: Array<{
             dayOfWeek: string;
             startTime: string;
