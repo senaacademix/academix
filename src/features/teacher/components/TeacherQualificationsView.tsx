@@ -107,9 +107,8 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
         if (!targetTeacherId) return;
         startTransition(async () => {
             try {
-                await updateTeacherQualificationsAction(targetTeacherId, selectedQualCourses);
                 await adminLockTeacherQualificationsAction(targetTeacherId);
-                toast.success("Materias guardadas y bloqueadas con éxito");
+                toast.success("Materias aprobadas y bloqueadas con éxito");
                 await loadQualifications();
                 if (onAdminActionComplete) onAdminActionComplete();
             } catch (e: any) {
@@ -193,17 +192,18 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                 </p>
                             )}
                         </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-auto">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleSaveChanges} 
-                            disabled={isPending}
-                            className="bg-background text-foreground hover:bg-muted"
-                        >
-                            {isAdminMode ? "Guardar Cambios" : "Guardar Borrador"}
-                        </Button>
+                               <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-auto">
+                        {!isAdminMode && (
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleSaveChanges} 
+                                disabled={isPending}
+                                className="bg-background text-foreground hover:bg-muted"
+                            >
+                                Guardar Borrador
+                            </Button>
+                        )}
                         {isAdminMode ? (
                             <Button 
                                 size="sm" 
@@ -211,7 +211,7 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                 disabled={isPending}
                                 className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
                             >
-                                Aprobar y Bloquear
+                                {isPending ? "Aprobando..." : "Aprobar y Bloquear"}
                             </Button>
                         ) : (
                             <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
@@ -242,7 +242,7 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                 </AlertDialogContent>
                             </AlertDialog>
                         )}
-                    </div>
+                    </div>               </div>
                 </div>
             )}
 
@@ -288,7 +288,7 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                                                     <Checkbox
                                                                         id={`qual-course-${course.id}`}
                                                                         checked={isChecked}
-                                                                        disabled={locked}
+                                                                        disabled={locked || isAdminMode}
                                                                         onCheckedChange={(checked) => {
                                                                             if (checked) {
                                                                                 setSelectedQualCourses(prev => [...prev, course.id]);
@@ -300,7 +300,7 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                                                     />
                                                                     <Label 
                                                                         htmlFor={`qual-course-${course.id}`} 
-                                                                        className={`text-xs font-semibold cursor-pointer select-none transition-colors ${locked ? "opacity-70" : "hover:text-foreground"}`}
+                                                                        className={`text-xs font-semibold cursor-pointer select-none transition-colors ${locked || isAdminMode ? "opacity-70 cursor-not-allowed" : "hover:text-foreground"}`}
                                                                     >
                                                                         {course.title}
                                                                     </Label>

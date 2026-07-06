@@ -904,93 +904,98 @@ export async function registerTeacherManualAction(data: {
     email: string;
     telefono?: string;
 }) {
-    const session = await requireAdmin();
+    try {
+        const session = await requireAdmin();
 
-    if (!data.identificacion) throw new Error("El número de documento es obligatorio");
-    if (!data.nombres) throw new Error("El nombre es obligatorio");
-    if (!data.apellido) throw new Error("El apellido es obligatorio");
-    if (!data.email) throw new Error("El correo electrónico es obligatorio");
+        if (!data.identificacion) return { success: false, error: "El número de documento es obligatorio" };
+        if (!data.nombres) return { success: false, error: "El nombre es obligatorio" };
+        if (!data.apellido) return { success: false, error: "El apellido es obligatorio" };
+        if (!data.email) return { success: false, error: "El correo electrónico es obligatorio" };
 
-    // Normalizar
-    const emailNorm = data.email.trim().toLowerCase();
-    const idenNorm = data.identificacion.trim();
+        // Normalizar
+        const emailNorm = data.email.trim().toLowerCase();
+        const idenNorm = data.identificacion.trim();
 
-    // Validar duplicados en la base de datos
-    const existingUser = await prisma.user.findUnique({
-        where: { email: emailNorm }
-    });
-    if (existingUser) {
-        throw new Error(`Ya existe un usuario registrado con el correo: ${emailNorm}`);
-    }
+        // Validar duplicados en la base de datos
+        const existingUser = await prisma.user.findUnique({
+            where: { email: emailNorm }
+        });
+        if (existingUser) {
+            return { success: false, error: "Usuario existente" };
+        }
 
-    const existingProfile = await prisma.profile.findFirst({
-        where: { identificacion: idenNorm }
-    });
-    if (existingProfile) {
-        throw new Error(`Ya existe un perfil registrado con el número de documento: ${idenNorm}`);
-    }
+        const existingProfile = await prisma.profile.findFirst({
+            where: { identificacion: idenNorm }
+        });
+        if (existingProfile) {
+            return { success: false, error: `Ya existe un perfil registrado con el número de documento: ${idenNorm}` };
+        }
 
-    // Hash de la contraseña (contraseña inicial es el número de documento)
-    const { hashPassword } = await import("better-auth/crypto");
-    const hashedPassword = await hashPassword(idenNorm);
-    const teacherId = crypto.randomUUID();
+        // Hash de la contraseña (contraseña inicial es el número de documento)
+        const { hashPassword } = await import("better-auth/crypto");
+        const hashedPassword = await hashPassword(idenNorm);
+        const teacherId = crypto.randomUUID();
 
-    const result = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
-            data: {
-                id: teacherId,
-                email: emailNorm,
-                name: `${data.nombres.trim()} ${data.apellido.trim()}`,
-                role: "teacher",
-                emailVerified: true,
-                ...(data.programId ? {
-                    programs: {
-                        connect: { id: data.programId }
-                    }
-                } : {}),
-                accounts: {
-                    create: {
-                        id: crypto.randomUUID(),
-                        accountId: crypto.randomUUID(),
-                        providerId: "credential",
-                        password: hashedPassword,
+        const result = await prisma.$transaction(async (tx) => {
+            const user = await tx.user.create({
+                data: {
+                    id: teacherId,
+                    email: emailNorm,
+                    name: `${data.nombres.trim()} ${data.apellido.trim()}`,
+                    role: "teacher",
+                    emailVerified: true,
+                    ...(data.programId ? {
+                        programs: {
+                            connect: { id: data.programId }
+                        }
+                    } : {}),
+                    accounts: {
+                        create: {
+                            id: crypto.randomUUID(),
+                            accountId: crypto.randomUUID(),
+                            providerId: "credential",
+                            password: hashedPassword,
+                        }
                     }
                 }
-            }
+            });
+
+            const profile = await tx.profile.create({
+                data: {
+                    userId: teacherId,
+                    identificacion: idenNorm,
+                    nombres: data.nombres.trim(),
+                    apellido: data.apellido.trim(),
+                    telefono: data.telefono?.trim() || null,
+                    dataProcessingConsent: true,
+                    dataProcessingConsentDate: new Date(),
+                }
+            });
+
+            return { user, profile };
         });
 
-        const profile = await tx.profile.create({
-            data: {
-                userId: teacherId,
-                identificacion: idenNorm,
-                nombres: data.nombres.trim(),
-                apellido: data.apellido.trim(),
-                telefono: data.telefono?.trim() || null,
-                dataProcessingConsent: true,
-                dataProcessingConsentDate: new Date(),
-            }
+        const { auditLogger } = await import("../services/auditLogger");
+        await auditLogger.log({
+            action: "CREATE",
+            entity: "USER",
+            entityId: teacherId,
+            userId: session.user.id,
+            userName: session.user.name || "Admin",
+            userRole: "admin",
+            description: data.programId
+                ? `Profesor registrado manualmente en programa: ${data.nombres} ${data.apellido} (${emailNorm})`
+                : `Profesor registrado manualmente en el banco global: ${data.nombres} ${data.apellido} (${emailNorm})`,
+            metadata: { email: emailNorm, programId: data.programId, identificacion: idenNorm },
+            success: true,
         });
 
-        return { user, profile };
-    });
-
-    const { auditLogger } = await import("../services/auditLogger");
-    await auditLogger.log({
-        action: "CREATE",
-        entity: "USER",
-        entityId: teacherId,
-        userId: session.user.id,
-        userName: session.user.name || "Admin",
-        userRole: "admin",
-        description: data.programId
-            ? `Profesor registrado manualmente en programa: ${data.nombres} ${data.apellido} (${emailNorm})`
-            : `Profesor registrado manualmente en el banco global: ${data.nombres} ${data.apellido} (${emailNorm})`,
-        metadata: { email: emailNorm, programId: data.programId, identificacion: idenNorm },
-        success: true,
-    });
-
-    revalidatePath("/dashboard/admin/courses");
-    return result;
+        revalidatePath("/dashboard/admin/courses");
+        return { success: true, ...result };
+    } catch (error: any) {
+        console.error("Error in registerTeacherManualAction:", error);
+        return { success: false, error: error.message || "Error al registrar profesor" };
+    }
 }
 
 interface TeacherImportRow {

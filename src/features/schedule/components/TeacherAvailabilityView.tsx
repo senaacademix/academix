@@ -312,53 +312,68 @@ export function TeacherAvailabilityView({ teacherId, isAdminMode, onAdminActionC
                         <div>
                             <p className="font-semibold text-sm">Disponibilidad en Modo Borrador</p>
                             <p className="text-xs opacity-90 mt-0.5">
-                                Puedes configurar y modificar tus horas de disponibilidad de lunes a domingo. Recuerda hacer clic en **Publicar** para enviarla de forma oficial; esto bloqueará tus cambios para edición.
+                                {isAdminMode 
+                                    ? "El profesor aún puede editar su disponibilidad." 
+                                    : "Puedes configurar y modificar tus horas de disponibilidad de lunes a domingo. Recuerda hacer clic en **Publicar** para enviarla de forma oficial; esto bloqueará tus cambios para edición."}
                             </p>
                             {lastModifiedBy && (
                                 <p className="text-[11px] mt-2 font-medium bg-amber-600/10 border border-amber-600/20 px-2 py-1 rounded-md inline-block">
-                                    Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : "Tú"}) 
+                                    Última modificación: <span className="font-bold">{lastModifiedBy.name}</span> ({lastModifiedBy.role === "admin" ? "Administrador" : (isAdminMode ? "Profesor" : "Tú")}) 
                                     {updatedAt && ` - ${updatedAt.toLocaleDateString()} ${updatedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
                                 </p>
                             )}
                         </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleSaveChanges} 
-                            disabled={isPending}
-                            className="bg-background text-foreground hover:bg-muted"
-                        >
-                            Guardar Borrador
-                        </Button>
-                        <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
-                            <AlertDialogTrigger asChild>
-                                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
-                                    Publicar y Bloquear
+                        {!isAdminMode ? (
+                            <>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={handleSaveChanges} 
+                                    disabled={isPending}
+                                    className="bg-background text-foreground hover:bg-muted"
+                                >
+                                    Guardar Borrador
                                 </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle className="flex items-center gap-2">
-                                        <Lock className="w-5 h-5 text--600 dark:text--400" />
-                                        ¿Confirmas publicar tu disponibilidad?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Una vez publicada, tu disponibilidad horaria quedará **bloqueada** y no podrás realizar más cambios. Solo un administrador podrá desbloquearla para que puedas editarla nuevamente.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                        onClick={handlePublish}
-                                        className="bg-amber-600 hover:bg-amber-700 text-white"
-                                    >
-                                        Confirmar y Bloquear
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
+                                <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+                                    <AlertDialogTrigger asChild>
+                                        <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+                                            Publicar y Bloquear
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle className="flex items-center gap-2">
+                                                <Lock className="w-5 h-5 text-amber-600" />
+                                                ¿Confirmas publicar tu disponibilidad?
+                                            </AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Una vez publicada, tu disponibilidad horaria quedará **bloqueada** y no podrás realizar más cambios. Solo un administrador podrá desbloquearla para que puedas editarla nuevamente.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction 
+                                                onClick={handlePublish}
+                                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                                            >
+                                                Confirmar y Bloquear
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </>
+                        ) : (
+                            <Button 
+                                size="sm" 
+                                onClick={handlePublish}
+                                disabled={isPending}
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                            >
+                                {isPending ? "Aprobando..." : "Aprobar y Bloquear"}
+                            </Button>
+                        )}
                     </div>
                 </div>
             )}
@@ -443,7 +458,7 @@ export function TeacherAvailabilityView({ teacherId, isAdminMode, onAdminActionC
                                                         className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-muted/20 text-xs font-medium text-foreground/90 group"
                                                     >
                                                         <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> {toFormat12h(slot.startTime)} – {toFormat12h(slot.endTime)}</span>
-                                                        {!locked && (
+                                                        {!locked && !isAdminMode && (
                                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <Tooltip><TooltipTrigger asChild><Button 
                                                                                                                                     variant="ghost" size="icon"
@@ -469,7 +484,7 @@ export function TeacherAvailabilityView({ teacherId, isAdminMode, onAdminActionC
                                 </div>
 
                                 {/* Form to add slots */}
-                                {!locked && (
+                                {!locked && !isAdminMode && (
                                     <div className="border-t border-muted/40 pt-3 space-y-2 mt-2">
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">

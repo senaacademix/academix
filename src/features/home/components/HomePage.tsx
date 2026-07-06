@@ -51,7 +51,6 @@ export default function HomePage({ initialUserName, initialUserRole, initialDate
             return [
                 { title: "Gestión de Estudiantes", url: "/dashboard/admin/users", icon: Users, color: "text-blue-500" },
                 { title: "Estructura Académica", url: "/dashboard/admin/courses", icon: BookOpen, color: "text-green-500" },
-                { title: "Banco de Profesores", url: "/dashboard/admin/teachers", icon: GraduationCap, color: "text-yellow-500" },
                 { title: "Programación de Horarios", url: "/dashboard/admin/schedule", icon: Calendar, color: "text-teal-500" },
                 { title: "Configuración", url: "/dashboard/admin/settings", icon: Settings2, color: "text-gray-500" },
             ];

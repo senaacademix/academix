@@ -1512,7 +1512,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
 
         startTransition(async () => {
             try {
-                await registerTeacherManualAction({
+                const res = await registerTeacherManualAction({
                     programId: selectedProgram.id,
                     identificacion: manualTeacherIdentificacion,
                     nombres: manualTeacherNombres,
@@ -1520,6 +1520,11 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     email: manualTeacherEmail,
                     telefono: manualTeacherTelefono || undefined
                 });
+
+                if (res && !res.success) {
+                    toast.error(res.error || "Error al registrar profesor");
+                    return;
+                }
 
                 toast.success("Profesor registrado exitosamente");
                 
