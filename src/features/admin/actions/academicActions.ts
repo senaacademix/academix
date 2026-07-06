@@ -43,7 +43,7 @@ export async function getProgramsAction() {
                 }
             },
             periods: {
-                orderBy: { createdAt: "asc" },
+                orderBy: { order: "asc" },
                 include: {
                     courses: {
                         orderBy: { order: "asc" },
@@ -549,6 +549,23 @@ export async function reorderCoursesAction(orderedIds: string[]) {
     await prisma.$transaction(
         orderedIds.map((id, index) =>
             prisma.course.update({
+                where: { id },
+                data: { order: index }
+            })
+        )
+    );
+
+    revalidatePath("/dashboard/admin/courses");
+}
+
+export async function reorderPeriodsAction(orderedIds: string[]) {
+    await requireAdmin();
+    
+    if (!orderedIds || orderedIds.length === 0) return;
+
+    await prisma.$transaction(
+        orderedIds.map((id, index) =>
+            prisma.period.update({
                 where: { id },
                 data: { order: index }
             })

@@ -65,6 +65,7 @@ import {
     SortableContext,
     sortableKeyboardCoordinates,
     verticalListSortingStrategy,
+    rectSortingStrategy,
     useSortable
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -90,6 +91,7 @@ import {
     assignStudentToGroupAction,
     assignCourseToPeriodAction,
     reorderCoursesAction,
+    reorderPeriodsAction,
     registerStudentManualAction,
     registerStudentsBulkAction,
     assignTeacherToProgramAction,
@@ -389,6 +391,138 @@ function SortableCourseItem({
     );
 }
 
+interface SortablePeriodCardProps {
+    period: Period;
+    openEditPeriod: (period: Period) => void;
+    triggerDelete: (type: "program" | "period" | "group" | "course" | "teacher", id: string, name: string) => void;
+    openCreateCourseForPeriod: (periodId: string) => void;
+    openEditCourse: (course: Course) => void;
+    setSelectedCourseForDesc: (course: Course) => void;
+    setDescriptionDialogOpen: (open: boolean) => void;
+    formatWeeklyHours: (hours: number | null | undefined) => string;
+    BADGE_COLORS: Record<string, { label: string; bg: string }>;
+    sensors: any;
+    handleDragEnd: (event: any, periodId: string) => void;
+}
+
+function SortablePeriodCard({
+    period,
+    openEditPeriod,
+    triggerDelete,
+    openCreateCourseForPeriod,
+    openEditCourse,
+    setSelectedCourseForDesc,
+    setDescriptionDialogOpen,
+    formatWeeklyHours,
+    BADGE_COLORS,
+    sensors,
+    handleDragEnd
+}: SortablePeriodCardProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: period.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition: isDragging ? "none" : transition,
+        opacity: isDragging ? 0.6 : 1,
+        zIndex: isDragging ? 50 : "auto",
+    };
+
+    return (
+        <Card
+            ref={setNodeRef}
+            style={style}
+            className="border-none shadow-sm relative overflow-hidden bg-background flex flex-col justify-between"
+        >
+            <div>
+                <CardHeader className="bg-muted/10 pb-4">
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Tooltip><TooltipTrigger asChild><div 
+                                                {...attributes} 
+                                                {...listeners}
+                                                className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground/75 p-1 transition-colors rounded hover:bg-muted/5 shrink-0"
+                                            >
+                                                <GripVertical className="h-4 w-4" />
+                                            </div></TooltipTrigger><TooltipContent><p>Arrastrar para ordenar periodos</p></TooltipContent></Tooltip>
+                            <div className="min-w-0">
+                                <CardTitle className="text-lg font-bold truncate">{period.name}</CardTitle>
+                                <CardDescription className="text-xs mt-1 truncate">
+                                    {period.description || "Periodo académico del programa"}
+                                </CardDescription>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => openEditPeriod(period)}>
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => triggerDelete("period", period.id, period.name)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Materias del Periodo ({period.courses.length})</span>
+                    </div>
+
+                    {period.courses.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground text-xs bg-muted/5 border border-dashed border-muted/50 rounded-xl">
+                            No hay materias creadas para este periodo.
+                        </div>
+                    ) : (
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={(event) => handleDragEnd(event, period.id)}
+                        >
+                            <SortableContext
+                                items={period.courses.map(c => c.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                    {period.courses.map(course => (
+                                        <SortableCourseItem
+                                            key={course.id}
+                                            course={course}
+                                            openEditCourse={openEditCourse}
+                                            triggerDelete={triggerDelete}
+                                            setSelectedCourseForDesc={setSelectedCourseForDesc}
+                                            setDescriptionDialogOpen={setDescriptionDialogOpen}
+                                        />
+                                    ))}
+                                </div>
+                            </SortableContext>
+                        </DndContext>
+                    )}
+                    {period.courses.length > 0 && (
+                        <div className="pt-3 border-t border-muted/30 flex justify-between items-center text-xs font-bold text-muted-foreground mt-2 animate-in fade-in duration-200">
+                            <span>Total Horas Programadas:</span>
+                            <span className="flex items-center gap-1 bg-primary/5 text-primary border border-primary/15 px-2.5 py-1 rounded-lg">
+                                <Clock className="h-3.5 w-3.5" />
+                                {formatWeeklyHours(period.courses.reduce((sum, c) => sum + (c.weeklyHours || 0), 0))}
+                            </span>
+                        </div>
+                    )}
+                </CardContent>
+            </div>
+            <CardContent className="px-5 pb-5 pt-0">
+                <Button size="sm" variant="outline" className="w-full h-9 text-xs border-dashed border-primary/30 hover:border-primary/60" onClick={() => openCreateCourseForPeriod(period.id)}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Crear Materia
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
 export function AcademicManagement({ initialCourses, teachers, totalCount }: AcademicManagementProps) {
     const [programs, setPrograms] = useState<Program[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
@@ -537,6 +671,44 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                 toast.success("Orden de las materias actualizado");
             } catch (error) {
                 toast.error("Error al reordenar las materias");
+                refreshAll();
+            }
+        }
+    };
+
+    const handlePeriodDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            if (!selectedProgram) return;
+
+            const oldIndex = selectedProgram.periods.findIndex(p => p.id === active.id);
+            const newIndex = selectedProgram.periods.findIndex(p => p.id === over.id);
+
+            const reorderedPeriods = arrayMove(selectedProgram.periods, oldIndex, newIndex);
+
+            const updatedPrograms = programs.map(p => {
+                if (p.id === selectedProgram.id) {
+                    return {
+                        ...p,
+                        periods: reorderedPeriods
+                    };
+                }
+                return p;
+            });
+            setPrograms(updatedPrograms);
+
+            const updatedSel = updatedPrograms.find(p => p.id === selectedProgram.id);
+            if (updatedSel) {
+                setSelectedProgram(updatedSel);
+            }
+
+            try {
+                const orderedIds = reorderedPeriods.map(p => p.id);
+                await reorderPeriodsAction(orderedIds);
+                toast.success("Orden de los periodos actualizado");
+            } catch (error) {
+                toast.error("Error al reordenar los periodos");
                 refreshAll();
             }
         }
@@ -1865,82 +2037,28 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     </Button>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {selectedProgram.periods.map(period => (
-                                        <Card key={period.id} className="border-none shadow-sm relative overflow-hidden bg-background flex flex-col justify-between">
-                                            <div>
-                                                <CardHeader className="bg-muted/10 pb-4">
-                                                    <div className="flex justify-between items-start">
-                                                        <div>
-                                                            <CardTitle className="text-lg font-bold">{period.name}</CardTitle>
-                                                            <CardDescription className="text-xs mt-1">
-                                                                {period.description || "Periodo académico del programa"}
-                                                            </CardDescription>
-                                                        </div>
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => openEditPeriod(period)}>
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => triggerDelete("period", period.id, period.name)}>
-                                                                                               <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardContent className="p-5 space-y-4">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Materias del Periodo ({period.courses.length})</span>
-                                                    </div>
-
-                                                    {period.courses.length === 0 ? (
-                                                        <div className="text-center py-8 text-muted-foreground text-xs bg-muted/5 border border-dashed border-muted/50 rounded-xl">
-                                                            No hay materias creadas para este periodo.
-                                                        </div>
-                                                    ) : (
-                                                        <DndContext
-                                                            sensors={sensors}
-                                                            collisionDetection={closestCenter}
-                                                            onDragEnd={(event) => handleDragEnd(event, period.id)}
-                                                        >
-                                                            <SortableContext
-                                                                items={period.courses.map(c => c.id)}
-                                                                strategy={verticalListSortingStrategy}
-                                                            >
-                                                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                                                                    {period.courses.map(course => (
-                                                                        <SortableCourseItem
-                                                                            key={course.id}
-                                                                            course={course}
-                                                                            openEditCourse={openEditCourse}
-                                                                            triggerDelete={triggerDelete}
-                                                                            setSelectedCourseForDesc={setSelectedCourseForDesc}
-                                                                            setDescriptionDialogOpen={setDescriptionDialogOpen}
-                                                                        />
-                                                                    ))}
-                                                                </div>
-                                                            </SortableContext>
-                                                        </DndContext>
-                                                    )}
-                                                    {period.courses.length > 0 && (
-                                                        <div className="pt-3 border-t border-muted/30 flex justify-between items-center text-xs font-bold text-muted-foreground mt-2 animate-in fade-in duration-200">
-                                                            <span>Total Horas Programadas:</span>
-                                                            <span className="flex items-center gap-1 bg-primary/5 text-primary border border-primary/15 px-2.5 py-1 rounded-lg">
-                                                                <Clock className="h-3.5 w-3.5" />
-                                                                {formatWeeklyHours(period.courses.reduce((sum, c) => sum + (c.weeklyHours || 0), 0))}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </CardContent>
-                                            </div>
-                                            <CardContent className="px-5 pb-5 pt-0">
-                                                <Button size="sm" variant="outline" className="w-full h-9 text-xs border-dashed border-primary/30 hover:border-primary/60" onClick={() => openCreateCourseForPeriod(period.id)}>
-                                                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                                                    Crear Materia
-                                                </Button>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-                                </div>
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePeriodDragEnd}>
+                                    <SortableContext items={selectedProgram.periods.map(p => p.id)} strategy={rectSortingStrategy}>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {selectedProgram.periods.map(period => (
+                                                <SortablePeriodCard
+                                                    key={period.id}
+                                                    period={period}
+                                                    openEditPeriod={openEditPeriod}
+                                                    triggerDelete={triggerDelete}
+                                                    openCreateCourseForPeriod={openCreateCourseForPeriod}
+                                                    openEditCourse={openEditCourse}
+                                                    setSelectedCourseForDesc={setSelectedCourseForDesc}
+                                                    setDescriptionDialogOpen={setDescriptionDialogOpen}
+                                                    formatWeeklyHours={formatWeeklyHours}
+                                                    BADGE_COLORS={BADGE_COLORS}
+                                                    sensors={sensors}
+                                                    handleDragEnd={handleDragEnd}
+                                                />
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
                             )}
                         </TabsContent>
 

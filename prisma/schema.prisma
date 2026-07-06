@@ -412,6 +412,7 @@ model Period {
   id          String     @id @default(cuid())
   name        String
   description String?
+  order       Int        @default(0)
   programId   String
   program     Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
   courses     Course[]
