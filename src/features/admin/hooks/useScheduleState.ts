@@ -807,11 +807,15 @@ export function useScheduleState({
         });
     }, [localPrograms]);
 
-    const triggerSettingsChange = useCallback((title: string, startDate: string, endDate: string, maxHours: number) => {
+    const triggerSettingsChange = useCallback((title: string, startDate: string, endDate: string, maxHours: number, published?: boolean) => {
+        const nextPublished = published !== undefined ? published : schedulesPublished;
         setScheduleTitle(title);
         setScheduleStartDate(startDate);
         setScheduleEndDate(endDate);
         setMaxTeacherHours(maxHours);
+        if (published !== undefined) {
+            setSchedulesPublished(published);
+        }
 
         setLocalPrograms(prev => prev.map(p => p.id === programId
             ? { ...p, startDate, endDate, scheduleTitle: title, maxTeacherHours: maxHours }
@@ -820,7 +824,7 @@ export function useScheduleState({
 
         setPendingChanges(prev => {
             const filtered = prev.filter(ch => ch.type !== "UPDATE_SETTINGS");
-            return [...filtered, { type: "UPDATE_SETTINGS" as const, schedulesPublished, scheduleTitle: title, scheduleStartDate: startDate, scheduleEndDate: endDate, maxTeacherHours: maxHours, programId }];
+            return [...filtered, { type: "UPDATE_SETTINGS" as const, schedulesPublished: nextPublished, scheduleTitle: title, scheduleStartDate: startDate, scheduleEndDate: endDate, maxTeacherHours: maxHours, programId }];
         });
     }, [schedulesPublished, programId]);
 

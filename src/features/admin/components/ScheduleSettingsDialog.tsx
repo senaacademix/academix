@@ -18,7 +18,7 @@ interface ScheduleSettingsDialogProps {
     setScheduleEndDate: (val: string) => void;
     maxTeacherHours: number;
     setMaxTeacherHours: (val: number) => void;
-    triggerSettingsChange: (title: string, startDate: string, endDate: string, maxHours: number) => void;
+    triggerSettingsChange: (title: string, startDate: string, endDate: string, maxHours: number, published?: boolean) => void;
 }
 
 export function ScheduleSettingsDialog({

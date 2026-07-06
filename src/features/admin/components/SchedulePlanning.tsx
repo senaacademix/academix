@@ -1725,8 +1725,7 @@ export function SchedulePlanning({
                             disabled={!schedulesPublished && (!scheduleStartDate || !scheduleEndDate)}
                             onClick={() => {
                                 const val = !schedulesPublished;
-                                setSchedulesPublished(val);
-                                triggerSettingsChange(scheduleTitle, scheduleStartDate, scheduleEndDate, maxTeacherHours);
+                                triggerSettingsChange(scheduleTitle, scheduleStartDate, scheduleEndDate, maxTeacherHours, val);
                             }}
                             className={`rounded-xl text-white ${schedulesPublished ? "bg-orange-500 hover:bg-orange-600" : "bg-emerald-500 hover:bg-emerald-600"}`}
                         >
