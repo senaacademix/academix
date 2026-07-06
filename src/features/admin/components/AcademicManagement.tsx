@@ -148,6 +148,16 @@ const formatWeeklyHours = (hours: number | null | undefined) => {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
+const BADGE_COLORS: Record<string, { label: string; bg: string }> = {
+    slate: { label: "Gris", bg: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20" },
+    blue: { label: "Azul", bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
+    green: { label: "Verde", bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" },
+    red: { label: "Rojo", bg: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20" },
+    amber: { label: "Naranja", bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+    purple: { label: "Púrpura", bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20" },
+    pink: { label: "Rosa", bg: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20" },
+};
+
 const getInitials = (name: string | null) => {
     if (!name) return "NN";
     const words = name.trim().split(/\s+/).filter(Boolean);
@@ -261,6 +271,7 @@ interface Course {
     externalUrl: string | null;
     weeklyHours?: number | null;
     badge?: string | null;
+    badgeColor?: string | null;
     createdAt: Date;
     group?: Group | null;
     periodId: string | null;
@@ -349,7 +360,7 @@ function SortableCourseItem({
                         </Badge>
                     )}
                     {course.badge && (
-                        <Badge className="shrink-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold py-0.5 px-1.5">
+                        <Badge className={cn("shrink-0 border text-[10px] font-bold py-0.5 px-1.5", (course.badgeColor && BADGE_COLORS[course.badgeColor]) ? BADGE_COLORS[course.badgeColor].bg : BADGE_COLORS.slate.bg)}>
                             {course.badge}
                         </Badge>
                     )}
@@ -452,6 +463,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     const [coursePeriodId, setCoursePeriodId] = useState("");
     const [courseWeeklyHours, setCourseWeeklyHours] = useState<number>(0);
     const [courseBadge, setCourseBadge] = useState("");
+    const [courseBadgeColor, setCourseBadgeColor] = useState("slate");
 
     // Description Dialog States
     const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
@@ -1596,6 +1608,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setCourseDescription("");
         setCourseWeeklyHours(0);
         setCourseBadge("");
+        setCourseBadgeColor("slate");
         setCoursePeriodId(periodId);
         setCourseDialogOpen(true);
     };
@@ -1606,6 +1619,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         setCourseDescription(course.description || "");
         setCourseWeeklyHours(course.weeklyHours || 0);
         setCourseBadge(course.badge || "");
+        setCourseBadgeColor(course.badgeColor || "slate");
         setCoursePeriodId(course.periodId || "");
         setCourseDialogOpen(true);
     };
@@ -1627,6 +1641,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
         formData.append("externalUrl", "");
         formData.append("weeklyHours", courseWeeklyHours.toString());
         formData.append("badge", courseBadge);
+        formData.append("badgeColor", courseBadgeColor);
         formData.append("startDate", "");
         formData.append("endDate", "");
         formData.append("schedules", "[]");
@@ -1905,6 +1920,15 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                                 </div>
                                                             </SortableContext>
                                                         </DndContext>
+                                                    )}
+                                                    {period.courses.length > 0 && (
+                                                        <div className="pt-3 border-t border-muted/30 flex justify-between items-center text-xs font-bold text-muted-foreground mt-2 animate-in fade-in duration-200">
+                                                            <span>Total Horas Programadas:</span>
+                                                            <span className="flex items-center gap-1 bg-primary/5 text-primary border border-primary/15 px-2.5 py-1 rounded-lg">
+                                                                <Clock className="h-3.5 w-3.5" />
+                                                                {formatWeeklyHours(period.courses.reduce((sum, c) => sum + (c.weeklyHours || 0), 0))}
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </CardContent>
                                             </div>
@@ -2895,6 +2919,24 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     className="h-9"
                                 />
                             </div>
+                            <div className="space-y-2 col-span-2 md:col-span-1">
+                                <Label htmlFor="cBadgeColor">Color de Leyenda</Label>
+                                <Select value={courseBadgeColor} onValueChange={setCourseBadgeColor}>
+                                    <SelectTrigger id="cBadgeColor" className="h-9">
+                                        <SelectValue placeholder="Selecciona un color" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(BADGE_COLORS).map(([key, value]) => (
+                                            <SelectItem key={key} value={key}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={cn("w-3 h-3 rounded-full border", value.bg)} />
+                                                    <span>{value.label}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>
@@ -2933,7 +2975,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 </Badge>
                             )}
                             {selectedCourseForDesc?.badge && (
-                                <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-xs font-bold px-2 py-0.5">
+                                <Badge className={cn("border text-xs font-bold px-2 py-0.5", (selectedCourseForDesc.badgeColor && BADGE_COLORS[selectedCourseForDesc.badgeColor]) ? BADGE_COLORS[selectedCourseForDesc.badgeColor].bg : BADGE_COLORS.slate.bg)}>
                                     {selectedCourseForDesc.badge}
                                 </Badge>
                             )}

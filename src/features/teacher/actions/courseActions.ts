@@ -24,6 +24,7 @@ export async function createCourseAction(formData: FormData) {
     const schedulesStr = formData.get("schedules") as string;
     const periodId = (formData.get("periodId") as string) || undefined;
     const badge = (formData.get("badge") as string) || undefined;
+    const badgeColor = (formData.get("badgeColor") as string) || undefined;
 
     // Parse schedules if provided
     let schedules;
@@ -49,6 +50,7 @@ export async function createCourseAction(formData: FormData) {
         schedules,
         weeklyHours,
         badge,
+        badgeColor,
     });
 
     // 🎯 AUDIT LOG
@@ -124,6 +126,7 @@ export async function updateCourseAction(formData: FormData) {
     const docProjectIdRaw = formData.get("docProjectId") as string;
     const schedulesStr = formData.get("schedules") as string;
     const badge = formData.get("badge") as string;
+    const badgeColor = formData.get("badgeColor") as string;
 
     const weeklyHoursRaw = formData.get("weeklyHours") as string;
     const weeklyHours = weeklyHoursRaw ? parseFloat(weeklyHoursRaw) : 0;
@@ -151,6 +154,7 @@ export async function updateCourseAction(formData: FormData) {
         schedules,
         weeklyHours,
         badge: badge || null,
+        badgeColor: badgeColor || null,
     });
 
     // 🎯 AUDIT LOG
