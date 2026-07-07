@@ -427,7 +427,8 @@ export async function saveSingleAttendanceAction(
     studentId: string,
     dateStr: string,
     status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED",
-    justification?: string
+    justification?: string,
+    arrivalTime?: string | null
 ) {
     try {
         const teacher = await requireTeacher();
@@ -459,13 +460,36 @@ export async function saveSingleAttendanceAction(
             const dbStatus = (status === "EXCUSED" || status === "ABSENT") ? "ABSENT" : "LATE";
             const dbJustification = status === "EXCUSED" ? (justification || "Justificado en planilla") : null;
 
+            // Handle arrivalTime parse if late
+            let dbArrivalTime: Date | null = null;
+            if (dbStatus === "LATE") {
+                if (arrivalTime) {
+                    const dateParsed = new Date(arrivalTime);
+                    if (!isNaN(dateParsed.getTime())) {
+                        dbArrivalTime = dateParsed;
+                    } else if (/^\d{2}:\d{2}$/.test(arrivalTime)) {
+                        const yyyy = dateObj.getUTCFullYear();
+                        const mm = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+                        const dd = String(dateObj.getUTCDate()).padStart(2, "0");
+                        const fullDateTimeStr = `${yyyy}-${mm}-${dd}T${arrivalTime}:00`;
+                        const d = new Date(fullDateTimeStr);
+                        if (!isNaN(d.getTime())) {
+                            dbArrivalTime = d;
+                        }
+                    }
+                } else {
+                    // Default to current time or keep existing arrivalTime if updating
+                    dbArrivalTime = existing?.arrivalTime || new Date();
+                }
+            }
+
             if (existing) {
                 await prisma.attendance.update({
                     where: { id: existing.id },
                     data: {
                         status: dbStatus as any,
                         justification: dbJustification,
-                        arrivalTime: null
+                        arrivalTime: dbArrivalTime
                     }
                 });
             } else {
@@ -475,7 +499,8 @@ export async function saveSingleAttendanceAction(
                         userId: studentId,
                         date: dateObj,
                         status: dbStatus as any,
-                        justification: dbJustification
+                        justification: dbJustification,
+                        arrivalTime: dbArrivalTime
                     }
                 });
             }

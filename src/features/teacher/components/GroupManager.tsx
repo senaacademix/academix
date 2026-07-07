@@ -3,8 +3,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText } from "lucide-react";
+import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,9 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { formatCalendarDate } from "@/lib/dateUtils";
 import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction } from "../actions/groupActions";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { CourseDocLinks } from "./CourseDocLinks";
 import { GroupAnalyticsPanel } from "@/components/analytics/GroupAnalyticsPanel";
@@ -102,7 +106,12 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [selectedStudentForAnalytics, setSelectedStudentForAnalytics] = useState<any>(null);
 
     // Attendance Tab State
-    const [attMode, setAttMode] = useState<"list" | "sequential" | "matrix">("list");
+    const [attMode, setAttMode] = useState<"list" | "matrix" | "summary" | "history">("list");
+    const [isSequentialFullscreen, setIsSequentialFullscreen] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
     const [seqIndex, setSeqIndex] = useState(0);
     const [attDate, setAttDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
     const [attCourseId, setAttCourseId] = useState<string>("");
@@ -138,24 +147,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
         value: string;
     } | null>(null);
 
-    const hasPendingChanges = () => {
-        const keys1 = Object.keys(attRecords);
-        const keys2 = Object.keys(initialAttRecords);
-        
-        if (keys1.length !== keys2.length) return true;
-        
-        for (const key of keys1) {
-            const r1 = attRecords[key];
-            const r2 = initialAttRecords[key];
-            if (!r2) return true;
-            if (r1.status !== r2.status) return true;
-            if (r1.arrivalTime !== r2.arrivalTime) return true;
-            const j1 = r1.justification || "";
-            const j2 = r2.justification || "";
-            if (j1 !== j2) return true;
-        }
-        return false;
-    };
+    const hasPendingChanges = () => false;
 
     const confirmPendingAction = () => {
         if (!pendingAction) return;
@@ -422,24 +414,49 @@ const handleOpenAnalytics = async () => {
         }
     };
 
-    const setStudentAttendance = (studentId: string, status: "PRESENT" | "ABSENT" | "LATE") => {
+    const setStudentAttendance = async (studentId: string, status: "PRESENT" | "ABSENT" | "LATE") => {
+        if (!attCourseId) return toast.error("Selecciona una materia");
+
+        const now = new Date();
+        const timeString = status === "LATE" ? `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}` : undefined;
+
+        // Optimistic UI update
         setAttRecords(prev => {
             const newRecords = { ...prev };
             if (status === "PRESENT") {
                 delete newRecords[studentId]; // Removiendo = Presente
             } else {
-                const now = new Date();
-                const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                 newRecords[studentId] = { 
                     status, 
-                    arrivalTime: status === "LATE" ? timeString : undefined 
+                    arrivalTime: timeString 
                 };
             }
             return newRecords;
         });
+
+        try {
+            const res = await saveSingleAttendanceAction(
+                attCourseId,
+                studentId,
+                attDate,
+                status,
+                undefined,
+                timeString
+            );
+            if (res.success) {
+                loadHistory(selectedGroup!.id);
+            } else {
+                toast.error("Error al registrar asistencia: " + res.error);
+                loadHistory(selectedGroup!.id);
+            }
+        } catch (e) {
+            toast.error("Error de red al guardar asistencia");
+            loadHistory(selectedGroup!.id);
+        }
     };
 
-    const updateLateTime = (studentId: string, time: string) => {
+    const updateLateTime = async (studentId: string, time: string) => {
+        // Optimistic update
         setAttRecords(prev => {
             if (!prev[studentId]) return prev;
             return {
@@ -447,16 +464,26 @@ const handleOpenAnalytics = async () => {
                 [studentId]: { ...prev[studentId], arrivalTime: time }
             };
         });
-    };
 
-    const updateJustification = (studentId: string, text: string) => {
-        setAttRecords(prev => {
-            if (!prev[studentId]) return prev;
-            return {
-                ...prev,
-                [studentId]: { ...prev[studentId], justification: text }
-            };
-        });
+        try {
+            const res = await saveSingleAttendanceAction(
+                attCourseId,
+                studentId,
+                attDate,
+                "LATE",
+                undefined,
+                time
+            );
+            if (res.success) {
+                loadHistory(selectedGroup!.id);
+            } else {
+                toast.error("Error al actualizar la hora de ingreso: " + res.error);
+                loadHistory(selectedGroup!.id);
+            }
+        } catch (e) {
+            toast.error("Error de red al actualizar la hora");
+            loadHistory(selectedGroup!.id);
+        }
     };
 
     const nextSeqStudent = () => {
@@ -466,6 +493,149 @@ const handleOpenAnalytics = async () => {
     const prevSeqStudent = () => {
         if (seqIndex > 0) setSeqIndex(i => i - 1);
     };
+
+    const startSequentialFullscreen = () => {
+        setSeqIndex(0);
+        setIsSequentialFullscreen(true);
+        // Attempt native fullscreen
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch((err) => {
+                console.log("Error attempting fullscreen", err);
+            });
+        }
+    };
+
+    const exitSequentialFullscreen = () => {
+        setIsSequentialFullscreen(false);
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch((err) => {
+                console.log("Error exiting fullscreen", err);
+            });
+        }
+    };
+
+    // ── EXPORT FUNCTIONS ────────────────────────────────────────────────────────
+    const getMatrixData = () => {
+        if (!selectedGroup || !attCourseId) return null;
+        const history = attendanceHistory.filter((r: any) => r.courseId === attCourseId);
+        const allDates = [...new Set(history.map((r: any) => r.date as string))].sort();
+        const students = selectedGroup.students ?? [];
+
+        const rows = students.map((s: any) => {
+            const row: Record<string, string> = {
+                "Estudiante": formatName(s.name, s.profile),
+                "Identificación": s.profile?.identificacion || "—",
+            };
+            for (const date of allDates) {
+                const rec = history.find((r: any) => r.userId === s.id && r.date === date);
+                row[date] = rec ? (rec.status === "ABSENT" ? "F" : rec.status === "LATE" ? "T" : "P") : "P";
+            }
+            return row;
+        });
+        return { rows, allDates, students };
+    };
+
+    const getHistoryData = () => {
+        if (!selectedGroup || !attCourseId) return null;
+        const history = attendanceHistory.filter((r: any) =>
+            r.courseId === attCourseId && r.status !== "PRESENT"
+        );
+        const students = selectedGroup.students ?? [];
+
+        const rows: Record<string, string>[] = [];
+        for (const s of students) {
+            const recs = history.filter((r: any) => r.userId === s.id);
+            if (recs.length === 0) continue;
+            for (const rec of recs) {
+                rows.push({
+                    "Estudiante": formatName(s.name, s.profile),
+                    "Identificación": s.profile?.identificacion || "—",
+                    "Fecha": rec.date ?? "",
+                    "Tipo": rec.status === "ABSENT" ? "Falta" : "Llegada Tarde",
+                    "Hora": rec.arrivalTime ?? "—",
+                    "Justificación": rec.justification ?? "Sin justificación",
+                });
+            }
+        }
+        return rows;
+    };
+
+    const exportMatrixToExcel = () => {
+        const data = getMatrixData();
+        if (!data) return toast.error("No hay datos para exportar");
+        const ws = XLSX.utils.json_to_sheet(data.rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Planilla");
+        const groupName = selectedGroup?.name ?? "grupo";
+        XLSX.writeFile(wb, `Planilla_${groupName}_${attDate}.xlsx`);
+        toast.success("Planilla exportada a Excel");
+    };
+
+    const exportMatrixToPDF = () => {
+        const data = getMatrixData();
+        if (!data) return toast.error("No hay datos para exportar");
+
+        const doc = new jsPDF({ orientation: "landscape" });
+        const groupName = selectedGroup?.name ?? "Grupo";
+        doc.setFontSize(14);
+        doc.text(`Planilla de Asistencia – ${groupName}`, 14, 15);
+        doc.setFontSize(9);
+        doc.text(`Referencia: F=Falta  T=Tarde  P=Presente`, 14, 21);
+
+        const headers = ["Estudiante", "ID", ...data.allDates];
+        const body = data.rows.map((row: Record<string, string>) => [
+            row["Estudiante"],
+            row["Identificación"],
+            ...data.allDates.map((d) => row[d] ?? "P"),
+        ]);
+
+        autoTable(doc, {
+            head: [headers],
+            body,
+            startY: 26,
+            styles: { fontSize: 7, cellPadding: 2 },
+            headStyles: { fillColor: [30, 100, 200], textColor: 255, fontStyle: "bold" },
+            columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 22 } },
+        });
+
+        doc.save(`Planilla_${groupName}_${attDate}.pdf`);
+        toast.success("Planilla exportada a PDF");
+    };
+
+    const exportHistoryToExcel = () => {
+        const rows = getHistoryData();
+        if (!rows || rows.length === 0) return toast.error("No hay registros de novedades");
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Historial");
+        const groupName = selectedGroup?.name ?? "grupo";
+        XLSX.writeFile(wb, `Historial_${groupName}.xlsx`);
+        toast.success("Historial exportado a Excel");
+    };
+
+    const exportHistoryToPDF = () => {
+        const rows = getHistoryData();
+        if (!rows || rows.length === 0) return toast.error("No hay registros de novedades");
+
+        const doc = new jsPDF({ orientation: "landscape" });
+        const groupName = selectedGroup?.name ?? "Grupo";
+        doc.setFontSize(14);
+        doc.text(`Historial de Asistencia – ${groupName}`, 14, 15);
+
+        autoTable(doc, {
+            head: [["Estudiante", "Identificación", "Fecha", "Tipo", "Hora", "Justificación"]],
+            body: rows.map((r) => [r["Estudiante"], r["Identificación"], r["Fecha"], r["Tipo"], r["Hora"], r["Justificación"]]),
+            startY: 22,
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [30, 100, 200], textColor: 255, fontStyle: "bold" },
+            columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 28 }, 5: { cellWidth: 60 } },
+        });
+
+        doc.save(`Historial_${groupName}.pdf`);
+        toast.success("Historial exportado a PDF");
+    };
+    // ── END EXPORT FUNCTIONS ─────────────────────────────────────────────────────
 
     const handleSaveAttendance = async () => {
         if (!attCourseId) return toast.error("Selecciona una materia");
@@ -634,14 +804,14 @@ const handleOpenAnalytics = async () => {
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom" className="max-w-xs text-left p-3 space-y-1.5">
                                                 <p className="font-bold text-sm">📋 Asistencia</p>
-                                                <p className="text-xs text-muted-foreground">Registra y consulta la asistencia de tus estudiantes por clase.</p>
+                                                <p className="text-xs text-muted-foreground">Registra y consulta la asistencia de tus estudiantes. Todo se guarda automáticamente al instante.</p>
                                                 <ul className="text-xs space-y-1 mt-1 text-muted-foreground list-disc list-inside">
-                                                    <li>Selecciona fecha y materia de la clase</li>
-                                                    <li>Marca: Presente, Tarde, Ausente o Excusa</li>
-                                                    <li>Usa el modo secuencial para recorrer estudiante a estudiante</li>
-                                                    <li>Selección múltiple para registros masivos</li>
-                                                    <li>Consulta el historial de asistencias anteriores</li>
-                                                    <li>Exporta registros a Excel</li>
+                                                    <li><b>Listado:</b> marca Presente/Falta/Tarde por cada estudiante</li>
+                                                    <li><b>Resumen:</b> vista rápida de las novedades del día</li>
+                                                    <li><b>Planilla:</b> matriz Estudiante × Fecha de todo el historial</li>
+                                                    <li><b>Historial:</b> agrupado por estudiante con faltas, tardanzas y justificaciones</li>
+                                                    <li><b>Llamar por Secuencia:</b> modo pantalla completa estudiante a estudiante</li>
+                                                    <li><b>Exportar:</b> descarga Planilla o Historial a Excel o PDF</li>
                                                 </ul>
                                             </TooltipContent>
                                         </Tooltip>
@@ -933,8 +1103,7 @@ const handleOpenAnalytics = async () => {
                             <TabsContent value="attendance" className="m-0 space-y-4 outline-none">
                                 {/* Header Controls for Attendance — single compact row */}
                                 <div className="flex flex-wrap items-center gap-2 bg-muted/20 px-4 py-3 rounded-2xl border">
-                                    {/* Date */}
-                                    {attMode !== "matrix" && (
+                                    {attMode !== "matrix" && attMode !== "history" && (
                                         <>
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Fecha</Label>
@@ -959,45 +1128,95 @@ const handleOpenAnalytics = async () => {
                                         </Select>
                                     </div>
 
-                                    {/* Spacer */}
-                                    <div className="flex-1" />
+                                    {/* View mode pill - Group 1: Listado / Resumen */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5">
+                                            {([
+                                                { mode: "list",    icon: <ListTodo className="w-3.5 h-3.5" />, label: "Listado" },
+                                                { mode: "summary", icon: <ClipboardList className="w-3.5 h-3.5" />, label: "Resumen" },
+                                            ] as const).map(({ mode, icon, label }) => (
+                                                <button
+                                                    key={mode}
+                                                    onClick={() => setAttMode(mode)}
+                                                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
+                                                        attMode === mode
+                                                            ? "bg-background shadow-sm text-foreground"
+                                                            : "text-muted-foreground hover:text-foreground"
+                                                    }`}
+                                                >
+                                                    {icon}
+                                                    <span className="hidden sm:inline">{label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
 
-                                    {/* View mode pill */}
-                                    <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5 shrink-0">
-                                        {([
-                                            { mode: "list",       icon: <ListTodo className="w-3.5 h-3.5" />, label: "Listado" },
-                                            { mode: "sequential", icon: <Play className="w-3.5 h-3.5" />,     label: "Secuencial" },
-                                            { mode: "matrix",     icon: <LayoutList className="w-3.5 h-3.5" />, label: "Planilla" },
-                                        ] as const).map(({ mode, icon, label }) => (
-                                            <button
-                                                key={mode}
-                                                onClick={() => setAttMode(mode)}
-                                                className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
-                                                    attMode === mode
-                                                        ? "bg-background shadow-sm text-foreground"
-                                                        : "text-muted-foreground hover:text-foreground"
-                                                }`}
-                                            >
-                                                {icon}
-                                                <span className="hidden sm:inline">{label}</span>
-                                            </button>
-                                        ))}
+                                        {/* Divider */}
+                                        <div className="w-px h-6 bg-border/60 mx-1 shrink-0" />
+
+                                        {/* Group 2: Planilla / Historial */}
+                                        <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5">
+                                            {([
+                                                { mode: "matrix",  icon: <LayoutList className="w-3.5 h-3.5" />, label: "Planilla" },
+                                                { mode: "history", icon: <History className="w-3.5 h-3.5" />, label: "Historial" },
+                                            ] as const).map(({ mode, icon, label }) => (
+                                                <button
+                                                    key={mode}
+                                                    onClick={() => setAttMode(mode)}
+                                                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
+                                                        attMode === mode
+                                                            ? "bg-background shadow-sm text-foreground"
+                                                            : "text-muted-foreground hover:text-foreground"
+                                                    }`}
+                                                >
+                                                    {icon}
+                                                    <span className="hidden sm:inline">{label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
 
-                                    {attMode === "list" && (
-                                        <>
-                                            <div className="w-px h-6 bg-border/60 shrink-0" />
-                                            {/* Save */}
-                                            <Button
-                                                onClick={handleSaveAttendance}
-                                                disabled={isSavingAtt || !attCourseId}
-                                                className="h-9 px-4 rounded-lg font-bold text-sm gap-1.5 shrink-0"
-                                            >
-                                                <Save className="w-3.5 h-3.5" />
-                                                {isSavingAtt ? "Guardando..." : "Guardar"}
-                                            </Button>
-                                        </>
+                                    {/* Export buttons - only for Planilla and Historial */}
+                                    {(attMode === "matrix" || attMode === "history") && (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    disabled={!attCourseId}
+                                                    className="h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-border hover:bg-muted/60"
+                                                >
+                                                    <FileDown className="w-3.5 h-3.5" />
+                                                    Exportar
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-48">
+                                                <DropdownMenuItem
+                                                    onClick={() => attMode === "matrix" ? exportMatrixToExcel() : exportHistoryToExcel()}
+                                                    className="gap-2 cursor-pointer"
+                                                >
+                                                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                                                    <span>Exportar a Excel</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => attMode === "matrix" ? exportMatrixToPDF() : exportHistoryToPDF()}
+                                                    className="gap-2 cursor-pointer"
+                                                >
+                                                    <FileText className="w-4 h-4 text-red-600" />
+                                                    <span>Exportar a PDF</span>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     )}
+
+                                    {/* Play Sequential button */}
+                                    <Button
+                                        onClick={startSequentialFullscreen}
+                                        variant="outline"
+                                        disabled={!attCourseId}
+                                        className="h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-primary/20 hover:bg-primary/5 text-primary"
+                                    >
+                                        <Play className="w-3.5 h-3.5" />
+                                        Llamar por Secuencia
+                                    </Button>
                                 </div>
 
                                 {attMode === "list" ? (
@@ -1137,87 +1356,313 @@ const handleOpenAnalytics = async () => {
                                             })}
                                         </div>
                                     </div>
-                                ) : attMode === "sequential" ? (
-                                    // MODE 2: SEQUENTIAL VIEW (Flashcards)
-                                    <div className="flex flex-col items-center py-8">
-                                        {filteredStudents.length > 0 ? (
-                                            <div className="w-full max-w-2xl relative">
-                                                <div className="text-center font-bold text-sm text-muted-foreground mb-4">
-                                                    Estudiante {seqIndex + 1} de {filteredStudents.length}
+                                ) : attMode === "summary" ? (
+                                    // MODE 2: SUMMARY VIEW (Resumen)
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                                                <ClipboardList className="w-3.5 h-3.5 mr-1" />
+                                                Resumen de Inasistencias y Tardanzas de Hoy
+                                            </Badge>
+                                            <span className="text-xs font-semibold text-muted-foreground">
+                                                {Object.keys(attRecords).length} Estudiantes con novedades marcadas
+                                            </span>
+                                        </div>
+
+                                        {Object.keys(attRecords).length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 rounded-2xl border border-dashed bg-card shadow-sm">
+                                                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-full text-emerald-600 dark:text-emerald-400">
+                                                    <CheckSquare className="w-8 h-8" />
                                                 </div>
-                                                
-                                                <Card className="border-2 shadow-xl bg-gradient-to-b from-background to-muted/20">
-                                                    <CardContent className="p-10 flex flex-col items-center text-center">
-                                                        <Avatar className="w-32 h-32 border-4 border-muted shadow-sm mb-6">
-                                                            <AvatarImage src={filteredStudents[seqIndex].image} />
-                                                            <AvatarFallback className="text-4xl bg-primary/10 text-primary">
-                                                                {filteredStudents[seqIndex].name?.substring(0, 2).toUpperCase()}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <h2 className="text-3xl font-black mb-2">{formatName(filteredStudents[seqIndex].name, filteredStudents[seqIndex].profile)}</h2>
-                                                        <p className="text-muted-foreground font-mono mb-8">{filteredStudents[seqIndex].profile?.identificacion || "Sin ID"}</p>
-
-                                                        {attRecords[filteredStudents[seqIndex].id] && (
-                                                            <Badge className={`mb-6 text-sm py-1 px-4 ${attRecords[filteredStudents[seqIndex].id].status === 'ABSENT' ? 'bg-red-500' : 'bg-amber-500'}`}>
-                                                                {attRecords[filteredStudents[seqIndex].id].status === 'ABSENT' ? 'Falta Registrada' : 'Llegada Tarde Registrada'}
-                                                            </Badge>
-                                                        )}
-
-                                                        <div className="bg-muted/10 p-4 rounded-xl mb-6 w-full max-w-sm flex justify-around">
-                                                            <div className="text-center">
-                                                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Inasistencias</p>
-                                                                <p className="text-2xl font-black text-red-600">{attendanceHistory.filter(a => a.userId === filteredStudents[seqIndex].id && a.status === 'ABSENT').length}</p>
-                                                            </div>
-                                                            <div className="w-px bg-border"></div>
-                                                            <div className="text-center">
-                                                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Retrasos</p>
-                                                                <p className="text-2xl font-black text-amber-600">{attendanceHistory.filter(a => a.userId === filteredStudents[seqIndex].id && a.status === 'LATE').length}</p>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex flex-wrap justify-center gap-4 w-full">
-                                                            <Button size="lg" variant="outline" className="h-16 px-8 rounded-2xl border-red-200 text-red-600 hover:bg-red-50 font-bold text-lg"
-                                                                onClick={() => { setStudentAttendance(filteredStudents[seqIndex].id, "ABSENT"); setTimeout(nextSeqStudent, 300); }}>
-                                                                <UserX className="w-6 h-6 mr-2" /> Inasistencia
-                                                            </Button>
-                                                            <Button size="lg" variant="outline" className="h-16 px-8 rounded-2xl border-amber-200 text-amber-600 hover:bg-amber-50 font-bold text-lg"
-                                                                onClick={() => { setStudentAttendance(filteredStudents[seqIndex].id, "LATE"); }}>
-                                                                <Clock className="w-6 h-6 mr-2" /> Llegada Tarde
-                                                            </Button>
-                                                            <Button size="lg" className="h-16 px-12 rounded-2xl font-black text-lg bg-emerald-600 hover:bg-emerald-700"
-                                                                onClick={() => { setStudentAttendance(filteredStudents[seqIndex].id, "PRESENT"); nextSeqStudent(); }}>
-                                                                <UserCheck className="w-6 h-6 mr-2" /> Presente (Siguiente)
-                                                            </Button>
-                                                        </div>
-
-                                                        {attRecords[filteredStudents[seqIndex].id]?.status === "LATE" && (
-                                                            <div className="mt-8 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4">
-                                                                <Label className="font-bold text-amber-600 mb-2">Ajustar Hora de Ingreso</Label>
-                                                                <Input type="time" className="h-12 w-48 text-center text-lg font-bold border-amber-300 rounded-xl"
-                                                                    value={attRecords[filteredStudents[seqIndex].id]?.arrivalTime || ""}
-                                                                    onChange={e => updateLateTime(filteredStudents[seqIndex].id, e.target.value)} />
-                                                                <Button variant="ghost" className="mt-4 text-muted-foreground" onClick={nextSeqStudent}>
-                                                                    Continuar <ArrowRight className="w-4 h-4 ml-1" />
-                                                                </Button>
-                                                            </div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
-
-                                                <div className="flex justify-between mt-6">
-                                                    <Button variant="ghost" disabled={seqIndex === 0} onClick={prevSeqStudent} className="font-bold">
-                                                        <ArrowLeft className="w-4 h-4 mr-2" /> Anterior
-                                                    </Button>
-                                                    <Button variant="ghost" disabled={seqIndex === filteredStudents.length - 1} onClick={nextSeqStudent} className="font-bold">
-                                                        Saltar <ArrowRight className="w-4 h-4 ml-2" />
-                                                    </Button>
+                                                <div className="space-y-1">
+                                                    <h3 className="font-black text-lg text-foreground">¡Todo en orden!</h3>
+                                                    <p className="text-sm text-muted-foreground max-w-sm">No hay inasistencias o tardanzas registradas para esta clase. Todos los estudiantes están marcados como presentes.</p>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <p className="text-muted-foreground">No hay estudiantes en este grupo.</p>
+                                            <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+                                                <Table>
+                                                    <TableHeader className="bg-muted/30">
+                                                        <TableRow>
+                                                            <TableHead className="pl-6">Estudiante</TableHead>
+                                                            <TableHead className="w-[150px] text-center">Identificación</TableHead>
+                                                            <TableHead className="w-[150px] text-center">Novedad</TableHead>
+                                                            <TableHead className="w-[180px] text-center">Detalle</TableHead>
+                                                            <TableHead className="w-[120px] text-right pr-6">Acción</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {filteredStudents
+                                                            .filter((s: any) => attRecords[s.id])
+                                                            .map((s: any) => {
+                                                                const rec = attRecords[s.id];
+                                                                const isAbsent = rec.status === "ABSENT";
+                                                                const isLate = rec.status === "LATE";
+                                                                return (
+                                                                    <TableRow key={s.id} className="hover:bg-muted/10 transition-colors">
+                                                                        <TableCell className="pl-6 py-3.5">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <Avatar className="w-9 h-9 border">
+                                                                                    <AvatarImage src={s.image} />
+                                                                                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                                                                        {s.name?.substring(0, 2).toUpperCase()}
+                                                                                    </AvatarFallback>
+                                                                                </Avatar>
+                                                                                <div className="min-w-0">
+                                                                                    <div className="font-semibold text-sm text-foreground truncate max-w-[280px]">
+                                                                                        {formatName(s.name, s.profile)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                                                                            {s.profile?.identificacion || "—"}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            <Badge variant="outline" className={`font-bold text-xs ${
+                                                                                isAbsent 
+                                                                                    ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-950/20' 
+                                                                                    : 'text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20'
+                                                                            }`}>
+                                                                                {isAbsent ? "Inasistencia" : "Llegada Tarde"}
+                                                                            </Badge>
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            {isLate ? (
+                                                                                <div className="flex items-center justify-center gap-2">
+                                                                                    <span className="text-xs text-muted-foreground">Hora:</span>
+                                                                                    <Input 
+                                                                                        type="time" 
+                                                                                        className="h-7 w-24 text-xs font-bold text-center border-amber-300 dark:border-amber-900/60" 
+                                                                                        value={rec.arrivalTime || ""}
+                                                                                        onChange={e => updateLateTime(s.id, e.target.value)}
+                                                                                    />
+                                                                                </div>
+                                                                            ) : (
+                                                                                <span className="text-xs text-muted-foreground">Día completo</span>
+                                                                            )}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-right pr-6">
+                                                                            <Button 
+                                                                                size="sm" 
+                                                                                variant="ghost" 
+                                                                                onClick={() => setStudentAttendance(s.id, "PRESENT")}
+                                                                                className="h-7 px-2.5 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 font-bold"
+                                                                            >
+                                                                                Marcar Presente
+                                                                            </Button>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
                                         )}
                                     </div>
-                                ) : (() => {
+                                ) : attMode === "history" ? (() => {
+                                    // MODE 4: HISTORIAL VIEW
+                                    const studentsWithNovedades = selectedGroup.students?.filter((student: any) => {
+                                        const studentRecords = attendanceHistory.filter((rec: any) => 
+                                            rec.courseId === attCourseId && 
+                                            rec.userId === student.id && 
+                                            rec.status !== "PRESENT"
+                                        );
+                                        if (studentRecords.length === 0) return false;
+
+                                        if (searchQuery) {
+                                            const q = searchQuery.toLowerCase();
+                                            return student.name.toLowerCase().includes(q) || 
+                                                   student.profile?.identificacion?.toLowerCase().includes(q);
+                                        }
+                                        return true;
+                                    });
+
+                                    const sortedStudentsWithNovedades = [...(studentsWithNovedades || [])].sort((a: any, b: any) => {
+                                        const recordsA = attendanceHistory.filter((rec: any) => rec.courseId === attCourseId && rec.userId === a.id && rec.status !== "PRESENT").length;
+                                        const recordsB = attendanceHistory.filter((rec: any) => rec.courseId === attCourseId && rec.userId === b.id && rec.status !== "PRESENT").length;
+                                        return recordsB - recordsA;
+                                    });
+
+                                    const totalRecordsCount = attendanceHistory.filter((rec: any) => 
+                                        rec.courseId === attCourseId && 
+                                        rec.status !== "PRESENT" &&
+                                        selectedGroup.students?.some((s: any) => s.id === rec.userId)
+                                    ).length;
+
+                                    return (
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                                                    <History className="w-3.5 h-3.5 mr-1" />
+                                                    Historial de Asistencia Agrupado por Estudiante
+                                                </Badge>
+                                                <span className="text-xs font-semibold text-muted-foreground">
+                                                    {totalRecordsCount} Registros en total ({sortedStudentsWithNovedades.length} Estudiantes)
+                                                </span>
+                                            </div>
+
+                                            {sortedStudentsWithNovedades.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 rounded-2xl border border-dashed bg-card shadow-sm">
+                                                    <div className="p-3 bg-muted rounded-full text-muted-foreground">
+                                                        <History className="w-8 h-8" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <h3 className="font-black text-lg text-foreground">Sin registros históricos</h3>
+                                                        <p className="text-sm text-muted-foreground max-w-sm">No se han encontrado registros de inasistencias o tardanzas para esta materia.</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    {sortedStudentsWithNovedades.map((student: any) => {
+                                                        const studentRecords = attendanceHistory.filter((rec: any) => 
+                                                            rec.courseId === attCourseId && 
+                                                            rec.userId === student.id && 
+                                                            rec.status !== "PRESENT"
+                                                        );
+                                                        const sortedRecs = [...studentRecords].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                                        const absentCount = studentRecords.filter(r => r.status === "ABSENT").length;
+                                                        const lateCount = studentRecords.filter(r => r.status === "LATE").length;
+
+                                                        return (
+                                                            <div key={student.id} className="rounded-2xl border bg-card shadow-sm overflow-hidden hover:border-primary/20 transition-all duration-200">
+                                                                {/* Student Header summary */}
+                                                                <div className="bg-muted/30 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Avatar className="w-10 h-10 border-2 border-background shadow-sm">
+                                                                            <AvatarImage src={student.image} />
+                                                                            <AvatarFallback className="bg-primary/10 text-primary text-sm font-black">
+                                                                                {student.name?.substring(0, 2).toUpperCase()}
+                                                                            </AvatarFallback>
+                                                                        </Avatar>
+                                                                        <div>
+                                                                            <h4 className="font-bold text-sm text-foreground">
+                                                                                {formatName(student.name, student.profile)}
+                                                                            </h4>
+                                                                            <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                                                                ID: {student.profile?.identificacion || "—"}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-2">
+                                                                        {absentCount > 0 && (
+                                                                            <Badge className="bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-900/60 font-extrabold shadow-none px-2.5 py-0.5 rounded-full text-xs">
+                                                                                {absentCount} {absentCount === 1 ? "Falta" : "Faltas"}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {lateCount > 0 && (
+                                                                            <Badge className="bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-900/60 font-extrabold shadow-none px-2.5 py-0.5 rounded-full text-xs">
+                                                                                {lateCount} {lateCount === 1 ? "Llegada Tarde" : "Llegadas Tardes"}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Detail Records List inside Student card */}
+                                                                <div className="overflow-x-auto">
+                                                                    <Table>
+                                                                        <TableHeader className="bg-muted/10">
+                                                                            <TableRow className="hover:bg-transparent">
+                                                                                <TableHead className="pl-6 w-[120px] text-xs font-bold uppercase tracking-wider text-muted-foreground">Fecha</TableHead>
+                                                                                <TableHead className="w-[140px] text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">Novedad</TableHead>
+                                                                                <TableHead className="w-[160px] text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">Detalle / Hora</TableHead>
+                                                                                <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Justificación</TableHead>
+                                                                                <TableHead className="w-[120px] text-right pr-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">Acción</TableHead>
+                                                                            </TableRow>
+                                                                        </TableHeader>
+                                                                        <TableBody>
+                                                                            {sortedRecs.map((rec: any) => {
+                                                                                const isAbsent = rec.status === "ABSENT";
+                                                                                const isLate = rec.status === "LATE";
+                                                                                const formattedDate = format(new Date(rec.date), "dd/MM/yyyy");
+                                                                                
+                                                                                return (
+                                                                                    <TableRow key={rec.id} className="hover:bg-muted/5 transition-colors">
+                                                                                        <TableCell className="pl-6 py-3 font-semibold text-xs text-foreground/80">
+                                                                                            {formattedDate}
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-center py-3">
+                                                                                            <Badge variant="outline" className={`font-bold text-[10px] uppercase px-2 py-0.5 rounded-md ${
+                                                                                                isAbsent 
+                                                                                                    ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-950/20' 
+                                                                                                    : 'text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20'
+                                                                                            }`}>
+                                                                                                {isAbsent ? "Falta" : "Tarde"}
+                                                                                            </Badge>
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-center text-xs py-3 font-medium text-foreground/70">
+                                                                                            {isLate && rec.arrivalTime ? (
+                                                                                                <span className="font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded text-[11px] border border-amber-500/20">
+                                                                                                    {new Date(rec.arrivalTime).toISOString().substring(11, 16)} hs
+                                                                                                </span>
+                                                                                            ) : (
+                                                                                                <span className="text-muted-foreground text-[11px]">Día completo</span>
+                                                                                            )}
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-xs py-3 max-w-[300px]">
+                                                                                            {rec.justification ? (
+                                                                                                rec.justification.startsWith("http") ? (
+                                                                                                    <a 
+                                                                                                        href={rec.justification} 
+                                                                                                        target="_blank" 
+                                                                                                        rel="noopener noreferrer" 
+                                                                                                        className="text-primary hover:underline font-bold inline-flex items-center gap-1"
+                                                                                                    >
+                                                                                                        <FileText className="w-3 h-3" />
+                                                                                                        Ver soporte
+                                                                                                    </a>
+                                                                                                ) : (
+                                                                                                    <span className="text-muted-foreground italic truncate block" title={rec.justification}>
+                                                                                                        {rec.justification}
+                                                                                                    </span>
+                                                                                                )
+                                                                                            ) : (
+                                                                                                <span className="text-muted-foreground/60 italic text-[11px]">Sin justificación</span>
+                                                                                            )}
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right pr-6 py-3">
+                                                                                            <Button 
+                                                                                                size="sm" 
+                                                                                                variant="ghost" 
+                                                                                                onClick={async () => {
+                                                                                                    const toastId = toast.loading("Eliminando novedad...");
+                                                                                                    try {
+                                                                                                        const res = await saveSingleAttendanceAction(
+                                                                                                            attCourseId,
+                                                                                                            student.id,
+                                                                                                            rec.date,
+                                                                                                            "PRESENT"
+                                                                                                        );
+                                                                                                        if (res.success) {
+                                                                                                            toast.success("Novedad eliminada (marcado Presente)", { id: toastId });
+                                                                                                            loadHistory(selectedGroup!.id);
+                                                                                                        } else {
+                                                                                                            toast.error("Error: " + res.error, { id: toastId });
+                                                                                                        }
+                                                                                                    } catch (e) {
+                                                                                                        toast.error("Error de conexión", { id: toastId });
+                                                                                                    }
+                                                                                                }}
+                                                                                                className="h-7 px-2.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 font-bold"
+                                                                                            >
+                                                                                                Eliminar
+                                                                                            </Button>
+                                                                                        </TableCell>
+                                                                                    </TableRow>
+                                                                                );
+                                                                            })}
+                                                                        </TableBody>
+                                                                    </Table>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })() : (() => {
                                     // MODE 3: MATRIX / PLANILLA VIEW
                                     // Build the list of class days for the selected course
                                     const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
@@ -1813,6 +2258,208 @@ const handleOpenAnalytics = async () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {mounted && isSequentialFullscreen && createPortal(
+                <AnimatePresence>
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] bg-background flex flex-col h-screen w-screen overflow-hidden p-6 select-none"
+                    >
+                        {/* Header: Full Screen title & Close Button */}
+                        <div className="flex items-center justify-between border-b pb-4 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <Badge className="bg-primary/10 text-primary hover:bg-primary/10 border-primary/20 text-xs font-bold px-2.5 py-1">
+                                    <Clock className="w-3.5 h-3.5 mr-1" />
+                                    Sesión de Asistencia Activa
+                                </Badge>
+                                <span className="text-sm font-semibold text-muted-foreground">
+                                    Materia: {selectedGroup.courses?.find((c: any) => c.id === attCourseId)?.title}
+                                </span>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={exitSequentialFullscreen}
+                                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                            >
+                                <X className="w-5 h-5" />
+                            </Button>
+                        </div>
+
+                        {/* Main sequence content */}
+                        {filteredStudents.length > 0 ? (() => {
+                            const currentStudent = filteredStudents[seqIndex];
+                            const rec = attRecords[currentStudent.id];
+                            const isAbsent = rec?.status === "ABSENT";
+                            const isLate = rec?.status === "LATE";
+                            
+                            const studentHistory = attendanceHistory.filter(a => a.userId === currentStudent.id);
+                            const absentCount = studentHistory.filter(a => a.status === 'ABSENT').length;
+                            const lateCount = studentHistory.filter(a => a.status === 'LATE').length;
+
+                            return (
+                                <div className="flex-1 flex flex-col justify-between py-6 min-h-0">
+                                    {/* Progress indicator */}
+                                    <div className="w-full max-w-xl mx-auto shrink-0 space-y-2">
+                                        <div className="flex justify-between text-xs font-bold text-muted-foreground">
+                                            <span>PROGRESO DE LLAMADO</span>
+                                            <span>{seqIndex + 1} de {filteredStudents.length} ({Math.round(((seqIndex + 1) / filteredStudents.length) * 100)}%)</span>
+                                        </div>
+                                        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-primary transition-all duration-300"
+                                                style={{ width: `${((seqIndex + 1) / filteredStudents.length) * 100}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Center Block: Avatar, Name, History statistics - Fits perfectly without card */}
+                                    <div className="flex-1 flex flex-col items-center justify-center min-h-0 py-4 max-w-2xl mx-auto w-full">
+                                        <Avatar className="w-40 h-40 border-4 border-primary/20 shadow-md mb-6 shrink-0">
+                                            <AvatarImage src={currentStudent.image} />
+                                            <AvatarFallback className="text-5xl bg-primary/10 text-primary font-black">
+                                                {currentStudent.name?.substring(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+
+                                        <div className="text-center space-y-2 shrink-0">
+                                            <h2 className="text-4xl font-black text-foreground tracking-tight max-w-xl mx-auto break-words leading-none">
+                                                {formatName(currentStudent.name, currentStudent.profile)}
+                                            </h2>
+                                            <p className="text-sm font-mono text-muted-foreground">
+                                                Identificación: {currentStudent.profile?.identificacion || "—"}
+                                            </p>
+                                        </div>
+
+                                        {/* Quick badge indicating if attendance is marked for this session */}
+                                        <div className="h-10 mt-4 shrink-0">
+                                            {rec && (
+                                                <Badge className={`text-xs font-black px-4 py-1.5 shadow-sm ${
+                                                    isAbsent 
+                                                        ? 'bg-red-500 hover:bg-red-600 text-white' 
+                                                        : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                                }`}>
+                                                    {isAbsent ? 'Falta Marcada' : 'Llegada Tarde Marcada'}
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        {/* Statistics block */}
+                                        <div className="mt-6 p-4 rounded-2xl bg-muted/30 border border-border/60 w-full max-w-sm flex justify-around shrink-0">
+                                            <div className="text-center">
+                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Inasistencias</p>
+                                                <p className="text-3xl font-black text-red-600 dark:text-red-400">{absentCount}</p>
+                                            </div>
+                                            <div className="w-px bg-border/60" />
+                                            <div className="text-center">
+                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Retrasos</p>
+                                                <p className="text-3xl font-black text-amber-600 dark:text-amber-400">{lateCount}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Time entry selector nested under avatar for late arrivals */}
+                                        <AnimatePresence>
+                                            {isLate && (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: 10 }}
+                                                    className="mt-6 w-full max-w-xs shrink-0 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col items-center gap-2"
+                                                >
+                                                    <Label className="text-xs font-bold text-amber-700 dark:text-amber-400">AJUSTAR HORA DE INGRESO</Label>
+                                                    <Input 
+                                                        type="time" 
+                                                        className="h-10 w-36 text-center text-base font-bold bg-background border-amber-300 dark:border-amber-900"
+                                                        value={rec?.arrivalTime || ""}
+                                                        onChange={e => updateLateTime(currentStudent.id, e.target.value)} 
+                                                    />
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+
+                                    {/* Action Buttons: Giant controls for easy click/touch */}
+                                    <div className="shrink-0 w-full max-w-xl mx-auto space-y-4">
+                                        <div className="flex gap-4">
+                                            <Button 
+                                                size="lg" 
+                                                variant="outline" 
+                                                className={`flex-1 h-16 rounded-2xl font-bold text-base transition-all border-2 ${
+                                                    isAbsent 
+                                                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-600' 
+                                                        : 'border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
+                                                }`}
+                                                onClick={() => { 
+                                                    setStudentAttendance(currentStudent.id, isAbsent ? "PRESENT" : "ABSENT"); 
+                                                    if (!isAbsent) {
+                                                        setTimeout(nextSeqStudent, 300); 
+                                                    }
+                                                }}
+                                            >
+                                                <UserX className="w-5 h-5 mr-2" /> Inasistencia
+                                            </Button>
+
+                                            <Button 
+                                                size="lg" 
+                                                variant="outline" 
+                                                className={`flex-1 h-16 rounded-2xl font-bold text-base transition-all border-2 ${
+                                                    isLate 
+                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500' 
+                                                        : 'border-amber-200 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20'
+                                                }`}
+                                                onClick={() => { 
+                                                    setStudentAttendance(currentStudent.id, isLate ? "PRESENT" : "LATE"); 
+                                                }}
+                                            >
+                                                <Clock className="w-5 h-5 mr-2" /> Llegada Tarde
+                                            </Button>
+                                        </div>
+
+                                        <Button 
+                                            size="lg" 
+                                            className="w-full h-16 rounded-2xl font-black text-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2"
+                                            onClick={() => { 
+                                                setStudentAttendance(currentStudent.id, "PRESENT"); 
+                                                nextSeqStudent(); 
+                                            }}
+                                        >
+                                            <UserCheck className="w-6 h-6" /> Presente (Siguiente)
+                                        </Button>
+
+                                        {/* Secondary navigation */}
+                                        <div className="flex justify-between items-center pt-2 text-muted-foreground">
+                                            <Button 
+                                                variant="ghost" 
+                                                disabled={seqIndex === 0} 
+                                                onClick={prevSeqStudent} 
+                                                className="font-bold text-xs"
+                                            >
+                                                <ArrowLeft className="w-4 h-4 mr-1.5" /> ANTERIOR
+                                            </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                disabled={seqIndex === filteredStudents.length - 1} 
+                                                onClick={nextSeqStudent} 
+                                                className="font-bold text-xs"
+                                            >
+                                                SALTAR <ArrowRight className="w-4 h-4 ml-1.5" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })() : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+                                <Users className="w-16 h-16 mb-4 opacity-40" />
+                                <p className="text-lg font-bold">No hay estudiantes en el grupo para llamar asistencia</p>
+                            </div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>,
+                document.body
+            )}
         </div>
     );
 }

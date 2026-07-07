@@ -123,6 +123,8 @@ import { TeacherAvailabilityView } from "@/features/schedule/components/TeacherA
 import { TeacherQualificationsView } from "@/features/teacher/components/TeacherQualificationsView";
 import { DayOfWeek } from "@/generated/prisma/client";
 import { EnvironmentManagement, TrainingEnvironment } from "@/features/admin/components/EnvironmentManagement";
+import { AdminAttendanceView } from "@/features/admin/components/AdminAttendanceView";
+
 
 const DAYS_OF_WEEK_ORDERED: { value: DayOfWeek; label: string }[] = [
     { value: "MONDAY", label: "Lunes" },
@@ -552,6 +554,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
     }, [programIdParam, programs]);
 
     const [selectedSchedulePeriodId, setSelectedSchedulePeriodId] = useState<string>("");
+    const [groupSubTab, setGroupSubTab] = useState<"students" | "attendance">("students");
 
     useEffect(() => {
         if (managingGroup) {
@@ -562,6 +565,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
             } else {
                 setSelectedSchedulePeriodId("");
             }
+            setGroupSubTab("students");
         } else {
             setSelectedSchedulePeriodId("");
         }
@@ -2096,67 +2100,103 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                         </div>
                                     </div>
 
+                                    {/* Segmented sub-tab controller for Students vs Attendance */}
+                                    <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5 self-start w-fit">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setGroupSubTab("students")}
+                                            className={`h-8 px-4 rounded-md text-xs font-bold transition-all ${
+                                                groupSubTab === "students"
+                                                    ? "bg-background shadow-sm text-foreground hover:bg-background"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                                            }`}
+                                        >
+                                            <Users className="w-3.5 h-3.5 mr-1.5" />
+                                            <span>Estudiantes</span>
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setGroupSubTab("attendance")}
+                                            className={`h-8 px-4 rounded-md text-xs font-bold transition-all ${
+                                                groupSubTab === "attendance"
+                                                    ? "bg-background shadow-sm text-foreground hover:bg-background"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                                            }`}
+                                        >
+                                            <Clock className="w-3.5 h-3.5 mr-1.5" />
+                                            <span>Asistencia (Solo Lectura)</span>
+                                        </Button>
+                                    </div>
+
                                     <div className="space-y-6">
-                                        <div className="space-y-4 mt-0">
-                                            <div className="flex justify-between items-center">
-                                                <h5 className="text-sm font-semibold text-muted-foreground">Listado de Estudiantes ({managingGroup.students.length})</h5>
-                                                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openAssignStudents(managingGroup)}>
-                                                    <Plus className="h-3 w-3 mr-1.5" />
-                                                    Asociar Estudiantes
-                                                </Button>
-                                            </div>
-                                            <Card className="border-none shadow-sm bg-background">
-                                                <CardContent className="p-5">
-                                                    {managingGroup.students.length === 0 ? (
-                                                        <div className="text-center py-16 text-muted-foreground text-sm bg-muted/5 border border-dashed border-muted/50 rounded-xl">
-                                                            No hay estudiantes asignados en este grupo.
-                                                            <br />
-                                                            <Button size="sm" variant="outline" className="mt-4 text-xs" onClick={() => openAssignStudents(managingGroup)}>
-                                                                <Plus className="h-3.5 w-3.5 mr-1.5" /> Asociar Estudiantes
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="border border-muted/40 rounded-xl overflow-hidden">
-                                                            <Table>
-                                                                <TableHeader className="bg-muted/10">
-                                                                    <TableRow>
-                                                                        <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
-                                                                        <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
-                                                                        <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
-                                                                        <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
-                                                                        <TableHead className="py-3 text-xs font-semibold text-right">Acción</TableHead>
-                                                                    </TableRow>
-                                                                </TableHeader>
-                                                                <TableBody>
-                                                                    {managingGroup.students.map((student) => (
-                                                                        <TableRow key={student.id} className="hover:bg-muted/5">
-                                                                            <TableCell className="py-3 text-xs font-mono">
-                                                                                {student.profile?.identificacion || "S/D"}
-                                                                            </TableCell>
-                                                                            <TableCell className="py-3 text-xs font-medium">{student.name}</TableCell>
-                                                                            <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
-                                                                            <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
-                                                                            <TableCell className="py-3 text-right">
-                                                                                <div className="flex items-center justify-end gap-1.5">
-                                                                                    <Tooltip><TooltipTrigger asChild><Button
-                                                                                        size="icon"
-                                                                                        variant="ghost"
-                                                                                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                                                                        onClick={() => triggerDelete("student", student.id, student.name)}
-                                                                                    >
-                                                                                        <Trash2 className="h-4 w-4" />
-                                                                                    </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
-                                                                                </div>
-                                                                            </TableCell>
+                                        {groupSubTab === "students" ? (
+                                            <div className="space-y-4 mt-0">
+                                                <div className="flex justify-between items-center">
+                                                    <h5 className="text-sm font-semibold text-muted-foreground">Listado de Estudiantes ({managingGroup.students.length})</h5>
+                                                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openAssignStudents(managingGroup)}>
+                                                        <Plus className="h-3 w-3 mr-1.5" />
+                                                        Asociar Estudiantes
+                                                    </Button>
+                                                </div>
+                                                <Card className="border-none shadow-sm bg-background">
+                                                    <CardContent className="p-5">
+                                                        {managingGroup.students.length === 0 ? (
+                                                            <div className="text-center py-16 text-muted-foreground text-sm bg-muted/5 border border-dashed border-muted/50 rounded-xl">
+                                                                No hay estudiantes asignados en este grupo.
+                                                                <br />
+                                                                <Button size="sm" variant="outline" className="mt-4 text-xs" onClick={() => openAssignStudents(managingGroup)}>
+                                                                    <Plus className="h-3.5 w-3.5 mr-1.5" /> Asociar Estudiantes
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="border border-muted/40 rounded-xl overflow-hidden">
+                                                                <Table>
+                                                                    <TableHeader className="bg-muted/10">
+                                                                        <TableRow>
+                                                                            <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
+                                                                            <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
+                                                                            <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
+                                                                            <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
+                                                                            <TableHead className="py-3 text-xs font-semibold text-right">Acción</TableHead>
                                                                         </TableRow>
-                                                                    ))}
-                                                                </TableBody>
-                                                            </Table>
-                                                        </div>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        </div>
+                                                                    </TableHeader>
+                                                                    <TableBody>
+                                                                        {managingGroup.students.map((student) => (
+                                                                            <TableRow key={student.id} className="hover:bg-muted/5">
+                                                                                <TableCell className="py-3 text-xs font-mono">
+                                                                                    {student.profile?.identificacion || "S/D"}
+                                                                                </TableCell>
+                                                                                <TableCell className="py-3 text-xs font-medium">{student.name}</TableCell>
+                                                                                <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
+                                                                                <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
+                                                                                <TableCell className="py-3 text-right">
+                                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                                        <Tooltip><TooltipTrigger asChild><Button
+                                                                                            size="icon"
+                                                                                            variant="ghost"
+                                                                                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                                                                            onClick={() => triggerDelete("student", student.id, student.name)}
+                                                                                        >
+                                                                                            <Trash2 className="h-4 w-4" />
+                                                                                        </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
+                                                                                    </div>
+                                                                                </TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </div>
+                                                        )}
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-0">
+                                                <AdminAttendanceView group={managingGroup} />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ) : (

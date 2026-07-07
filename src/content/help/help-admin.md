@@ -259,3 +259,38 @@ Accede al panel de **Analítica** (ícono 📊 en la barra del planificador) par
 - Comparativo del límite legal de horas
 - Distribución de carga por programa
 - Ocupación de ambientes físicos
+
+---
+
+## 📋 Supervisión de Asistencia (Vista Admin)
+
+Como administrador puedes consultar la asistencia de cualquier grupo en **modo solo lectura** con exportación incluida.
+
+### Cómo acceder
+
+1. Ve a **Administración Académica** en el menú lateral.
+2. Selecciona el programa y entra a la pestaña **Grupos y Estudiantes**.
+3. Haz clic en **Gestionar** junto al grupo que deseas consultar.
+4. En el panel de gestión del grupo verás la sección **Asistencia** con dos vistas disponibles.
+
+### Planilla
+Matriz de asistencia histórica con Estudiantes en filas y Fechas en columnas.
+- **P** = Presente · **F** = Falta · **T** = Tarde
+- Puedes filtrar por materia usando el selector en la barra de herramientas.
+
+### Historial
+Vista agrupada por estudiante con el detalle completo de cada novedad:
+- Fecha, Tipo (Falta/Llegada Tarde), Hora de llegada, Justificación.
+- Ordenado de mayor a menor cantidad de incidencias.
+
+### Exportar
+Desde el botón **"Exportar"** puedes descargar:
+- **Excel (.xlsx)** para editar o compartir en hoja de cálculo.
+- **PDF** en orientación horizontal con tabla formateada.
+
+> [!NOTE]
+> El administrador tiene acceso de **solo lectura** en las vistas de Planilla e Historial. El registro y modificación de asistencia es responsabilidad exclusiva del **Docente**.
+
+> [!NOTE]
+> **Sobre las justificaciones:** Solo el **estudiante** puede subir su justificación. El **profesor y el administrador** pueden eliminarla para que el estudiante la suba nuevamente.
+

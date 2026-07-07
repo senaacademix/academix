@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3 } from "lucide-react";
+import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3, UserX } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
@@ -450,6 +450,8 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
     }
 
     const issueAttendances = attendances.filter(a => (a.status === 'ABSENT' || a.status === 'LATE') && !a.justification);
+    const absentCount   = attendances.filter(a => a.status === 'ABSENT').length;
+    const lateCount     = attendances.filter(a => a.status === 'LATE').length;
 
     const analyticsContent = (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
@@ -677,20 +679,36 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
     return (
         <div className="space-y-8">
             {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Faltas */}
+                <Card className="border-red-200/60 dark:border-red-900/40">
                     <CardHeader className="p-4 pb-2">
                         <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-amber-500" />
-                            Alertas de Asistencia
+                            <UserX className="w-4 h-4 text-red-500" />
+                            Faltas
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 flex items-end gap-3">
-                        <div className="text-3xl font-black text-foreground">{issueAttendances.length}</div>
-                        <div className="text-sm text-muted-foreground font-medium pb-1">Fallas / Retardos Sin Justificar</div>
+                        <div className="text-3xl font-black text-red-600 dark:text-red-400">{absentCount}</div>
+                        <div className="text-sm text-muted-foreground font-medium pb-1">Inasistencias totales</div>
                     </CardContent>
                 </Card>
 
+                {/* Tardanzas */}
+                <Card className="border-amber-200/60 dark:border-amber-900/40">
+                    <CardHeader className="p-4 pb-2">
+                        <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-500" />
+                            Llegadas Tarde
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 flex items-end gap-3">
+                        <div className="text-3xl font-black text-amber-600 dark:text-amber-400">{lateCount}</div>
+                        <div className="text-sm text-muted-foreground font-medium pb-1">Tardanzas totales</div>
+                    </CardContent>
+                </Card>
+
+                {/* Llamados de Atención */}
                 <Card>
                     <CardHeader className="p-4 pb-2">
                         <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
