@@ -818,14 +818,14 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                         {att.arrivalTime && <div className="text-xs text-muted-foreground mt-0.5">Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</div>}
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
-                                                                        <Badge variant="outline" className={`text-xs font-bold ${att.status === 'LATE' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-red-600 border-red-200 bg-red-50'}`}>
+                                                                        <Badge variant="outline" className={`text-xs font-bold w-28 h-6 inline-flex items-center justify-center ${att.status === 'LATE' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-red-600 border-red-200 bg-red-50'}`}>
                                                                             {att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'}
                                                                         </Badge>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
                                                                         {isJustified ? (
                                                                             <div className="flex flex-col items-center gap-1">
-                                                                                <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 gap-1">
+                                                                                <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 gap-1 w-28 h-6 inline-flex items-center justify-center">
                                                                                     <CheckCircle2 className="w-3 h-3" /> Justificado
                                                                                 </Badge>
                                                                                 {att.justificationUrl && (

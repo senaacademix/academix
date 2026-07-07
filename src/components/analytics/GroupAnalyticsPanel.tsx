@@ -197,6 +197,13 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
     const rankedStudentsData = useMemo(() => {
         if (!analyticsData || !analyticsData.studentMetrics) return [];
 
+        const selectedCourse = analyticsData.coursesList?.find(c => c.id === selectedCourseId);
+        const selectedCourseTitle = selectedCourse?.title;
+        const stats = analyticsData.coursesStats.find(c => c.title === selectedCourseTitle);
+        const hasGrades = selectedCourseId === "all"
+            ? analyticsData.coursesStats.some(c => c.totalGrades > 0)
+            : (stats ? stats.totalGrades > 0 : false);
+
         return analyticsData.studentMetrics.map(student => {
             let gradesAvg = 0;
             let absences = 0;
@@ -221,7 +228,7 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
             }
 
             // 1. Academic Score (70%): based on gradesAvg (0 to 5).
-            const academicScore = gradesAvg > 0 ? (gradesAvg / 5) * 100 : 0;
+            const academicScore = hasGrades ? (gradesAvg > 0 ? (gradesAvg / 5) * 100 : 0) : 100;
 
             // 2. Attendance Score (20%): 10 points penalty per absence, 4 points per late arrival.
             const attendanceScore = Math.max(0, 100 - (absences * 10) - (lates * 4));

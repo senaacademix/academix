@@ -15,7 +15,7 @@ import prisma from "@/lib/prisma";
 import { ExceededLimitScreen } from "@/components/auth/ExceededLimitScreen";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Bug } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export default async function DashboardLayout({
@@ -122,6 +122,19 @@ export default async function DashboardLayout({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Centro de Ayuda</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a href="mailto:senaacademix@gmail.com?subject=Reporte%20de%20Problema%20-%20SigaTic">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
+                      <Bug className="h-4 w-4" />
+                      <span className="sr-only">Reportar un problema</span>
+                    </Button>
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reportar un problema</p>
                 </TooltipContent>
               </Tooltip>
               <CreditsModal />

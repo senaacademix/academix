@@ -191,6 +191,15 @@ export function GroupGenerator({ students: initialStudents }: GroupGeneratorProp
         setUngrouped(initialStudents.map(s => s.user));
     };
 
+    const handleRenameGroup = (groupId: string, newName: string) => {
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                return { ...g, name: newName };
+            }
+            return g;
+        }));
+    };
+
     const handleRandomize = () => {
         const count = parseInt(groupCountInput);
         if (isNaN(count) || count < 1) return;
@@ -526,6 +535,13 @@ export function GroupGenerator({ students: initialStudents }: GroupGeneratorProp
                                                                                     id={group.id}
                                                                                     items={group.students.map(s => s.id)}
                                                                                     onRemove={() => handleRemoveGroup(group.id)}
+                                                                                    title={
+                                                                                        <Input
+                                                                                            value={group.name}
+                                                                                            onChange={(e) => handleRenameGroup(group.id, e.target.value)}
+                                                                                            className="h-7 w-32 border-0 bg-transparent focus-visible:ring-1 text-sm font-bold p-1 rounded hover:bg-muted/80 focus:bg-background shrink-0"
+                                                                                        />
+                                                                                    }
                                                                                 >
                                                                                     <SortableContext
                                                                                         id={group.id}

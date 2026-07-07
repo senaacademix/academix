@@ -514,3 +514,32 @@ export async function saveSingleAttendanceAction(
     }
 }
 
+export async function deleteRemarkAction(remarkId: string) {
+    try {
+        const teacher = await requireTeacher();
+
+        const remark = await prisma.remark.findUnique({
+            where: { id: remarkId },
+            include: { course: true }
+        });
+
+        if (!remark) throw new Error("Observación no encontrada");
+
+        // Permisos: admin o creador de la observación o profesor del curso
+        if (teacher.role !== "admin" && remark.teacherId !== teacher.id && remark.course.teacherId !== teacher.id) {
+            throw new Error("No tienes permisos para retirar esta observación.");
+        }
+
+        await prisma.remark.delete({
+            where: { id: remarkId }
+        });
+
+        revalidatePath("/dashboard/teacher");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error deleting remark:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+

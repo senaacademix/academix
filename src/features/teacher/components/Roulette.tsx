@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RotateCcw, Trophy, Users, ChevronDown, Check, X, Pencil, Volume2, VolumeX, Download } from "lucide-react";
+import { RotateCcw, Trophy, Users, ChevronDown, Check, X, Pencil, Volume2, VolumeX, Download, UserPlus } from "lucide-react";
 import * as XLSX from 'xlsx';
 import { cn, formatName } from "@/lib/utils";
 import confetti from "canvas-confetti";
@@ -285,6 +285,21 @@ export function Roulette({ students: initialStudents, courseId }: RouletteProps)
         localStorage.removeItem(`roulette-storage-${courseId}`);
     };
 
+    const handleReaddStudent = (studentId: string) => {
+        const historyItem = history.find(item => item.student.id === studentId);
+        if (!historyItem) return;
+
+        setHistory(prev => prev.filter(item => item.student.id !== studentId));
+
+        setCandidates(prev => {
+            if (prev.some(c => c.id === studentId)) return prev;
+            return [...prev, historyItem.student];
+        });
+
+        rotation.set(0);
+        lastTickRef.current = 0;
+    };
+
     const handleExport = () => {
         if (history.length === 0) return;
 
@@ -507,6 +522,14 @@ export function Roulette({ students: initialStudents, courseId }: RouletteProps)
                                                                                                             >
                                                                                                                 <Pencil className="h-3 w-3" />
                                                                                                             </Button></TooltipTrigger><TooltipContent><p>Editar nota</p></TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button
+                                                                                                                size="icon"
+                                                                                                                variant="ghost"
+                                                                                                                className="h-6 w-6 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+                                                                                                                onClick={() => handleReaddStudent(item.student.id)}
+                                                                                                            >
+                                                                                                                <UserPlus className="h-3.5 w-3.5" />
+                                                                                                            </Button></TooltipTrigger><TooltipContent><p>Reincorporar a la ruleta</p></TooltipContent></Tooltip>
                                                 </div>
                                             )}
                                         </div>
