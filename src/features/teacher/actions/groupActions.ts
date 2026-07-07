@@ -99,6 +99,25 @@ export async function saveAttendanceBatch(
 
         const filteredRecords = records.filter(r => r.status !== 'PRESENT' as any);
 
+        const parseArrivalTime = (timeStr: string | undefined | null) => {
+            if (!timeStr) return null;
+            const dateParsed = new Date(timeStr);
+            if (!isNaN(dateParsed.getTime())) {
+                return dateParsed;
+            }
+            if (/^\d{2}:\d{2}$/.test(timeStr)) {
+                const yyyy = dateObj.getUTCFullYear();
+                const mm = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+                const dd = String(dateObj.getUTCDate()).padStart(2, "0");
+                const fullDateTimeStr = `${yyyy}-${mm}-${dd}T${timeStr}:00`;
+                const d = new Date(fullDateTimeStr);
+                if (!isNaN(d.getTime())) {
+                    return d;
+                }
+            }
+            return null;
+        };
+
         if (filteredRecords.length > 0) {
             await prisma.attendance.createMany({
                 data: filteredRecords.map(r => ({
@@ -106,17 +125,17 @@ export async function saveAttendanceBatch(
                     userId: r.studentId,
                     date: dateObj,
                     status: r.status,
-                    arrivalTime: r.arrivalTime ? new Date(r.arrivalTime) : null,
+                    arrivalTime: parseArrivalTime(r.arrivalTime),
                     justification: r.justification
                 }))
             });
         }
 
         revalidatePath("/dashboard/teacher");
-return { success: true };
+        return { success: true };
     } catch (error: any) {
         console.error("Error saving attendance:", error);
-return { success: false, error: error.message };
+        return { success: false, error: error.message };
     }
 }
 
@@ -157,7 +176,7 @@ return { success: false, error: error.message };
 
 export async function getGroupAttendanceHistory(groupId: string) {
     try {
-        await requireTeacher();
+        const user = await requireTeacher();
         const group = await prisma.group.findUnique({
             where: { id: groupId },
             include: { courses: true }
@@ -165,7 +184,12 @@ export async function getGroupAttendanceHistory(groupId: string) {
 
         if (!group) return [];
 
-        const courseIds = group.courses.map(c => c.id);
+        // Filter courses: teachers only see their own courses, admins see all
+        const coursesTaught = user.role === "admin"
+            ? group.courses
+            : group.courses.filter(c => c.teacherId === user.id);
+
+        const courseIds = coursesTaught.map(c => c.id);
 
         const attendances = await prisma.attendance.findMany({
             where: {
@@ -193,7 +217,7 @@ export async function getGroupAttendanceHistory(groupId: string) {
 
 export async function getGroupRemarksHistory(groupId: string) {
     try {
-        await requireTeacher();
+        const user = await requireTeacher();
         const group = await prisma.group.findUnique({
             where: { id: groupId },
             include: { courses: true }
@@ -201,7 +225,12 @@ export async function getGroupRemarksHistory(groupId: string) {
 
         if (!group) return [];
 
-        const courseIds = group.courses.map(c => c.id);
+        // Filter courses: teachers only see their own courses, admins see all
+        const coursesTaught = user.role === "admin"
+            ? group.courses
+            : group.courses.filter(c => c.teacherId === user.id);
+
+        const courseIds = coursesTaught.map(c => c.id);
 
         const remarks = await prisma.remark.findMany({
             where: {
@@ -230,10 +259,8 @@ export async function getGroupRemarksHistory(groupId: string) {
         console.error("Error fetching remarks history:", error);
         return [];
     }
-}
-
-export async function getTeacherComprehensiveGroupAnalyticsAction(groupId: string) {
-    await requireTeacher();
+}export async function getTeacherComprehensiveGroupAnalyticsAction(groupId: string) {
+    const user = await requireTeacher();
 
     const group = await prisma.group.findUnique({
         where: { id: groupId },
@@ -248,6 +275,7 @@ export async function getTeacherComprehensiveGroupAnalyticsAction(groupId: strin
                 select: {
                     id: true,
                     title: true,
+                    teacherId: true,
                     activities: {
                         select: {
                             grades: {
@@ -262,7 +290,12 @@ export async function getTeacherComprehensiveGroupAnalyticsAction(groupId: strin
 
     if (!group) throw new Error("Grupo no encontrado");
 
-    const courseIds = group.courses.map(c => c.id);
+    // Filter courses: teachers only see their own courses, admins see all
+    const coursesTaught = user.role === "admin"
+        ? group.courses
+        : group.courses.filter(c => c.teacherId === user.id);
+
+    const courseIds = coursesTaught.map(c => c.id);
 
     // Fetch attendances
     const attendances = await prisma.attendance.findMany({
@@ -288,11 +321,11 @@ export async function getTeacherComprehensiveGroupAnalyticsAction(groupId: strin
     const activeStudents = totalStudents - bannedStudents;
 
     // Calculate courses average grades
-    const coursesStats = group.courses.map(course => {
+    const coursesStats = coursesTaught.map(course => {
         const allGrades = course.activities.flatMap(a => a.grades);
         const sum = allGrades.reduce((acc, g) => acc + g.score, 0);
         const avg = allGrades.length > 0 ? sum / allGrades.length : 0;
-return {
+        return {
             title: course.title,
             averageGrade: Number(avg.toFixed(2)),
             totalGrades: allGrades.length
@@ -317,7 +350,7 @@ return {
         const courseAttendances: Record<string, { present: number, absent: number, late: number }> = {};
         const courseRemarks: Record<string, { attention: number, commendation: number }> = {};
 
-        group.courses.forEach(c => {
+        coursesTaught.forEach(c => {
             // Grades
             let cScore = 0;
             let cCount = 0;

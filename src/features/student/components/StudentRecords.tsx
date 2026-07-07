@@ -10,12 +10,22 @@ import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatName, cn } from "@/lib/utils";
-import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation } from "../actions/studentActions";
+import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation, deleteJustificationAction } from "../actions/studentActions";
 import { getStudentGrades, submitStudentSubmissionLink } from "@/features/teacher/actions/gradeActions";
 import { authClient } from "@/lib/auth-client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -81,6 +91,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
     const [justificationText, setJustificationText] = useState("");
     const [justificationUrl, setJustificationUrl] = useState("");
     const [viewingJustification, setViewingJustification] = useState<{ justification: string; url?: string | null; date: string; statusName: string } | null>(null);
+    const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
     useEffect(() => {
         loadRecords();
@@ -90,7 +101,12 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
 
     const loadRecords = () => {
         getStudentRecords(studentId)
-            .then(data => setRecords(data))
+            .then(data => {
+                setRecords(data);
+                if (data.currentUser) {
+                    setCurrentUserRole(data.currentUser.role);
+                }
+            })
             .catch(console.error)
             .finally(() => setIsLoading(false));
     };
@@ -139,6 +155,33 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                 toast.error(error.message || "Error al enviar la justificación");
             }
         });
+    };
+
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [attendanceIdToDelete, setAttendanceIdToDelete] = useState<string | null>(null);
+
+    const triggerDeleteJustification = (id: string) => {
+        setAttendanceIdToDelete(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDeleteJustification = async () => {
+        if (!attendanceIdToDelete) return;
+        const toastId = toast.loading("Eliminando justificación...");
+        try {
+            const res = await deleteJustificationAction(attendanceIdToDelete);
+            if (res.success) {
+                toast.success("Justificación eliminada correctamente", { id: toastId });
+                loadRecords();
+            } else {
+                toast.error("Error al eliminar la justificación", { id: toastId });
+            }
+        } catch (e: any) {
+            toast.error(e.message || "Error al conectar con el servidor", { id: toastId });
+        } finally {
+            setDeleteDialogOpen(false);
+            setAttendanceIdToDelete(null);
+        }
     };
 
     const handleSubmitLink = () => {
@@ -749,7 +792,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                     <TableBody>
                                                         {entries.map(att => {
                                                             const isJustified = !!att.justification;
-                                                            const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE');
+                                                            const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE') && currentUserRole === "student";
                                                             return (
                                                                 <TableRow key={att.id}>
                                                                     <TableCell>
@@ -808,16 +851,28 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                                 </DialogContent>
                                                                             </Dialog>
                                                                         ) : isJustified ? (
-                                                                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                                                                onClick={() => setViewingJustification({
-                                                                                    justification: att.justification || "",
-                                                                                    url: att.justificationUrl,
-                                                                                    date: att.date,
-                                                                                    statusName: att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'
-                                                                                })}
-                                                                            >
-                                                                                <FileText className="w-3 h-3" /> Ver
-                                                                            </Button>
+                                                                            <div className="flex items-center justify-center gap-1.5">
+                                                                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                                                                    onClick={() => setViewingJustification({
+                                                                                        justification: att.justification || "",
+                                                                                        url: att.justificationUrl,
+                                                                                        date: att.date,
+                                                                                        statusName: att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'
+                                                                                    })}
+                                                                                >
+                                                                                    <FileText className="w-3 h-3" /> Ver
+                                                                                </Button>
+                                                                                {(currentUserRole === "teacher" || currentUserRole === "admin") && (
+                                                                                    <Button 
+                                                                                        size="sm" 
+                                                                                        variant="destructive" 
+                                                                                        onClick={() => triggerDeleteJustification(att.id)}
+                                                                                        className="h-7 text-xs font-semibold"
+                                                                                    >
+                                                                                        Eliminar
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
                                                                         ) : (
                                                                             <span className="text-muted-foreground text-xs">—</span>
                                                                         )}
@@ -1422,6 +1477,26 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            {/* Confirm Delete Justification Alert Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar esta justificación?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            ¿Estás seguro de que deseas eliminar esta justificación? El estudiante tendrá que volver a justificar esta inasistencia/retardo para que pueda ser considerada válida.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => { setDeleteDialogOpen(false); setAttendanceIdToDelete(null); }}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDeleteJustification}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+                        >
+                            Eliminar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

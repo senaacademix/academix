@@ -57,6 +57,10 @@ export async function getStudentRecords(targetStudentId?: string) {
     return {
         attendances,
         remarks,
+        currentUser: {
+            id: session.user.id,
+            role: session.user.role
+        }
     };
 }
 
@@ -89,6 +93,27 @@ export async function justifyAttendanceAction(attendanceId: string, justificatio
         data: {
             justification: justification.trim(),
             justificationUrl: url.trim() || null,
+        }
+    });
+
+    return { success: true, attendance: updated };
+}
+
+export async function deleteJustificationAction(attendanceId: string) {
+    const session = await getSession();
+    if (!session?.user) {
+        throw new Error("Unauthorized");
+    }
+
+    if (session.user.role !== "teacher" && session.user.role !== "admin") {
+        throw new Error("No autorizado para realizar esta acción");
+    }
+
+    const updated = await prisma.attendance.update({
+        where: { id: attendanceId },
+        data: {
+            justification: null,
+            justificationUrl: null,
         }
     });
 

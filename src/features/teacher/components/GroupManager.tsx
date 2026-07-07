@@ -4,7 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 
 import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
-import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle } from "lucide-react";
+import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,12 +18,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { formatName } from "@/lib/utils";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { formatCalendarDate } from "@/lib/dateUtils";
 import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction } from "../actions/groupActions";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { CourseDocLinks } from "./CourseDocLinks";
 import { GroupAnalyticsPanel } from "@/components/analytics/GroupAnalyticsPanel";
 import { StudentRecords } from "@/features/student/components/StudentRecords";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { GradeManagerPanel } from "./GradeManagerPanel";
 import {
     AlertDialog,
@@ -121,6 +122,148 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
     const [remarksHistory, setRemarksHistory] = useState<any[]>([]);
 
+    // Details Modal State
+    const [detailStudent, setDetailStudent] = useState<any | null>(null);
+    const [detailOpen, setDetailOpen] = useState(false);
+
+    const handleShowStudentDetails = (student: any) => {
+        setDetailStudent(student);
+        setDetailOpen(true);
+    };
+
+    // Unsaved Changes Warning State & Logic
+    const [initialAttRecords, setInitialAttRecords] = useState<Record<string, any>>({});
+    const [pendingAction, setPendingAction] = useState<{
+        type: "DATE" | "COURSE" | "TAB" | "GROUP";
+        value: string;
+    } | null>(null);
+
+    const hasPendingChanges = () => {
+        const keys1 = Object.keys(attRecords);
+        const keys2 = Object.keys(initialAttRecords);
+        
+        if (keys1.length !== keys2.length) return true;
+        
+        for (const key of keys1) {
+            const r1 = attRecords[key];
+            const r2 = initialAttRecords[key];
+            if (!r2) return true;
+            if (r1.status !== r2.status) return true;
+            if (r1.arrivalTime !== r2.arrivalTime) return true;
+            const j1 = r1.justification || "";
+            const j2 = r2.justification || "";
+            if (j1 !== j2) return true;
+        }
+        return false;
+    };
+
+    const confirmPendingAction = () => {
+        if (!pendingAction) return;
+        const { type, value } = pendingAction;
+        
+        // Temporarily align them so hasPendingChanges returns false during state updates
+        setInitialAttRecords(attRecords);
+        
+        if (type === "DATE") {
+            setAttDate(value);
+        } else if (type === "COURSE") {
+            setAttCourseId(value);
+        } else if (type === "TAB") {
+            setActiveTab(value as any);
+        } else if (type === "GROUP") {
+            setSelectedGroupId(value);
+        }
+        setPendingAction(null);
+    };
+
+    const saveAndConfirmPendingAction = async () => {
+        if (!pendingAction || !attCourseId || !attDate) return;
+        
+        const recordsArray = filteredStudents.map((s: any) => {
+            const rec = attRecords[s.id];
+            return {
+                studentId: s.id,
+                status: rec?.status || "PRESENT",
+                arrivalTime: rec?.arrivalTime || undefined,
+                justification: rec?.justification || undefined
+            };
+        });
+
+        const toastId = toast.loading("Guardando cambios y continuando...");
+        try {
+            const res = await saveAttendanceBatch(attCourseId, attDate, recordsArray);
+            if (res.success) {
+                toast.success("Asistencia guardada correctamente", { id: toastId });
+                
+                const { type, value } = pendingAction;
+                setInitialAttRecords(attRecords);
+                
+                if (type === "DATE") {
+                    setAttDate(value);
+                } else if (type === "COURSE") {
+                    setAttCourseId(value);
+                } else if (type === "TAB") {
+                    setActiveTab(value as any);
+                } else if (type === "GROUP") {
+                    setSelectedGroupId(value);
+                }
+                
+                if (type !== "GROUP" && selectedGroup) {
+                    await loadHistory(selectedGroup.id);
+                }
+            } else {
+                toast.error("Error al guardar asistencia: " + res.error, { id: toastId });
+            }
+        } catch (e: any) {
+            toast.error("Error de conexión al guardar cambios", { id: toastId });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleDateChangeAttempt = (newVal: string) => {
+        if (hasPendingChanges()) {
+            setPendingAction({ type: "DATE", value: newVal });
+        } else {
+            setAttDate(newVal);
+        }
+    };
+
+    const handleCourseChangeAttempt = (newVal: string) => {
+        if (hasPendingChanges()) {
+            setPendingAction({ type: "COURSE", value: newVal });
+        } else {
+            setAttCourseId(newVal);
+        }
+    };
+
+    const handleTabChangeAttempt = (newVal: string) => {
+        if (hasPendingChanges()) {
+            setPendingAction({ type: "TAB", value: newVal });
+        } else {
+            setActiveTab(newVal as any);
+        }
+    };
+
+    const handleGroupChangeAttempt = (newVal: string) => {
+        if (hasPendingChanges()) {
+            setPendingAction({ type: "GROUP", value: newVal });
+        } else {
+            setSelectedGroupId(newVal);
+        }
+    };
+
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasPendingChanges()) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [attRecords, initialAttRecords]);
+
     // Analytics Modal State
     const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
     const [fullAnalyticsData, setFullAnalyticsData] = useState<any>(null);
@@ -156,6 +299,8 @@ export function GroupManager({ groups }: GroupManagerProps) {
             setRemarksHistory([]);
             setFullAnalyticsData(null);
             setShowAnalyticsModal(false);
+            setDetailStudent(null);
+            setDetailOpen(false);
 
             // Load fresh history for the new group
             loadHistory(selectedGroup.id);
@@ -206,6 +351,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
         });
         
         setAttRecords(newRecords);
+        setInitialAttRecords(newRecords);
     }, [attDate, attCourseId, attendanceHistory]);
 const handleOpenAnalytics = async () => {
         if (!selectedGroup) return;
@@ -406,7 +552,7 @@ const handleOpenAnalytics = async () => {
                         <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                             <Users className="w-5 h-5 text-primary" />
                         </div>
-                        <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+                        <Select value={selectedGroupId} onValueChange={handleGroupChangeAttempt}>
                             <SelectTrigger className="w-full md:w-[320px] h-10 text-base font-bold border border-primary/20 bg-background shadow-sm rounded-lg">
                                 <SelectValue placeholder="Selecciona un Grupo" />
                             </SelectTrigger>
@@ -448,7 +594,7 @@ const handleOpenAnalytics = async () => {
             {/* MAIN WORKSPACE */}
             <Card className="flex-1 w-full min-w-0 border-0 shadow-lg rounded-2xl overflow-hidden">
                 {selectedGroup ? (
-                    <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)} className="flex-1 flex flex-col h-full min-h-[600px]">
+                    <Tabs value={activeTab} onValueChange={handleTabChangeAttempt} className="flex-1 flex flex-col h-full min-h-[600px]">
                         <div className="p-4 border-b bg-muted/10">
                             <TabsList className="flex w-full overflow-x-auto justify-start md:justify-center h-auto p-1 bg-muted/50 rounded-xl gap-1 scrollbar-none">
                                 {/* ── ESTUDIANTES ── */}
@@ -792,7 +938,7 @@ const handleOpenAnalytics = async () => {
                                         <>
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Fecha</Label>
-                                                <Input type="date" className="h-9 rounded-lg border-muted-foreground/20 font-semibold text-sm w-[150px]" value={attDate} onChange={e => setAttDate(e.target.value)} />
+                                                <Input type="date" className="h-9 rounded-lg border-muted-foreground/20 font-semibold text-sm w-[150px]" value={attDate} onChange={e => handleDateChangeAttempt(e.target.value)} />
                                             </div>
                                             <div className="w-px h-6 bg-border/60 shrink-0" />
                                         </>
@@ -801,7 +947,7 @@ const handleOpenAnalytics = async () => {
                                     {/* Course */}
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                         <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Materia</Label>
-                                        <Select value={attCourseId} onValueChange={setAttCourseId}>
+                                        <Select value={attCourseId} onValueChange={handleCourseChangeAttempt}>
                                             <SelectTrigger className="h-9 rounded-lg border-muted-foreground/20 font-semibold bg-background text-sm min-w-[180px] max-w-[280px]">
                                                 <SelectValue placeholder="Seleccionar Materia" />
                                             </SelectTrigger>
@@ -875,72 +1021,114 @@ const handleOpenAnalytics = async () => {
                                                 const studentHistory = attendanceHistory.filter(a => a.userId === s.id);
                                                 const absentCount = studentHistory.filter(a => a.status === 'ABSENT').length;
                                                 const lateCount = studentHistory.filter(a => a.status === 'LATE').length;
-
-                                                return (
-                                                    <div key={s.id} className={`p-4 rounded-xl border-2 transition-all duration-200 ${isAbsent ? 'bg-red-100 border-red-500 shadow-md dark:bg-red-950/40' : isLate ? 'bg-amber-100 border-amber-500 shadow-md dark:bg-amber-950/40' : 'bg-background hover:border-primary/50 shadow-sm border-transparent'}`}>
-                                                        <div className="flex items-start justify-between mb-3">
-                                                            <div className={`font-bold text-sm line-clamp-1 ${isAbsent ? 'text-red-900 dark:text-red-100' : isLate ? 'text-amber-900 dark:text-amber-100' : ''}`}>{formatName(s.name, s.profile)}</div>
-                                                            {(absentCount > 0 || lateCount > 0) && (
-                                                                <div className="flex gap-1 ml-2 shrink-0">
-                                                                    {absentCount > 0 && (
-                                                                        <Badge variant="outline" className="text-[10px] bg-red-100 text-red-700 border-red-300 dark:bg-red-900/50 dark:text-red-400 dark:border-red-800 whitespace-nowrap">
-                                                                            {absentCount} F
-                                                                        </Badge>
-                                                                    )}
-                                                                    {lateCount > 0 && (
-                                                                        <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/50 dark:text-amber-400 dark:border-amber-800 whitespace-nowrap">
-                                                                            {lateCount} R
-                                                                        </Badge>
-                                                                    )}
+                                                 return (
+                                                    <div 
+                                                        key={s.id} 
+                                                        className={`p-3.5 rounded-xl border transition-all duration-200 shadow-sm ${
+                                                            isAbsent 
+                                                                ? 'bg-red-50/70 border-red-300 dark:bg-red-950/20 dark:border-red-900/60' 
+                                                                : isLate 
+                                                                    ? 'bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900/60' 
+                                                                    : 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-700/50 dark:hover:border-emerald-500/80'
+                                                        }`}
+                                                    >
+                                                        {/* Header: Name, ID, Historial */}
+                                                        <div className="flex items-start justify-between gap-2 mb-2.5">
+                                                            <div className="min-w-0">
+                                                                <div 
+                                                                    className={`font-semibold text-sm break-words ${
+                                                                        isAbsent 
+                                                                            ? 'text-red-900 dark:text-red-200' 
+                                                                            : isLate 
+                                                                                ? 'text-amber-900 dark:text-amber-200' 
+                                                                                : 'text-foreground dark:text-emerald-200'
+                                                                    }`}
+                                                                    title={formatName(s.name, s.profile)}
+                                                                >
+                                                                    {formatName(s.name, s.profile)}
                                                                 </div>
-                                                            )}
+                                                                <div className="text-[10px] text-muted-foreground/80 dark:text-emerald-400/60 font-mono mt-0.5">
+                                                                    ID: {s.profile?.identificacion || s.id.substring(0, 8)}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* History button / indicator */}
+                                                            <div className="flex flex-col items-end gap-1 shrink-0">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-6 px-1.5 text-[10px] font-bold text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/40 rounded-md flex items-center gap-1"
+                                                                    onClick={() => handleShowStudentDetails(s)}
+                                                                    title="Ver historial de inasistencias"
+                                                                >
+                                                                    <Eye className="w-3 h-3" />
+                                                                    <span>Historial</span>
+                                                                </Button>
+                                                                {(absentCount > 0 || lateCount > 0) && (
+                                                                    <div className="flex gap-1">
+                                                                        {absentCount > 0 && (
+                                                                            <Badge className="h-4 text-[8px] px-1 bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 hover:bg-red-100 font-bold shadow-none">
+                                                                                Faltas: {absentCount}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {lateCount > 0 && (
+                                                                            <Badge className="h-4 text-[8px] px-1 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 hover:bg-amber-100 font-bold shadow-none">
+                                                                                Tardes: {lateCount}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        
-                                                        {/* Acciones Rápidas */}
-                                                        <div className="flex gap-2 mb-3">
+
+                                                        {/* Quick Actions Row */}
+                                                        <div className="flex items-center gap-2">
                                                             <Button 
                                                                 size="sm" 
                                                                 variant={isAbsent ? "default" : "outline"}
-                                                                className={`flex-1 h-9 font-bold text-xs ${isAbsent ? 'bg-red-600 hover:bg-red-700 text-white shadow-inner ring-2 ring-red-300 ring-offset-1' : 'text-muted-foreground hover:text-red-600 hover:bg-red-50 hover:border-red-200 border-dashed'}`}
+                                                                className={`flex-1 h-8 font-bold text-xs rounded-lg transition-all ${
+                                                                    isAbsent 
+                                                                        ? 'bg-red-600 hover:bg-red-700 text-white shadow-sm' 
+                                                                        : 'text-muted-foreground hover:text-red-600 hover:bg-red-50/50 hover:border-red-200 border-border/80'
+                                                                }`}
                                                                 onClick={() => setStudentAttendance(s.id, isAbsent ? "PRESENT" : "ABSENT")}
                                                             >
                                                                 <UserX className="w-3.5 h-3.5 mr-1" />
-                                                                {isAbsent ? "Falta" : "Falta"}
+                                                                Falta
                                                             </Button>
                                                             <Button 
                                                                 size="sm" 
                                                                 variant={isLate ? "default" : "outline"}
-                                                                className={`flex-1 h-9 font-bold text-xs ${isLate ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-inner ring-2 ring-amber-300 ring-offset-1' : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200 border-dashed'}`}
+                                                                className={`flex-1 h-8 font-bold text-xs rounded-lg transition-all ${
+                                                                    isLate 
+                                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' 
+                                                                        : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-50/50 hover:border-amber-200 border-border/80'
+                                                                }`}
                                                                 onClick={() => setStudentAttendance(s.id, isLate ? "PRESENT" : "LATE")}
                                                             >
                                                                 <Clock className="w-3.5 h-3.5 mr-1" />
-                                                                {isLate ? "Tarde" : "Tarde"}
+                                                                Tarde
                                                             </Button>
                                                         </div>
 
-                                                        {/* Inputs Condicionales */}
+                                                        {/* Time input nested if Late */}
                                                         <AnimatePresence>
                                                             {isLate && (
-                                                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="pt-2">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Label className="text-xs font-bold text-amber-900 dark:text-amber-100 whitespace-nowrap">Hora Ingreso:</Label>
+                                                                <motion.div 
+                                                                    initial={{ opacity: 0, height: 0, marginTop: 0 }} 
+                                                                    animate={{ opacity: 1, height: "auto", marginTop: 8 }} 
+                                                                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                    className="overflow-hidden"
+                                                                >
+                                                                    <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-amber-100/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
+                                                                        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 pl-1">Hora Ingreso:</span>
                                                                         <Input 
                                                                             type="time" 
-                                                                            className="h-8 text-xs border-amber-400 bg-white dark:bg-black font-bold text-amber-900 dark:text-amber-100" 
+                                                                            className="h-6 w-20 text-[10px] py-0 px-1 border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black font-bold text-amber-900 dark:text-amber-200" 
                                                                             value={rec?.arrivalTime || ""}
                                                                             onChange={e => updateLateTime(s.id, e.target.value)}
                                                                         />
                                                                     </div>
-                                                                </motion.div>
-                                                            )}
-                                                            {isAbsent && (
-                                                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="pt-2">
-                                                                    <Input 
-                                                                        placeholder="Justificación / Motivo (Opcional)" 
-                                                                        className="h-8 text-xs border-red-400 bg-white dark:bg-black placeholder:text-red-300/70 font-semibold text-red-900 dark:text-red-100" 
-                                                                        value={rec?.justification || ""}
-                                                                        onChange={e => updateJustification(s.id, e.target.value)}
-                                                                    />
                                                                 </motion.div>
                                                             )}
                                                         </AnimatePresence>
@@ -1434,6 +1622,119 @@ const handleOpenAnalytics = async () => {
 
             
 
+            {/* Student Attendance Details Dialog */}
+            <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+                <DialogContent className="max-w-md rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                            <Clock className="h-5 w-5 text-primary" />
+                            Historial de Asistencia
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Detalle de inasistencias y llegadas tarde de <strong>{detailStudent ? formatName(detailStudent.name, detailStudent.profile) : ""}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-2">
+                        {(() => {
+                            if (!detailStudent) return null;
+                            const studentHistory = attendanceHistory.filter(a => a.userId === detailStudent.id && a.status !== 'PRESENT');
+                            const absencesList = studentHistory.filter(a => a.status === 'ABSENT');
+                            const latesList = studentHistory.filter(a => a.status === 'LATE');
+
+                            const renderRecordCard = (att: any) => {
+                                const dateLabel = formatCalendarDate(att.date, "eeee, d 'de' MMMM 'de' yyyy");
+                                const isAbsent = att.status === 'ABSENT';
+                                const isJustified = !!(att.justification?.trim() || att.justificationUrl);
+                                return (
+                                    <div key={att.id} className="p-3 rounded-xl border border-border bg-card/50 flex flex-col gap-1.5 text-left">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs font-bold text-foreground capitalize">{dateLabel}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <Badge className={isJustified ? "bg-emerald-500 hover:bg-emerald-500 text-white text-[10px]" : "bg-red-500 hover:bg-red-500 text-white text-[10px]"}>
+                                                    {isJustified ? "Justificado" : "No Justificado"}
+                                                </Badge>
+                                                <Badge variant="outline" className={isAbsent ? "bg-red-50 text-red-700 border-red-200 text-[10px]" : "bg-amber-50 text-amber-700 border-amber-200 text-[10px]"}>
+                                                    {isAbsent ? "Falta" : "Tarde"}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        <div className="text-[11px] text-muted-foreground">
+                                            <span className="font-semibold text-primary">Materia:</span> {att.course?.title || "N/A"}
+                                        </div>
+                                        {att.status === 'LATE' && att.arrivalTime && (
+                                            <div className="text-[11px] text-muted-foreground">
+                                                <span className="font-semibold text-amber-600">Hora Ingreso:</span> {format(new Date(att.arrivalTime), "HH:mm")}
+                                            </div>
+                                        )}
+                                        <div className="text-[11px] text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-muted/50 mt-1 flex flex-col gap-1.5">
+                                            <div>
+                                                <span className="font-bold text-foreground">Justificación:</span>{" "}
+                                                <span className="italic">{att.justification || "Sin justificación registrada."}</span>
+                                            </div>
+                                            {att.justificationUrl && (
+                                                <div className="flex items-center gap-1 mt-0.5 border-t border-muted/30 pt-1.5">
+                                                    <span className="font-bold text-foreground">Soporte:</span>
+                                                    <a 
+                                                        href={att.justificationUrl} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        className="text-primary hover:underline font-semibold flex items-center gap-0.5 ml-1"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" /> Ver documento soporte
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            };
+
+                            return (
+                                <Tabs defaultValue="faltas" className="w-full">
+                                    <TabsList className="grid w-full grid-cols-2 mb-4 bg-muted/60 p-1 rounded-xl">
+                                        <TabsTrigger value="faltas" className="rounded-lg text-xs font-bold py-1.5 data-[state=active]:bg-background">
+                                            Faltas ({absencesList.length})
+                                        </TabsTrigger>
+                                        <TabsTrigger value="tardes" className="rounded-lg text-xs font-bold py-1.5 data-[state=active]:bg-background">
+                                            Llegadas Tarde ({latesList.length})
+                                        </TabsTrigger>
+                                    </TabsList>
+                                    
+                                    <TabsContent value="faltas" className="outline-none m-0">
+                                        <div className="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1.5 custom-scrollbar">
+                                            {absencesList.length === 0 ? (
+                                                <div className="text-center py-8 text-sm text-muted-foreground italic bg-muted/20 rounded-xl border border-dashed border-muted">
+                                                    No hay inasistencias registradas.
+                                                </div>
+                                            ) : (
+                                                absencesList.map(renderRecordCard)
+                                            )}
+                                        </div>
+                                    </TabsContent>
+                                    
+                                    <TabsContent value="tardes" className="outline-none m-0">
+                                        <div className="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1.5 custom-scrollbar">
+                                            {latesList.length === 0 ? (
+                                                <div className="text-center py-8 text-sm text-muted-foreground italic bg-muted/20 rounded-xl border border-dashed border-muted">
+                                                    No hay llegadas tarde registradas.
+                                                </div>
+                                            ) : (
+                                                latesList.map(renderRecordCard)
+                                            )}
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
+                            );
+                        })()}
+                    </div>
+
+                    <DialogFooter>
+                        <Button onClick={() => setDetailOpen(false)} className="w-full sm:w-auto">Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Student Analytics Dialog */}
             <Dialog open={!!selectedStudentForAnalytics} onOpenChange={(open) => !open && setSelectedStudentForAnalytics(null)}>
                 <DialogContent className="!max-w-[100vw] sm:!max-w-[100vw] w-screen h-screen m-0 p-6 !rounded-none overflow-y-auto border-none bg-background flex flex-col">
@@ -1456,6 +1757,36 @@ const handleOpenAnalytics = async () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Unsaved Changes Warning Dialog */}
+            <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Descartar cambios sin guardar?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tienes cambios en el registro de asistencia de la clase actual que no han sido guardados.
+                            Si continúas, estos cambios se perderán definitivamente.
+                            <br/><br/>
+                            ¿Deseas descartar los cambios y continuar?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0 sm:space-x-2">
+                        <AlertDialogCancel onClick={() => setPendingAction(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmPendingAction}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+                        >
+                            Descartar y Continuar
+                        </AlertDialogAction>
+                        <AlertDialogAction
+                            onClick={saveAndConfirmPendingAction}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                        >
+                            Guardar y Continuar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Reset Password Confirmation Dialog */}
             <AlertDialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
