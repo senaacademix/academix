@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { BookOpen, CheckCircle2, AlertCircle, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import {
     getTeacherQualificationsAction,
     updateTeacherQualificationsAction,
@@ -143,6 +145,12 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
         ? qualPrograms.filter(p => p.id === programId) 
         : qualPrograms;
 
+    // Calculate global stats
+    const allCourses = filteredQualPrograms.flatMap(p => p.periods.flatMap((per: any) => per.courses || []));
+    const totalCoursesCount = allCourses.length;
+    const selectedCoursesCount = allCourses.filter((c: any) => selectedQualCourses.includes(c.id)).length;
+    const globalPercentage = totalCoursesCount > 0 ? Math.round((selectedCoursesCount / totalCoursesCount) * 100) : 0;
+
     return (
         <div className="space-y-6">
             {/* Status alerts */}
@@ -248,13 +256,26 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
 
             <Card className="border-none shadow-sm bg-background">
                 <CardHeader className="bg-muted/10 pb-4">
-                    <CardTitle className="text-lg font-bold flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-primary" />
-                        Asignaturas Disponibles en tus Programas
-                    </CardTitle>
-                    <CardDescription>
-                        Selecciona de la lista a continuación las materias que estás en capacidad de ejecutar.
-                    </CardDescription>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                <BookOpen className="h-5 w-5 text-primary" />
+                                Asignaturas Disponibles en tus Programas
+                            </CardTitle>
+                            <CardDescription>
+                                Selecciona de la lista a continuación las materias que estás en capacidad de ejecutar.
+                            </CardDescription>
+                        </div>
+                        {totalCoursesCount > 0 && (
+                            <div className="flex flex-col items-end gap-1.5 shrink-0 bg-background/50 backdrop-blur-sm p-3 rounded-xl border border-border/40 min-w-[220px]">
+                                <div className="flex items-center justify-between w-full text-xs font-semibold">
+                                    <span className="text-muted-foreground">Progreso de Selección:</span>
+                                    <span className="text-primary font-bold">{selectedCoursesCount} de {totalCoursesCount} ({globalPercentage}%)</span>
+                                </div>
+                                <Progress value={globalPercentage} className="h-2 w-full bg-muted" />
+                            </div>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6">
                     {filteredQualPrograms.length === 0 ? (
@@ -263,57 +284,79 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {filteredQualPrograms.map(program => (
-                                <div key={program.id} className="space-y-3 p-4 bg-muted/5 rounded-xl border border-border/30">
-                                    <h4 className="font-bold text-sm text-primary uppercase tracking-wider border-b border-border/30 pb-2">{program.name}</h4>
-                                    <div className="space-y-4">
-                                        {program.periods.map((period: any) => (
-                                            <div key={period.id} className="space-y-2">
-                                                <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/50 p-1.5 rounded">{period.name}</h5>
-                                                {period.courses.length === 0 ? (
-                                                    <div className="text-[10px] text-muted-foreground/60 italic pl-2">No hay materias registradas en este periodo.</div>
-                                                ) : (
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-2">
-                                                        {period.courses.map((course: any) => {
-                                                            const isChecked = selectedQualCourses.includes(course.id);
-                                                            return (
-                                                                <div 
-                                                                    key={course.id} 
-                                                                    className={`flex items-center space-x-2.5 p-2.5 rounded-lg border transition-colors ${
-                                                                        isChecked 
-                                                                            ? "bg-primary/5 border-primary/20" 
-                                                                            : "bg-background border-border hover:bg-muted/30"
-                                                                    }`}
-                                                                >
-                                                                    <Checkbox
-                                                                        id={`qual-course-${course.id}`}
-                                                                        checked={isChecked}
-                                                                        disabled={locked || isAdminMode}
-                                                                        onCheckedChange={(checked) => {
-                                                                            if (checked) {
-                                                                                setSelectedQualCourses(prev => [...prev, course.id]);
-                                                                            } else {
-                                                                                setSelectedQualCourses(prev => prev.filter(id => id !== course.id));
-                                                                            }
-                                                                        }}
-                                                                        className="h-4 w-4 rounded-sm border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                                                                    />
-                                                                    <Label 
-                                                                        htmlFor={`qual-course-${course.id}`} 
-                                                                        className={`text-xs font-semibold cursor-pointer select-none transition-colors ${locked || isAdminMode ? "opacity-70 cursor-not-allowed" : "hover:text-foreground"}`}
-                                                                    >
-                                                                        {course.title}
-                                                                    </Label>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
+                            {filteredQualPrograms.map(program => {
+                                const programCourses = program.periods.flatMap((p: any) => p.courses || []);
+                                const totalProgramCourses = programCourses.length;
+                                const selectedProgramCourses = programCourses.filter((c: any) => selectedQualCourses.includes(c.id)).length;
+                                const programPercentage = totalProgramCourses > 0 ? Math.round((selectedProgramCourses / totalProgramCourses) * 100) : 0;
+
+                                return (
+                                    <div key={program.id} className="space-y-4 p-4 bg-muted/5 rounded-xl border border-border/30">
+                                        <div className="space-y-2 border-b border-border/30 pb-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                                <h4 className="font-bold text-sm text-primary uppercase tracking-wider">{program.name}</h4>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground font-semibold">
+                                                        {selectedProgramCourses} de {totalProgramCourses} materias
+                                                    </span>
+                                                    <Badge variant={programPercentage === 100 ? "success" : "secondary"} className="font-bold">
+                                                        {programPercentage}%
+                                                    </Badge>
+                                                </div>
                                             </div>
-                                        ))}
+                                            {totalProgramCourses > 0 && (
+                                                <Progress value={programPercentage} className="h-1.5 bg-muted" />
+                                            )}
+                                        </div>
+                                        <div className="space-y-4">
+                                            {program.periods.map((period: any) => (
+                                                <div key={period.id} className="space-y-2">
+                                                    <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/50 p-1.5 rounded">{period.name}</h5>
+                                                    {period.courses.length === 0 ? (
+                                                        <div className="text-[10px] text-muted-foreground/60 italic pl-2">No hay materias registradas en este periodo.</div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-2">
+                                                            {period.courses.map((course: any) => {
+                                                                const isChecked = selectedQualCourses.includes(course.id);
+                                                                return (
+                                                                    <div 
+                                                                        key={course.id} 
+                                                                        className={`flex items-center space-x-2.5 p-2.5 rounded-lg border transition-colors ${
+                                                                            isChecked 
+                                                                                ? "bg-primary/5 border-primary/20" 
+                                                                                : "bg-background border-border hover:bg-muted/30"
+                                                                        }`}
+                                                                    >
+                                                                        <Checkbox
+                                                                            id={`qual-course-${course.id}`}
+                                                                            checked={isChecked}
+                                                                            disabled={locked || isAdminMode}
+                                                                            onCheckedChange={(checked) => {
+                                                                                if (checked) {
+                                                                                    setSelectedQualCourses(prev => [...prev, course.id]);
+                                                                                } else {
+                                                                                    setSelectedQualCourses(prev => prev.filter(id => id !== course.id));
+                                                                                }
+                                                                            }}
+                                                                            className="h-4 w-4 rounded-sm border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                                                        />
+                                                                        <Label 
+                                                                            htmlFor={`qual-course-${course.id}`} 
+                                                                            className={`text-xs font-semibold cursor-pointer select-none transition-colors ${locked || isAdminMode ? "opacity-70 cursor-not-allowed" : "hover:text-foreground"}`}
+                                                                        >
+                                                                            {course.title}
+                                                                        </Label>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </CardContent>

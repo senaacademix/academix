@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatName, cn } from "@/lib/utils";
+import { fromUTC } from "@/lib/dateUtils";
 import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation, deleteJustificationAction } from "../actions/studentActions";
 import { getStudentGrades, submitStudentSubmissionLink } from "@/features/teacher/actions/gradeActions";
 import { authClient } from "@/lib/auth-client";
@@ -67,12 +69,13 @@ interface StudentRecordsProps {
 }
 
 export function StudentRecords({ studentId, hideTables = false, hideDocumentation = false }: StudentRecordsProps = {}) {
-    const [records, setRecords] = useState<{ attendances: any[], remarks: any[] } | null>(null);
+    const [records, setRecords] = useState<{ attendances: any[], remarks: any[], groupDates?: { startDate: Date | null, endDate: Date | null } | null, scheduleDates?: { startDate: Date | null, endDate: Date | null } | null } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [courses, setCourses] = useState<any[]>([]);
     const [gradesLoading, setGradesLoading] = useState(true);
     const [docCourses, setDocCourses] = useState<any[]>([]);
     const [docLoading, setDocLoading] = useState(true);
+    const [selectedAttendanceCourse, setSelectedAttendanceCourse] = useState<string>("all");
 
     // Submission link dialog
     const [submissionDialog, setSubmissionDialog] = useState<{ open: boolean; activityId: string; activityTitle: string; currentLink: string } | null>(null);
@@ -766,13 +769,219 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                 </div>
                             ) : (() => {
                                 const byCourse: Record<string, { course: any; entries: any[] }> = {};
+                                for (const c of courses) {
+                                    byCourse[c.id] = { course: c, entries: [] };
+                                }
                                 for (const att of attendances) {
                                     if (!byCourse[att.course.id]) byCourse[att.course.id] = { course: att.course, entries: [] };
                                     byCourse[att.course.id].entries.push(att);
                                 }
-                                return Object.values(byCourse).map(({ course, entries }) => {
-                                    const unjustified = entries.filter(a => !a.justification).length;
-                                    return (
+
+                                const courseMetrics = Object.values(byCourse).map(({ course, entries }) => {
+                                    let totalClassDays = entries.length;
+                                    if (records?.scheduleDates?.startDate && records.scheduleDates.endDate && course.schedules && course.schedules.length > 0) {
+                                        const daysMap: Record<string, number> = {
+                                            SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6
+                                        };
+                                        const scheduledDays = course.schedules.map((s: any) => daysMap[s.dayOfWeek]).filter((d: number | undefined) => d !== undefined);
+                                        
+                                        if (scheduledDays.length > 0) {
+                                            let daysCount = 0;
+                                            const current = fromUTC(records.scheduleDates.startDate);
+                                            current.setHours(0,0,0,0);
+                                            const end = fromUTC(records.scheduleDates.endDate);
+                                            end.setHours(0,0,0,0);
+                                            
+                                            const effectiveEnd = end;
+                                            
+                                            while (current <= effectiveEnd) {
+                                                if (scheduledDays.includes(current.getDay())) {
+                                                    daysCount++;
+                                                }
+                                                current.setDate(current.getDate() + 1);
+                                            }
+                                            totalClassDays = daysCount > 0 ? daysCount : entries.length;
+                                        }
+                                    }
+                                    const absentCount = entries.filter(e => e.status === "ABSENT").length;
+                                    const lateCount = entries.filter(e => e.status === "LATE").length;
+                                    
+                                    let dailyHours = 6;
+                                    if (course.schedules && course.schedules.length > 0) {
+                                        const sch = course.schedules[0];
+                                        if (sch.startTime && sch.endTime) {
+                                            const [sh, sm] = sch.startTime.split(":").map(Number);
+                                            const [eh, em] = sch.endTime.split(":").map(Number);
+                                            dailyHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
+                                        }
+                                    }
+                                    const totalScheduledHours = totalClassDays * dailyHours;
+                                    
+                                    let absentHours = 0;
+                                    let lateHours = 0;
+                                    
+                                    entries.forEach(rec => {
+                                        if (rec.status === "ABSENT") {
+                                            absentHours += dailyHours;
+                                        } else if (rec.status === "LATE" && rec.arrivalTime && course.schedules && course.schedules.length > 0) {
+                                            const sch = course.schedules.find((s: any) => s.dayOfWeek === new Date(rec.date).getUTCDay()) || course.schedules[0];
+                                            if (sch && sch.startTime) {
+                                                const [sh, sm] = sch.startTime.split(":").map(Number);
+                                                let ah = 0, am = 0;
+                                                try {
+                                                    const dateObj = new Date(rec.arrivalTime);
+                                                    if (!isNaN(dateObj.getTime())) {
+                                                        ah = parseInt(dateObj.toISOString().substring(11, 13));
+                                                        am = parseInt(dateObj.toISOString().substring(14, 16));
+                                                    }
+                                                } catch(e) {}
+                                                const arrMin = ah * 60 + am;
+                                                const schedMin = sh * 60 + sm;
+                                                if (arrMin > schedMin) {
+                                                    lateHours += (arrMin - schedMin) / 60;
+                                                }
+                                            }
+                                        }
+                                    });
+
+                                    const absenceRate = totalClassDays > 0 ? Math.max(0, Math.min(100, (absentCount / totalClassDays) * 100)) : 0;
+                                    const lateRate = totalClassDays > 0 ? Math.max(0, Math.min(100, (lateCount / totalClassDays) * 100)) : 0;
+                                    
+                                    const totalLostHours = absentHours + lateHours;
+                                    const attendedHours = Math.max(0, totalScheduledHours - totalLostHours);
+                                    const attendanceHoursRate = totalScheduledHours > 0 ? Math.max(0, Math.min(100, (attendedHours / totalScheduledHours) * 100)) : 100;
+                                    
+                                    return {
+                                        course,
+                                        totalClassDays,
+                                        totalScheduledHours,
+                                        absentCount,
+                                        lateCount,
+                                        absentHours,
+                                        lateHours,
+                                        absenceRate,
+                                        lateRate,
+                                        attendedHours,
+                                        attendanceHoursRate
+                                    };
+                                });
+
+                                const filteredMetrics = selectedAttendanceCourse === "all" ? courseMetrics : courseMetrics.filter(m => m.course.id === selectedAttendanceCourse);
+                                const filteredCourses = selectedAttendanceCourse === "all" ? Object.values(byCourse) : Object.values(byCourse).filter(c => c.course.id === selectedAttendanceCourse);
+
+                                return (
+                                    <div className="space-y-8">
+                                        <div className="flex justify-between items-center bg-card border rounded-2xl p-4 shadow-sm">
+                                            <div className="flex items-center gap-2">
+                                                <BarChart3 className="w-5 h-5 text-primary" />
+                                                <h3 className="text-sm font-bold">Filtro de Materias</h3>
+                                            </div>
+                                            <Select value={selectedAttendanceCourse} onValueChange={setSelectedAttendanceCourse}>
+                                                <SelectTrigger className="w-[280px]">
+                                                    <SelectValue placeholder="Seleccione una materia..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all" className="font-bold">Todas las materias</SelectItem>
+                                                    {courseMetrics.map(m => (
+                                                        <SelectItem key={m.course.id} value={m.course.id}>
+                                                            {m.course.title}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {/* Chart Section */}
+                                        <Tabs defaultValue="faltas" className="w-full">
+                                            <TabsList className="grid w-full sm:w-[450px] grid-cols-3 mb-6 mx-auto">
+                                                <TabsTrigger value="faltas">Faltas</TabsTrigger>
+                                                <TabsTrigger value="tardanzas">Tardanzas</TabsTrigger>
+                                                <TabsTrigger value="horas">Carga Horaria</TabsTrigger>
+                                            </TabsList>
+                                            
+                                            <TabsContent value="faltas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                <div>
+                                                    <h3 className="text-base font-black text-foreground">Registro de Inasistencias (Faltas) por Materia</h3>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">Total de días no asistidos en cada materia sobre los días registrados.</p>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    {filteredMetrics.map(m => (
+                                                        <div key={m.course.id} className="space-y-1.5">
+                                                            <div className="flex items-center justify-between text-xs font-bold">
+                                                                <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
+                                                                <span className="text-red-600 shrink-0 font-extrabold">
+                                                                    {m.absentCount} / {m.totalClassDays} días ({m.absenceRate.toFixed(1)}%)
+                                                                </span>
+                                                            </div>
+                                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                <div className="h-full bg-red-500 rounded-full" style={{ width: `${m.absenceRate}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </TabsContent>
+                                            
+                                            <TabsContent value="tardanzas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                <div>
+                                                    <h3 className="text-base font-black text-foreground">Registro de Llegadas Tarde por Materia</h3>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días con ingreso tarde en cada materia.</p>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    {filteredMetrics.map(m => (
+                                                        <div key={m.course.id} className="space-y-1.5">
+                                                            <div className="flex items-center justify-between text-xs font-bold">
+                                                                <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
+                                                                <span className="text-amber-600 shrink-0 font-extrabold">
+                                                                    {m.lateCount} / {m.totalClassDays} días ({m.lateRate.toFixed(1)}%)
+                                                                </span>
+                                                            </div>
+                                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${m.lateRate}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </TabsContent>
+
+                                            <TabsContent value="horas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                <div>
+                                                    <h3 className="text-base font-black text-foreground">Carga Horaria y Asistencia Efectiva</h3>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">Horas asistidas vs perdidas por materia.</p>
+                                                </div>
+                                                <div className="space-y-5">
+                                                    {filteredMetrics.map(m => {
+                                                        const lostHours = m.absentHours + m.lateHours;
+                                                        return (
+                                                            <div key={m.course.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
+                                                                <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
+                                                                    <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{m.course.title}</span>
+                                                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
+                                                                        <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {m.attendedHours.toFixed(1)} hs</span>
+                                                                        <span className="text-red-500">Perdidas: {lostHours.toFixed(1)} hs</span>
+                                                                        <span className="text-blue-600 font-extrabold">Efectiva: {m.attendanceHoursRate.toFixed(1)}%</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                                                                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${m.attendanceHoursRate}%` }} title={`Horas Asistidas: ${m.attendedHours.toFixed(1)} hs`} />
+                                                                    {m.absentHours > 0 && (
+                                                                        <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${(m.absentHours / m.totalScheduledHours) * 100}%` }} title={`Horas Faltas: ${m.absentHours.toFixed(1)} hs`} />
+                                                                    )}
+                                                                    {m.lateHours > 0 && (
+                                                                        <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${(m.lateHours / m.totalScheduledHours) * 100}%` }} title={`Horas Tardes: ${m.lateHours.toFixed(1)} hs`} />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </TabsContent>
+                                        </Tabs>
+
+                                        {/* Original Table Section */}
+                                        <div className="space-y-6">
+                                            {filteredCourses.map(({ course, entries }) => {
+                                                const unjustified = entries.filter(a => !a.justification).length;
+                                                return (
                                         <Card key={course.id} className="overflow-hidden border-border/50 shadow-sm">
                                             <CardHeader className="bg-muted/10 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5">
                                                 <div className="flex-1 min-w-0">
@@ -903,7 +1112,10 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                             </CardContent>
                                         </Card>
                                     );
-                                });
+                                })}
+                                        </div>
+                                    </div>
+                                );
                             })()}
                         </motion.div>
                     </TabsContent>

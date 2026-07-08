@@ -28,6 +28,8 @@ import {
 import { Users, GraduationCap, UserX, UserCheck, BookOpen, AlertTriangle, CheckCircle2, Clock, Calendar } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatName } from "@/lib/utils";
 
 interface GroupAnalyticsPanelProps {
     open?: boolean;
@@ -49,7 +51,7 @@ interface GroupAnalyticsPanelProps {
         attendances: { status: string; date: Date }[];
         remarks: { type: string; date: Date }[];
         coursesStats: { title: string; averageGrade: number; totalGrades: number }[];
-        coursesList?: { id: string; title: string }[];
+        coursesList?: { id: string; title: string; teacherName?: string }[];
         studentMetrics?: {
             id: string;
             name: string;
@@ -57,9 +59,9 @@ interface GroupAnalyticsPanelProps {
             banned: boolean;
             gradesAvg: number;
             courseGrades?: Record<string, number>;
-            courseAttendances?: Record<string, { present: number; absent: number; late: number }>;
+            courseAttendances?: Record<string, { present: number; absent: number; late: number; absentHours?: number; lateHours?: number; totalClasses?: number }>;
             courseRemarks?: Record<string, { attention: number; commendation: number }>;
-            attendances: { present: number; absent: number; late: number };
+            attendances: { present: number; absent: number; late: number; absentHours?: number; lateHours?: number };
             remarks: { attention: number; commendation: number };
         }[];
     } | null;
@@ -95,6 +97,122 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
             setSelectedCourseId(analyticsData.coursesList[0].id);
         }
     }, [analyticsData]);
+
+    const groupDailyHours = useMemo(() => {
+        if (!analyticsData) return 0;
+        const gStart = analyticsData.startTime || "08:00";
+        const gEnd = analyticsData.endTime || "12:00";
+        const [gsh, gsm] = gStart.split(":").map(Number);
+        const [geh, gem] = gEnd.split(":").map(Number);
+        return Math.max(0, (geh * 60 + gem - (gsh * 60 + gsm)) / 60);
+    }, [analyticsData]);
+
+    const totalScheduledHours = useMemo(() => {
+        if (!analyticsData) return 0;
+        return analyticsData.totalCourseClasses * groupDailyHours;
+    }, [analyticsData, groupDailyHours]);
+
+    const detailedMetricsData = useMemo(() => {
+        if (!analyticsData || !analyticsData.studentMetrics) return [];
+        return analyticsData.studentMetrics.map(s => {
+            let absentCount = 0;
+            let lateCount = 0;
+            let absentHours = 0;
+            let lateHours = 0;
+            let totalClassDays = analyticsData.totalCourseClasses;
+
+            if (selectedCourseId === "all") {
+                absentCount = s.attendances.absent;
+                lateCount = s.attendances.late;
+                absentHours = s.attendances.absentHours || (absentCount * groupDailyHours);
+                lateHours = s.attendances.lateHours || 0;
+            } else {
+                const cAtt = s.courseAttendances?.[selectedCourseId] || { absent: 0, late: 0, absentHours: 0, lateHours: 0, totalClasses: 0 };
+                absentCount = cAtt.absent;
+                lateCount = cAtt.late;
+                absentHours = cAtt.absentHours || (absentCount * groupDailyHours);
+                lateHours = cAtt.lateHours || 0;
+                totalClassDays = cAtt.totalClasses !== undefined ? cAtt.totalClasses : analyticsData.totalCourseClasses;
+            }
+            
+            const dynamicTotalScheduledHours = totalClassDays * groupDailyHours;
+
+            const attendanceDaysRate = totalClassDays > 0 
+                ? Math.max(0, Math.min(100, ((totalClassDays - absentCount) / totalClassDays) * 100))
+                : 100;
+            
+            const totalLostHours = absentHours + lateHours;
+            const attendanceHoursRate = dynamicTotalScheduledHours > 0
+                ? Math.max(0, Math.min(100, ((dynamicTotalScheduledHours - totalLostHours) / dynamicTotalScheduledHours) * 100))
+                : 100;
+
+            const lateDaysRate = totalClassDays > 0
+                ? Math.max(0, Math.min(100, (lateCount / totalClassDays) * 100))
+                : 0;
+
+            const lateHoursRate = dynamicTotalScheduledHours > 0
+                ? Math.max(0, Math.min(100, (lateHours / dynamicTotalScheduledHours) * 100))
+                : 0;
+                
+            const details: any[] = [];
+            if (selectedCourseId === "all") {
+                Object.keys(s.courseAttendances || {}).forEach(cId => {
+                    const ca = s.courseAttendances![cId];
+                    if (ca.absent > 0 || ca.late > 0) {
+                        const cInfo = analyticsData.coursesList?.find(c => c.id === cId);
+                        details.push({
+                            courseName: cInfo?.title || "Desconocido",
+                            teacherName: cInfo?.teacherName || "No asignado",
+                            absent: ca.absent,
+                            late: ca.late
+                        });
+                    }
+                });
+            } else {
+                const ca = s.courseAttendances?.[selectedCourseId];
+                if (ca && (ca.absent > 0 || ca.late > 0)) {
+                    const cInfo = analyticsData.coursesList?.find(c => c.id === selectedCourseId);
+                    details.push({
+                        courseName: cInfo?.title || "Desconocido",
+                        teacherName: cInfo?.teacherName || "No asignado",
+                        absent: ca.absent,
+                        late: ca.late
+                    });
+                }
+            }
+
+            return {
+                student: { id: s.id, name: s.name, profile: { identificacion: s.identificacion } },
+                absentCount,
+                absentHours,
+                lateCount,
+                lateHours,
+                attendanceDaysRate,
+                attendanceHoursRate,
+                lateDaysRate,
+                lateHoursRate,
+                totalClassDays,
+                totalScheduledHours: dynamicTotalScheduledHours,
+                details
+            };
+        });
+    }, [analyticsData, selectedCourseId, groupDailyHours]);
+
+    const filteredAttendancesCount = useMemo(() => {
+        if (!analyticsData) return 0;
+        if (selectedCourseId === "all") return analyticsData.attendances.length;
+        
+        let count = 0;
+        if (analyticsData.studentMetrics) {
+            analyticsData.studentMetrics.forEach(s => {
+                const cAtt = s.courseAttendances?.[selectedCourseId];
+                if (cAtt) {
+                    count += cAtt.absent + cAtt.late;
+                }
+            });
+        }
+        return count;
+    }, [analyticsData, selectedCourseId]);
 
     // Asistencias Chart Data
     const attendanceData = useMemo(() => {
@@ -158,12 +276,41 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                 const att = selectedCourseId === "all" 
                     ? { present: s.attendances.present, absent: s.attendances.absent, late: s.attendances.late }
                     : (s.courseAttendances?.[selectedCourseId] || { present: 0, absent: 0, late: 0 });
+                
+                const details: any[] = [];
+                if (selectedCourseId === "all") {
+                    Object.keys(s.courseAttendances || {}).forEach(cId => {
+                        const ca = s.courseAttendances![cId];
+                        if (ca.absent > 0 || ca.late > 0) {
+                            const cInfo = analyticsData.coursesList?.find(c => c.id === cId);
+                            details.push({
+                                courseName: cInfo?.title || "Desconocido",
+                                teacherName: cInfo?.teacherName || "No asignado",
+                                absent: ca.absent,
+                                late: ca.late
+                            });
+                        }
+                    });
+                } else {
+                    const ca = s.courseAttendances?.[selectedCourseId];
+                    if (ca && (ca.absent > 0 || ca.late > 0)) {
+                        const cInfo = analyticsData.coursesList?.find(c => c.id === selectedCourseId);
+                        details.push({
+                            courseName: cInfo?.title || "Desconocido",
+                            teacherName: cInfo?.teacherName || "No asignado",
+                            absent: ca.absent,
+                            late: ca.late
+                        });
+                    }
+                }
+
                 return {
                     name: s.name.split(' ')[0] + (s.name.split(' ').length > 1 ? ' ' + s.name.split(' ')[1] : ''),
                     presente: att.present,
                     ausente: att.absent,
                     tarde: att.late,
-                    fullName: s.name
+                    fullName: s.name,
+                    details
                 };
             })
             .sort((a, b) => (b.ausente + b.tarde) - (a.ausente + a.tarde)); // Sort by most absent
@@ -360,7 +507,7 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-muted-foreground">Total Inasistencias/Retardos Reg.</p>
-                                            <h3 className="text-2xl font-bold">{analyticsData.attendances.length}</h3>
+                                            <h3 className="text-2xl font-bold">{filteredAttendancesCount}</h3>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -392,8 +539,16 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                 </CardContent>
                             </Card>
 
-                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Student Ranking Chart (from best to worst) */}
+                             <Tabs defaultValue="rendimiento" className="w-full mt-6">
+                                <TabsList className="grid w-full sm:w-[400px] grid-cols-3 mb-6 mx-auto">
+                                    <TabsTrigger value="rendimiento">Rendimiento</TabsTrigger>
+                                    <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
+                                    <TabsTrigger value="disciplina">Disciplina</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="rendimiento" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {/* Student Ranking Chart (from best to worst) */}
                                 {rankedStudentsData.length > 0 && (
                                 <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
                                     <CardHeader>
@@ -509,7 +664,12 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                 </Card>
                                 )}
 
-                                {/* Attendance Chart */}
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="asistencia" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {/* Attendance Chart */}
                                 <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2">
@@ -582,9 +742,39 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                     <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={11} angle={-45} textAnchor="end" />
                                                     <YAxis axisLine={false} tickLine={false} />
                                                     <Tooltip 
-                                                        cursor={{ fill: 'transparent' }}
-                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                                        labelFormatter={(label: string, payload: any[]) => payload[0]?.payload?.fullName || label}
+                                                        cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                                                        content={({ active, payload }) => {
+                                                            if (active && payload && payload.length) {
+                                                                const data = payload[0].payload;
+                                                                return (
+                                                                    <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-lg border border-slate-100 dark:border-slate-700 max-w-[280px]">
+                                                                        <p className="font-bold text-sm mb-2">{data.fullName}</p>
+                                                                        <div className="flex gap-4 mb-2">
+                                                                            <span className="text-red-500 font-medium text-sm">Faltas: {data.ausente}</span>
+                                                                            <span className="text-amber-500 font-medium text-sm">Tardes: {data.tarde}</span>
+                                                                        </div>
+                                                                        {data.details && data.details.length > 0 && (
+                                                                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                                                                                <p className="text-[11px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Detalle de Inasistencias:</p>
+                                                                                <ul className="space-y-2">
+                                                                                    {data.details.map((d: any, i: number) => (
+                                                                                        <li key={i} className="text-xs leading-tight">
+                                                                                            <span className="font-medium text-slate-800 dark:text-slate-200 block truncate">{d.courseName}</span>
+                                                                                            <span className="text-muted-foreground block text-[10px]">Prof: {d.teacherName}</span>
+                                                                                            <div className="mt-1 flex gap-2">
+                                                                                                {d.absent > 0 && <span className="text-[10px] bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">Faltas: {d.absent}</span>}
+                                                                                                {d.late > 0 && <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">Tardes: {d.late}</span>}
+                                                                                            </div>
+                                                                                        </li>
+                                                                                    ))}
+                                                                                </ul>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        }}
                                                     />
                                                     <Legend verticalAlign="top" height={36} />
                                                     <Bar dataKey="ausente" name="Ausente" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} maxBarSize={40} />
@@ -599,38 +789,180 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                     </CardContent>
                                 </Card>
 
-                                {/* Remarks Chart */}
-                                <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <AlertTriangle className="w-5 h-5 text-amber-500" />
-                                            Observaciones Disciplinarias
-                                        </CardTitle>
-                                        <CardDescription>Relación entre llamados de atención y felicitaciones.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="h-[250px] w-full">
-                                        {analyticsData.remarks.length > 0 ? (
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={remarksData} layout="vertical" margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
-                                                    <XAxis type="number" axisLine={false} tickLine={false} />
-                                                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} fontSize={12} width={100} />
-                                                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                                    <Bar dataKey="value" name="Total" radius={[0, 4, 4, 0]} maxBarSize={40}>
-                                                        {remarksData.map((entry, index) => (
-                                                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                                                        ))}
-                                                    </Bar>
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full text-muted-foreground bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-dashed">
-                                                No hay observaciones registradas
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </div>
+
+                                {/* DETAILED METRICS CHARTS (ADDED FOR ADMIN) */}
+                                <div className="col-span-1 lg:col-span-2 space-y-6">
+                                    {/* CHART 1: ABSENCES (FALTAS) */}
+                                    <Card className="shadow-sm border-slate-200 dark:border-slate-800">
+                                        <CardHeader>
+                                            <CardTitle className="text-base font-black">Registro de Inasistencias (Faltas)</CardTitle>
+                                            <CardDescription>Total de días no asistidos por cada estudiante sobre el total de días programados.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {detailedMetricsData.map(({ student, absentCount, attendanceDaysRate, totalClassDays, details }: any) => {
+                                                const absenceRate = 100 - attendanceDaysRate;
+                                                return (
+                                                    <div key={student.id} className="space-y-1.5 pb-2">
+                                                        <div className="flex items-center justify-between text-xs font-bold">
+                                                            <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                            <span className="text-red-600 shrink-0 font-extrabold">
+                                                                {absentCount} {absentCount === 1 ? "Falta" : "Faltas"} / {totalClassDays} días ({absenceRate.toFixed(1)}%)
+                                                            </span>
+                                                        </div>
+                                                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                            <div 
+                                                                className="h-full bg-red-500 dark:bg-red-600 rounded-full transition-all duration-500" 
+                                                                style={{ width: `${absenceRate}%` }}
+                                                            />
+                                                        </div>
+                                                        {details && details.some((d: any) => d.absent > 0) && (
+                                                            <div className="flex flex-wrap gap-2 mt-1.5">
+                                                                {details.filter((d: any) => d.absent > 0).map((d: any, idx: number) => (
+                                                                    <div key={idx} className="flex items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded px-2 py-1 text-[10px] text-muted-foreground">
+                                                                        <span className="font-semibold text-slate-700 dark:text-slate-300 mr-1 truncate max-w-[120px]">{d.courseName}</span>
+                                                                        <span className="mr-2 border-r border-slate-200 dark:border-slate-700 pr-2">({d.teacherName})</span>
+                                                                        <span className="text-red-500 font-bold">{d.absent} {d.absent === 1 ? "falta" : "faltas"}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* CHART 2: LATE ARRIVALS (TARDANZAS) */}
+                                    <Card className="shadow-sm border-slate-200 dark:border-slate-800">
+                                        <CardHeader>
+                                            <CardTitle className="text-base font-black">Registro de Llegadas Tarde (Tardanzas)</CardTitle>
+                                            <CardDescription>Cantidad de días en los que el estudiante registró ingreso tarde sobre los días programados.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {detailedMetricsData.map(({ student, lateCount, lateDaysRate, totalClassDays, details }: any) => (
+                                                <div key={student.id} className="space-y-1.5 pb-2">
+                                                    <div className="flex items-center justify-between text-xs font-bold">
+                                                        <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                        <span className="text-amber-600 dark:text-amber-400 shrink-0 font-extrabold">
+                                                            {lateCount} {lateCount === 1 ? "Tarde" : "Tardes"} / {totalClassDays} días ({lateDaysRate.toFixed(1)}%)
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-amber-500 rounded-full transition-all duration-500" 
+                                                            style={{ width: `${lateDaysRate}%` }}
+                                                        />
+                                                    </div>
+                                                    {details && details.some((d: any) => d.late > 0) && (
+                                                        <div className="flex flex-wrap gap-2 mt-1.5">
+                                                            {details.filter((d: any) => d.late > 0).map((d: any, idx: number) => (
+                                                                <div key={idx} className="flex items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded px-2 py-1 text-[10px] text-muted-foreground">
+                                                                    <span className="font-semibold text-slate-700 dark:text-slate-300 mr-1 truncate max-w-[120px]">{d.courseName}</span>
+                                                                    <span className="mr-2 border-r border-slate-200 dark:border-slate-700 pr-2">({d.teacherName})</span>
+                                                                    <span className="text-amber-500 font-bold">{d.late} {d.late === 1 ? "tarde" : "tardes"}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* CHART 3: TOTAL ACCUMULATED HOURS & EFFECTIVE ATTENDANCE */}
+                                    <Card className="shadow-sm border-slate-200 dark:border-slate-800">
+                                        <CardHeader>
+                                            <CardTitle className="text-base font-black">Carga Horaria y Asistencia Efectiva (Horas Asistidas vs. Perdidas)</CardTitle>
+                                            <CardDescription>Muestra la cantidad de horas acumuladas entre faltas y tardanzas, la diferencia (horas asistidas) y el porcentaje de asistencia efectiva con respecto a las horas totales.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-5">
+                                            {detailedMetricsData.map(({ student, absentHours, lateHours, attendanceHoursRate, totalScheduledHours }: any) => {
+                                                const lostHours = absentHours + lateHours;
+                                                const attendedHours = Math.max(0, totalScheduledHours - lostHours);
+                                                return (
+                                                    <div key={student.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
+                                                        <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
+                                                            <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
+                                                                <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {attendedHours.toFixed(2)} hs</span>
+                                                                <span className="text-red-500">Perdidas: {lostHours.toFixed(2)} hs</span>
+                                                                <span className="text-blue-600 dark:text-blue-400 font-extrabold">Efectiva: {attendanceHoursRate.toFixed(1)}%</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="space-y-1">
+                                                            <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                                                                <div 
+                                                                    className="h-full bg-emerald-500 dark:bg-emerald-600 transition-all duration-500" 
+                                                                    style={{ width: `${attendanceHoursRate}%` }}
+                                                                    title={`Horas Asistidas: ${attendedHours.toFixed(2)} hs`}
+                                                                />
+                                                                {absentHours > 0 && (
+                                                                    <div 
+                                                                        className="h-full bg-red-500 dark:bg-red-600 transition-all duration-500" 
+                                                                        style={{ width: `${(absentHours / totalScheduledHours) * 100}%` }}
+                                                                        title={`Horas de Faltas: ${absentHours.toFixed(2)} hs`}
+                                                                    />
+                                                                )}
+                                                                {lateHours > 0 && (
+                                                                    <div 
+                                                                        className="h-full bg-amber-500 dark:bg-amber-500 transition-all duration-500" 
+                                                                        style={{ width: `${(lateHours / totalScheduledHours) * 100}%` }}
+                                                                        title={`Horas de Tardanzas: ${lateHours.toFixed(2)} hs`}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                            
+                                                            <div className="text-[10px] text-muted-foreground flex justify-between">
+                                                                <span>{totalScheduledHours.toFixed(1)} hs totales del curso</span>
+                                                                <span>Desglose de pérdida: {absentHours.toFixed(1)} hs Faltas + {lateHours.toFixed(2)} hs Tardanzas</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </CardContent>
+                                    </Card>
+                                    </div>
+                                    </div>
+                                </TabsContent>
+                                
+                                <TabsContent value="disciplina" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {/* Remarks Chart */}
+                                        <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                                                    Observaciones Disciplinarias
+                                                </CardTitle>
+                                                <CardDescription>Relación entre llamados de atención y felicitaciones.</CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="h-[250px] w-full">
+                                                {analyticsData.remarks.length > 0 ? (
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <BarChart data={remarksData} layout="vertical" margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
+                                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                                                            <XAxis type="number" axisLine={false} tickLine={false} />
+                                                            <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} fontSize={12} width={100} />
+                                                            <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                                                            <Bar dataKey="value" name="Total" radius={[0, 4, 4, 0]} maxBarSize={40}>
+                                                                {remarksData.map((entry, index) => (
+                                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                                ))}
+                                                            </Bar>
+                                                        </BarChart>
+                                                    </ResponsiveContainer>
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full text-muted-foreground bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-dashed">
+                                                        No hay observaciones registradas
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
                         </div>
                     )}
                 </div>

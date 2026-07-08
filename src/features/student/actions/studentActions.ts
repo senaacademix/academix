@@ -54,9 +54,29 @@ export async function getStudentRecords(targetStudentId?: string) {
         orderBy: { date: "desc" },
     });
 
+    const user = await prisma.user.findUnique({
+        where: { id: studentId },
+        select: {
+            group: {
+                select: {
+                    startDate: true,
+                    endDate: true,
+                    program: {
+                        select: {
+                            startDate: true,
+                            endDate: true,
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     return {
         attendances,
         remarks,
+        groupDates: user?.group ? { startDate: user.group.startDate, endDate: user.group.endDate } : null,
+        scheduleDates: user?.group?.program ? { startDate: user.group.program.startDate, endDate: user.group.program.endDate } : null,
         currentUser: {
             id: session.user.id,
             role: session.user.role

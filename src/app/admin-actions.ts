@@ -485,6 +485,8 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
                 select: {
                     id: true,
                     title: true,
+                    teacher: { select: { name: true } },
+                    schedules: { select: { dayOfWeek: true } },
                     activities: {
                         select: {
                             grades: {
@@ -504,20 +506,14 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
     // Fetch attendances
     const attendances = await prisma.attendance.findMany({
         where: { courseId: { in: courseIds } },
-        select: { status: true, date: true, userId: true }
+        select: { status: true, date: true, userId: true, arrivalTime: true, courseId: true }
     });
 
     // Fetch remarks
     const remarks = await prisma.remark.findMany({
         where: { courseId: { in: courseIds } },
-        select: { type: true, date: true, userId: true }
+        select: { type: true, date: true, userId: true, courseId: true }
     });
-
-    const uniqueDates = new Set([
-        ...attendances.map(a => new Date(a.date).toISOString().split('T')[0]),
-        ...remarks.map(r => new Date(r.date).toISOString().split('T')[0])
-    ]);
-    const totalCourseClasses = uniqueDates.size;
 
     // Calculate students stats
     const totalStudents = group.students.length;
@@ -529,33 +525,149 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
         const allGrades = course.activities.flatMap(a => a.grades);
         const sum = allGrades.reduce((acc, g) => acc + g.score, 0);
         const avg = allGrades.length > 0 ? sum / allGrades.length : 0;
-return {
+        return {
             title: course.title,
             averageGrade: Number(avg.toFixed(2)),
             totalGrades: allGrades.length
         };
     });
 
+    // Calculate start and end dates for the group class interval
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const startDate = group.startDate ? new Date(group.startDate) : threeMonthsAgo;
+    const endDate = group.endDate ? new Date(group.endDate) : new Date();
+
+    const dayIndexMap: Record<string, number> = {
+        SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6
+    };
+
+    const gStart = group.startTime || "08:00";
+    const gEnd = group.endTime || "12:00";
+    const [gsh, gsm] = gStart.split(":").map(Number);
+    const [geh, gem] = gEnd.split(":").map(Number);
+    const groupDailyHours = Math.max(0, (geh * 60 + gem - (gsh * 60 + gsm)) / 60);
+
+    const courseTotalClassesMap: Record<string, number> = {};
+    let globalTotalCourseClasses = 0;
+
+    group.courses.forEach(c => {
+        const scheduledDays = c.schedules?.map((s: any) => s.dayOfWeek) || [];
+        let classDaysCount = 0;
+        
+        const cur = new Date(startDate);
+        cur.setUTCHours(12, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setUTCHours(12, 0, 0, 0);
+        
+        // If no schedules are explicitly set, assume Mon-Fri (SENA default)
+        const activeScheduledDays = scheduledDays.length > 0 
+            ? scheduledDays 
+            : ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
+
+        while (cur <= end) {
+            const jsDay = cur.getUTCDay();
+            const isClassDay = activeScheduledDays.some((d: string) => dayIndexMap[d] === jsDay);
+            if (isClassDay) classDaysCount++;
+            cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+
+        // Ensure we don't undercount if they took attendance on unscheduled days
+        const cAtts = attendances.filter(a => a.courseId === c.id);
+        const allDateStrings = new Set<string>();
+        cAtts.forEach(a => {
+            const ds = new Date(a.date).toISOString().split('T')[0];
+            allDateStrings.add(ds);
+        });
+        
+        const maxDays = Math.max(classDaysCount, allDateStrings.size);
+        courseTotalClassesMap[c.id] = maxDays;
+        globalTotalCourseClasses += maxDays;
+    });
+
+    const totalCourseClasses = globalTotalCourseClasses;
+
     // Calculate individual student metrics
     const studentMetrics = group.students.map(student => {
         const sAttendances = attendances.filter(a => a.userId === student.id);
-        const absent = sAttendances.filter(a => a.status === 'ABSENT').length;
-        const late = sAttendances.filter(a => a.status === 'LATE').length;
-        const present = Math.max(0, totalCourseClasses - absent - late);
-
         const sRemarks = remarks.filter(r => r.userId === student.id);
-        const attention = sRemarks.filter(r => r.type === 'ATTENTION').length;
-        const commendation = sRemarks.filter(r => r.type === 'COMMENDATION').length;
-
+        
         let totalScore = 0;
         let gradesCount = 0;
+        const courseGrades: Record<string, number> = {};
+        const courseAttendances: Record<string, { present: number, absent: number, late: number, absentHours: number, lateHours: number, totalClasses: number }> = {};
+        const courseRemarks: Record<string, { attention: number, commendation: number }> = {};
+
+        let globalAbsent = 0;
+        let globalLate = 0;
+        let globalPresent = 0;
+        let globalAbsentHours = 0;
+        let globalLateHours = 0;
+        
+        let globalAttention = 0;
+        let globalCommendation = 0;
+
         group.courses.forEach(c => {
+            // Grades
+            let cScore = 0;
+            let cCount = 0;
             c.activities.forEach(a => {
                 a.grades.filter(g => g.userId === student.id).forEach(g => {
+                    cScore += g.score;
+                    cCount++;
                     totalScore += g.score;
                     gradesCount++;
                 });
             });
+            courseGrades[c.id] = cCount > 0 ? Number((cScore / cCount).toFixed(2)) : 0;
+
+            // Attendances
+            const cAtts = sAttendances.filter(a => a.courseId === c.id);
+            const cAbsent = cAtts.filter(a => a.status === 'ABSENT').length;
+            const cLate = cAtts.filter(a => a.status === 'LATE').length;
+            
+            const cTotalClasses = courseTotalClassesMap[c.id];
+            const cPresent = Math.max(0, cTotalClasses - cAbsent - cLate);
+            
+            const cAbsentHours = cAbsent * groupDailyHours;
+            let cLateHours = 0;
+            cAtts.filter(a => a.status === 'LATE').forEach(rec => {
+                if (!rec.arrivalTime) return;
+                let timePart = "";
+                try {
+                    const dateObj = new Date(rec.arrivalTime);
+                    if (!isNaN(dateObj.getTime())) {
+                        timePart = `${dateObj.getUTCHours().toString().padStart(2, '0')}:${dateObj.getUTCMinutes().toString().padStart(2, '0')}`;
+                    } else {
+                        timePart = String(rec.arrivalTime);
+                    }
+                } catch {
+                    timePart = String(rec.arrivalTime);
+                }
+                const [ah, am] = timePart.split(":").map(Number);
+                if (!isNaN(ah) && !isNaN(am)) {
+                    const lateMinutes = (ah * 60 + am) - (gsh * 60 + gsm);
+                    if (lateMinutes > 0) {
+                        cLateHours += lateMinutes / 60;
+                    }
+                }
+            });
+            courseAttendances[c.id] = { present: cPresent, absent: cAbsent, late: cLate, absentHours: cAbsentHours, lateHours: cLateHours, totalClasses: cTotalClasses };
+
+            globalAbsent += cAbsent;
+            globalLate += cLate;
+            globalPresent += cPresent;
+            globalAbsentHours += cAbsentHours;
+            globalLateHours += cLateHours;
+
+            // Remarks
+            const cRems = sRemarks.filter(r => r.courseId === c.id);
+            const cAtten = cRems.filter(r => r.type === 'ATTENTION').length;
+            const cComm = cRems.filter(r => r.type === 'COMMENDATION').length;
+            courseRemarks[c.id] = { attention: cAtten, commendation: cComm };
+            
+            globalAttention += cAtten;
+            globalCommendation += cComm;
         });
         const gradesAvg = gradesCount > 0 ? Number((totalScore / gradesCount).toFixed(2)) : 0;
 
@@ -565,8 +677,11 @@ return {
             identificacion: student.profile?.identificacion || 'N/A',
             banned: student.banned,
             gradesAvg,
-            attendances: { present, absent, late },
-            remarks: { attention, commendation }
+            courseGrades,
+            courseAttendances,
+            courseRemarks,
+            attendances: { present: globalPresent, absent: globalAbsent, late: globalLate, absentHours: globalAbsentHours, lateHours: globalLateHours },
+            remarks: { attention: globalAttention, commendation: globalCommendation }
         };
     });
 
@@ -589,7 +704,12 @@ return {
         totalCourseClasses,
         attendances,
         remarks,
-        coursesStats
+        coursesStats,
+        coursesList: group.courses.map(c => ({ 
+            id: c.id, 
+            title: c.title,
+            teacherName: c.teacher?.name || "No asignado"
+        }))
     };
 }
 

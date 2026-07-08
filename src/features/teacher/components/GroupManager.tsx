@@ -1,11 +1,21 @@
 "use client";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+const toISODateString = (dateVal: any) => {
+    if (!dateVal) return undefined;
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return undefined;
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+};
 
 
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle } from "lucide-react";
+import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +62,146 @@ interface GroupManagerProps {
 export function GroupManager({ groups }: GroupManagerProps) {
     const { data: session } = authClient.useSession();
     const teacherId = session?.user?.id;
+
+    const isDateValidForAttendance = (dateStr: string, courseId: string) => {
+        if (!selectedGroup) return false;
+        
+        // 1. Check if within period (startDate and endDate)
+        const dateVal = new Date(dateStr + "T12:00:00Z");
+        
+        const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
+        if (groupStart) {
+            const startLimit = new Date(toISODateString(groupStart) + "T12:00:00Z");
+            if (dateVal < startLimit) return false;
+        }
+        
+        const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+        if (groupEnd) {
+            const endLimit = new Date(toISODateString(groupEnd) + "T12:00:00Z");
+            if (dateVal > endLimit) return false;
+        }
+        
+        // 2. Check if it's a scheduled day of week for this course
+        const course = selectedGroup.courses?.find((c: any) => c.id === courseId);
+        if (!course) return false;
+        
+        const scheduledDays = course.schedules?.map((s: any) => s.dayOfWeek) || [];
+        const daysOfWeek = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+        const dayOfWeekStr = daysOfWeek[dateVal.getUTCDay()];
+        
+        return scheduledDays.includes(dayOfWeekStr);
+    };
+
+    const findClosestValidDate = (refDateStr: string, courseId: string) => {
+        if (!selectedGroup) return refDateStr;
+        const course = selectedGroup.courses?.find((c: any) => c.id === courseId);
+        if (!course) return refDateStr;
+        
+        const scheduledDays = course.schedules?.map((s: any) => s.dayOfWeek) || [];
+        if (scheduledDays.length === 0) return refDateStr;
+        
+        const daysOfWeek = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+        
+        const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
+        const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+
+        // Start date of group/program
+        const startLimit = groupStart ? new Date(toISODateString(groupStart) + "T12:00:00Z") : null;
+        // End date of group/program
+        const endLimit = groupEnd ? new Date(toISODateString(groupEnd) + "T12:00:00Z") : null;
+        
+        const refDate = new Date(refDateStr + "T12:00:00Z");
+        
+        // If refDate is already valid and within limits, return it
+        const refDayOfWeek = daysOfWeek[refDate.getUTCDay()];
+        const isWithinStart = !startLimit || refDate >= startLimit;
+        const isWithinEnd = !endLimit || refDate <= endLimit;
+        if (scheduledDays.includes(refDayOfWeek) && isWithinStart && isWithinEnd) {
+            return refDateStr;
+        }
+        
+        // Search up to 30 days backward and forward to find the closest scheduled day within limits
+        for (let offset = 1; offset <= 30; offset++) {
+            // Check backward
+            const prevDate = new Date(refDate);
+            prevDate.setUTCDate(refDate.getUTCDate() - offset);
+            const prevDayOfWeek = daysOfWeek[prevDate.getUTCDay()];
+            const prevWithinStart = !startLimit || prevDate >= startLimit;
+            const prevWithinEnd = !endLimit || prevDate <= endLimit;
+            if (scheduledDays.includes(prevDayOfWeek) && prevWithinStart && prevWithinEnd) {
+                return toISODateString(prevDate)!;
+            }
+            
+            // Check forward
+            const nextDate = new Date(refDate);
+            nextDate.setUTCDate(refDate.getUTCDate() + offset);
+            const nextDayOfWeek = daysOfWeek[nextDate.getUTCDay()];
+            const nextWithinStart = !startLimit || nextDate >= startLimit;
+            const nextWithinEnd = !endLimit || nextDate <= endLimit;
+            if (scheduledDays.includes(nextDayOfWeek) && nextWithinStart && nextWithinEnd) {
+                return toISODateString(nextDate)!;
+            }
+        }
+        
+        return refDateStr;
+    };
+
+    const getValidClassDaysList = () => {
+        if (!selectedGroup || !attCourseId) return [];
+        
+        // Derive start date: group.startDate > earliest attendance record > 3 months ago
+        const attForCourse = attendanceHistory.filter((a: any) => a.courseId === attCourseId);
+        const earliestAtt = attForCourse.length > 0
+            ? new Date(Math.min(...attForCourse.map((a: any) => new Date(a.date).getTime())))
+            : null;
+            
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        
+        const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
+        const startDate = groupStart
+            ? new Date(groupStart)
+            : (earliestAtt ?? threeMonthsAgo);
+            
+        const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+        const endDate = groupEnd
+            ? new Date(groupEnd)
+            : new Date();
+            
+        const dayIndexMap: Record<string, number> = {
+            SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3,
+            THURSDAY: 4, FRIDAY: 5, SATURDAY: 6
+        };
+        
+        const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+        const scheduledDays = course?.schedules?.map((s: any) => s.dayOfWeek) || [];
+        
+        const classDays: Date[] = [];
+        const cur = new Date(startDate);
+        cur.setUTCHours(12, 0, 0, 0); // stable UTC noon
+        const end = new Date(endDate);
+        end.setUTCHours(12, 0, 0, 0);
+        
+        while (cur <= end) {
+            const jsDay = cur.getUTCDay();
+            const isClassDay = scheduledDays.some((d: any) => dayIndexMap[d] === jsDay);
+            if (isClassDay) classDays.push(new Date(cur));
+            cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+        
+        // Union with actual attendance dates just in case they have historical ones
+        const allDateStrings = new Set<string>();
+        classDays.forEach(d => {
+            const ds = toISODateString(d);
+            if (ds) allDateStrings.add(ds);
+        });
+        attForCourse.forEach((a: any) => {
+            const ds = toISODateString(new Date(a.date));
+            if (ds) allDateStrings.add(ds);
+        });
+        
+        return Array.from(allDateStrings).sort(); // returns YYYY-MM-DD strings sorted chronologically
+    };
     
     const [selectedGroupId, setSelectedGroupId] = useState<string>(groups[0]?.id || "");
     const [activeTab, setActiveTab] = useState<"students" | "attendance" | "remarks" | "analytics" | "grades" | "documentation">("students");
@@ -98,6 +248,28 @@ export function GroupManager({ groups }: GroupManagerProps) {
             time: hoursStr
         };
     }, [selectedGroup]);
+
+    const timeOptions = useMemo(() => {
+        if (!selectedGroup) return [];
+        const start = selectedGroup.startTime || "08:00";
+        const end = selectedGroup.endTime || "12:00";
+        const slots = [];
+        try {
+            const [sh, sm] = start.split(":").map(Number);
+            const [eh, em] = end.split(":").map(Number);
+            let currentMin = sh * 60 + sm;
+            const endMin = eh * 60 + em;
+            while (currentMin <= endMin) {
+                const h = Math.floor(currentMin / 60).toString().padStart(2, "0");
+                const m = (currentMin % 60).toString().padStart(2, "0");
+                slots.push(`${h}:${m}`);
+                currentMin += 15;
+            }
+        } catch (e) {
+            console.error("Error generating time slots", e);
+        }
+        return slots;
+    }, [selectedGroup?.startTime, selectedGroup?.endTime]);
     
     // Students Tab State
     const [searchQuery, setSearchQuery] = useState("");
@@ -108,7 +280,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [selectedStudentForAnalytics, setSelectedStudentForAnalytics] = useState<any>(null);
 
     // Attendance Tab State
-    const [attMode, setAttMode] = useState<"list" | "matrix" | "summary" | "history">("list");
+    const [attMode, setAttMode] = useState<"list" | "matrix" | "summary" | "history" | "metrics">("list");
     const [isSequentialFullscreen, setIsSequentialFullscreen] = useState(false);
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
@@ -282,7 +454,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
             // Attendance
             setAttMode("list");
             setAttCourseId(firstCourseId);
-            setAttDate(format(new Date(), "yyyy-MM-dd"));
+            setAttDate(findClosestValidDate(format(new Date(), "yyyy-MM-dd"), firstCourseId));
             setAttRecords({});
             setSeqIndex(0);
             setSelectedDayFilter(null);
@@ -398,6 +570,11 @@ const handleOpenAnalytics = async () => {
         );
     }, [selectedGroup, remarkStudentSearch]);
 
+    const isCurrentDateValid = useMemo(() => {
+        if (!attDate || !attCourseId) return true;
+        return isDateValidForAttendance(attDate, attCourseId);
+    }, [attDate, attCourseId, selectedGroupId]);
+
     const remarksByStudent = useMemo(() => {
         const grouped: Record<string, { student: any; remarks: any[] }> = {};
         remarksHistory.forEach((rem: any) => {
@@ -450,9 +627,31 @@ const handleOpenAnalytics = async () => {
     const setStudentAttendance = async (studentId: string, status: "PRESENT" | "ABSENT" | "LATE") => {
         if (!attCourseId) return toast.error("Selecciona una materia");
 
-        const now = new Date();
-        const timeString = status === "LATE" ? `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}` : undefined;
+        let timeString: string | undefined = undefined;
 
+        if (status === "LATE") {
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMin = now.getMinutes();
+            const totalMins = currentHour * 60 + currentMin;
+
+            if (timeOptions && timeOptions.length > 0) {
+                let closestDiff = Infinity;
+                let closestSlot = timeOptions[0];
+                for (const slot of timeOptions) {
+                    const [sh, sm] = slot.split(":").map(Number);
+                    const slotMins = sh * 60 + sm;
+                    const diff = Math.abs(slotMins - totalMins);
+                    if (diff < closestDiff) {
+                        closestDiff = diff;
+                        closestSlot = slot;
+                    }
+                }
+                timeString = closestSlot;
+            } else {
+                timeString = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`;
+            }
+        }
         // Optimistic UI update
         setAttRecords(prev => {
             const newRecords = { ...prev };
@@ -1222,11 +1421,113 @@ const handleOpenAnalytics = async () => {
                             <TabsContent value="attendance" className="m-0 space-y-4 outline-none">
                                 {/* Header Controls for Attendance — single compact row */}
                                 <div className="flex flex-wrap items-center gap-2 bg-muted/20 px-4 py-3 rounded-2xl border">
-                                    {attMode !== "matrix" && attMode !== "history" && (
+                                    {attMode !== "matrix" && attMode !== "history" && attMode !== "metrics" && (
                                         <>
-                                            <div className="flex items-center gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0 shrink-0">
                                                 <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Fecha</Label>
-                                                <Input type="date" className="h-9 rounded-lg border-muted-foreground/20 font-semibold text-sm w-[150px]" value={attDate} onChange={e => handleDateChangeAttempt(e.target.value)} />
+                                                
+                                                <div className="flex items-center gap-1 bg-background rounded-lg border border-muted-foreground/20 p-0.5 shadow-sm">
+                                                    {(() => {
+                                                        const validDaysList = getValidClassDaysList();
+                                                        const currentIdx = validDaysList.indexOf(attDate);
+                                                        const isPrevDisabled = currentIdx <= 0;
+                                                        const isNextDisabled = currentIdx === -1 || currentIdx >= validDaysList.length - 1;
+
+                                                        const handlePrevDate = () => {
+                                                            if (currentIdx > 0) {
+                                                                handleDateChangeAttempt(validDaysList[currentIdx - 1]);
+                                                            }
+                                                        };
+
+                                                        const handleNextDate = () => {
+                                                            if (currentIdx !== -1 && currentIdx < validDaysList.length - 1) {
+                                                                handleDateChangeAttempt(validDaysList[currentIdx + 1]);
+                                                            }
+                                                        };
+
+                                                        const handleTodayDate = () => {
+                                                            const todayStr = format(new Date(), "yyyy-MM-dd");
+                                                            handleDateChangeAttempt(todayStr);
+                                                        };
+
+                                                        return (
+                                                            <>
+                                                                {/* Backward Button */}
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                                                                    onClick={handlePrevDate}
+                                                                    disabled={isPrevDisabled}
+                                                                    type="button"
+                                                                >
+                                                                    <ChevronLeft className="w-4 h-4" />
+                                                                </Button>
+
+                                                                {/* Date Select Dropdown */}
+                                                                <Select value={attDate} onValueChange={handleDateChangeAttempt}>
+                                                                    <SelectTrigger className={`h-8 rounded-md border-0 shadow-none font-bold bg-transparent text-sm w-[190px] focus:ring-0 ${
+                                                                             attDate < format(new Date(), "yyyy-MM-dd")
+                                                                                 ? "text-red-600 dark:text-red-400" 
+                                                                                 : "text-foreground"
+                                                                         }`}>
+                                                                        <SelectValue>
+                                                                            {(() => {
+                                                                                const d = new Date(attDate + "T12:00:00Z");
+                                                                                if (isNaN(d.getTime())) return "Seleccionar Fecha";
+                                                                                const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+                                                                                return `${dayNames[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+                                                                            })()}
+                                                                        </SelectValue>
+                                                                    </SelectTrigger>
+                                                                    <SelectContent className="max-h-[300px]">
+                                                                        {validDaysList.map((ds) => {
+                                                                            const d = new Date(ds + "T12:00:00Z");
+                                                                            const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+                                                                            const label = `${dayNames[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+                                                                            const todayStr = format(new Date(), "yyyy-MM-dd");
+                                                                            const isPast = ds < todayStr;
+                                                                            return (
+                                                                                <SelectItem 
+                                                                                    key={ds} 
+                                                                                    value={ds} 
+                                                                                    className={`font-semibold ${isPast ? "text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20 cursor-pointer" : "cursor-pointer"}`}
+                                                                                >
+                                                                                    {label}
+                                                                                </SelectItem>
+                                                                            );
+                                                                        })}
+                                                                    </SelectContent>
+                                                                </Select>
+
+                                                                {/* Forward Button */}
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                                                                    onClick={handleNextDate}
+                                                                    disabled={isNextDisabled}
+                                                                    type="button"
+                                                                >
+                                                                    <ChevronRight className="w-4 h-4" />
+                                                                </Button>
+
+                                                                <div className="w-px h-5 bg-border/60 shrink-0 mx-0.5" />
+
+                                                                {/* Today / Hoy Button */}
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-8 px-2.5 rounded-md text-xs font-bold text-primary hover:bg-primary/10 shrink-0 cursor-pointer"
+                                                                    onClick={handleTodayDate}
+                                                                    type="button"
+                                                                >
+                                                                    Hoy
+                                                                </Button>
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </div>
                                             <div className="w-px h-6 bg-border/60 shrink-0" />
                                         </>
@@ -1272,11 +1573,12 @@ const handleOpenAnalytics = async () => {
                                         {/* Divider */}
                                         <div className="w-px h-6 bg-border/60 mx-1 shrink-0" />
 
-                                        {/* Group 2: Planilla / Historial */}
+                                        {/* Group 2: Planilla / Historial / Métricas */}
                                         <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5">
                                             {([
                                                 { mode: "matrix",  icon: <LayoutList className="w-3.5 h-3.5" />, label: "Planilla" },
                                                 { mode: "history", icon: <History className="w-3.5 h-3.5" />, label: "Historial" },
+                                                { mode: "metrics", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Métricas" },
                                             ] as const).map(({ mode, icon, label }) => (
                                                 <button
                                                     key={mode}
@@ -1338,7 +1640,19 @@ const handleOpenAnalytics = async () => {
                                     </Button>
                                 </div>
 
-                                {attMode === "list" ? (
+                                {!isCurrentDateValid && (attMode === "list" || attMode === "summary") ? (
+                                    <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-amber-300 bg-amber-500/5 dark:bg-amber-500/10 rounded-2xl text-center space-y-4">
+                                        <div className="p-3 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full animate-bounce">
+                                            <ShieldAlert className="w-8 h-8" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <h4 className="font-black text-lg text-foreground">Fecha no Programada</h4>
+                                            <p className="text-sm text-muted-foreground max-w-sm">
+                                                Hoy no es un día que corresponda a este curso según el horario programado. Seleccione otra fecha o use las flechas de navegación para ver los días válidos.
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : attMode === "list" ? (
                                     // MODE 1: LIST VIEW
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between mb-2">
@@ -1460,12 +1774,18 @@ const handleOpenAnalytics = async () => {
                                                                 >
                                                                     <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-amber-100/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
                                                                         <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 pl-1">Hora Ingreso:</span>
-                                                                        <Input 
-                                                                            type="time" 
-                                                                            className="h-6 w-20 text-[10px] py-0 px-1 border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black font-bold text-amber-900 dark:text-amber-200" 
+                                                                        <select
+                                                                            className="h-6 w-[115px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
                                                                             value={rec?.arrivalTime || ""}
                                                                             onChange={e => updateLateTime(s.id, e.target.value)}
-                                                                        />
+                                                                        >
+                                                                            <option value="" disabled>Seleccione...</option>
+                                                                            {timeOptions.map(time => (
+                                                                                <option key={time} value={time}>
+                                                                                    {time}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
                                                                     </div>
                                                                 </motion.div>
                                                             )}
@@ -1579,7 +1899,288 @@ const handleOpenAnalytics = async () => {
                                             </div>
                                         )}
                                     </div>
-                                ) : attMode === "history" ? (() => {
+                                ) : attMode === "metrics" ? (() => {
+                                    // Get group start/end times and calculate group daily duration
+                                    const gStart = selectedGroup.startTime || "08:00";
+                                    const gEnd = selectedGroup.endTime || "12:00";
+                                    
+                                    const [gsh, gsm] = gStart.split(":").map(Number);
+                                    const [geh, gem] = gEnd.split(":").map(Number);
+                                    const groupDailyHours = Math.max(0, (geh * 60 + gem - (gsh * 60 + gsm)) / 60);
+
+                                    // Get all scheduled dates
+                                    const validDaysList = getValidClassDaysList();
+                                    const totalClassDays = validDaysList.length;
+                                    const totalScheduledHours = totalClassDays * groupDailyHours;
+
+                                    if (totalClassDays === 0) {
+                                        return (
+                                            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 rounded-2xl border border-dashed bg-card shadow-sm">
+                                                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-full text-amber-600 dark:text-amber-400">
+                                                    <HelpCircle className="w-8 h-8" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <h3 className="font-black text-lg text-foreground">Sin días de clase configurados</h3>
+                                                    <p className="text-sm text-muted-foreground max-w-sm">
+                                                        No hay días de clase programados dentro del rango del horario para esta materia.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    // Calculate metrics per student
+                                    const studentMetrics = selectedGroup.students?.map((student: any) => {
+                                        const studentRecords = attendanceHistory.filter((rec: any) => 
+                                            rec.courseId === attCourseId && 
+                                            rec.userId === student.id
+                                        );
+
+                                        // Absences
+                                        const absentRecords = studentRecords.filter(r => r.status === "ABSENT");
+                                        const absentCount = absentRecords.length;
+                                        
+                                        const absentHours = absentCount * groupDailyHours;
+
+                                        // Late arrivals
+                                        const lateRecords = studentRecords.filter(r => r.status === "LATE");
+                                        const lateCount = lateRecords.length;
+
+                                        let lateHours = 0;
+                                        lateRecords.forEach(rec => {
+                                            if (!rec.arrivalTime) return;
+                                            
+                                            const [sh, sm] = gStart.split(":").map(Number);
+                                            let timePart = "";
+                                            try {
+                                                const dateObj = new Date(rec.arrivalTime);
+                                                if (isNaN(dateObj.getTime())) {
+                                                    throw new Error("Invalid date");
+                                                }
+                                                timePart = dateObj.toISOString().substring(11, 16);
+                                            } catch (e) {
+                                                timePart = typeof rec.arrivalTime === "string" ? rec.arrivalTime : "00:00";
+                                            }
+                                            const [ah, am] = timePart.split(":").map(Number);
+
+                                            const schedMin = sh * 60 + sm;
+                                            const arrMin = ah * 60 + am;
+
+                                            if (arrMin > schedMin) {
+                                                lateHours += (arrMin - schedMin) / 60;
+                                            }
+                                        });
+
+                                        // Attendance rates
+                                        const attendanceDaysRate = totalClassDays > 0 
+                                            ? Math.max(0, Math.min(100, ((totalClassDays - absentCount) / totalClassDays) * 100))
+                                            : 100;
+
+                                        const totalLostHours = absentHours + lateHours;
+                                        const attendanceHoursRate = totalScheduledHours > 0
+                                            ? Math.max(0, Math.min(100, ((totalScheduledHours - totalLostHours) / totalScheduledHours) * 100))
+                                            : 100;
+
+                                        // Late rates
+                                        const lateDaysRate = totalClassDays > 0
+                                            ? Math.max(0, Math.min(100, (lateCount / totalClassDays) * 100))
+                                            : 0;
+
+                                        const lateHoursRate = totalScheduledHours > 0
+                                            ? Math.max(0, Math.min(100, (lateHours / totalScheduledHours) * 100))
+                                            : 0;
+
+                                        return {
+                                            student,
+                                            absentCount,
+                                            absentHours,
+                                            lateCount,
+                                            lateHours,
+                                            attendanceDaysRate,
+                                            attendanceHoursRate,
+                                            lateDaysRate,
+                                            lateHoursRate
+                                        };
+                                    }) || [];
+
+                                    // Averages
+                                    const avgAttendanceDays = studentMetrics.length > 0
+                                        ? studentMetrics.reduce((acc: number, m: any) => acc + m.attendanceDaysRate, 0) / studentMetrics.length
+                                        : 100;
+                                    const avgAttendanceHours = studentMetrics.length > 0
+                                        ? studentMetrics.reduce((acc: number, m: any) => acc + m.attendanceHoursRate, 0) / studentMetrics.length
+                                        : 100;
+                                    const avgLateDays = studentMetrics.length > 0
+                                        ? studentMetrics.reduce((acc: number, m: any) => acc + m.lateDaysRate, 0) / studentMetrics.length
+                                        : 0;
+                                    const avgLateHours = studentMetrics.length > 0
+                                        ? studentMetrics.reduce((acc: number, m: any) => acc + m.lateHoursRate, 0) / studentMetrics.length
+                                        : 0;
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* KPI Grid */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Días Programados</span>
+                                                    <span className="text-3xl font-black text-foreground mt-2">{totalClassDays} días</span>
+                                                </div>
+                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Horas Programadas</span>
+                                                    <span className="text-3xl font-black text-foreground mt-2">{totalScheduledHours.toFixed(1)} hs</span>
+                                                </div>
+                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Asistencia Promedio</span>
+                                                    <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-2">
+                                                        {avgAttendanceHours.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pérdida de Tiempo (Tardanzas)</span>
+                                                    <span className="text-3xl font-black text-amber-600 dark:text-amber-400 mt-2">
+                                                        {avgLateHours.toFixed(2)}%
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Stacked Full-Width Charts Section Organized by Tabs */}
+                                            <Tabs defaultValue="faltas" className="w-full mt-6">
+                                                <TabsList className="grid w-full sm:w-[450px] grid-cols-3 mb-6 mx-auto">
+                                                    <TabsTrigger value="faltas">Faltas</TabsTrigger>
+                                                    <TabsTrigger value="tardanzas">Tardanzas</TabsTrigger>
+                                                    <TabsTrigger value="horas">Carga Horaria</TabsTrigger>
+                                                </TabsList>
+
+                                                <TabsContent value="faltas" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                                {/* CHART 1: ABSENCES (FALTAS) */}
+                                                <div className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 w-full">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Registro de Inasistencias (Faltas)</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Total de días no asistidos por cada estudiante sobre el total de días programados.</p>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                         {studentMetrics.map(({ student, absentCount, attendanceDaysRate }: any) => {
+                                                             const absenceRate = 100 - attendanceDaysRate;
+                                                             return (
+                                                                 <div key={student.id} className="space-y-1.5">
+                                                                     <div className="flex items-center justify-between text-xs font-bold">
+                                                                         <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                                         <span className="text-red-600 shrink-0 font-extrabold">
+                                                                             {absentCount} {absentCount === 1 ? "Falta" : "Faltas"} / {totalClassDays} días ({absenceRate.toFixed(1)}%)
+                                                                         </span>
+                                                                     </div>
+                                                                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                         <div 
+                                                                             className="h-full bg-red-500 dark:bg-red-600 rounded-full transition-all duration-500" 
+                                                                             style={{ width: `${absenceRate}%` }}
+                                                                         />
+                                                                     </div>
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                    </div>
+                                                </div>
+
+                                                </TabsContent>
+
+                                                <TabsContent value="tardanzas" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                                {/* CHART 2: LATE ARRIVALS (TARDANZAS) */}
+                                                <div className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 w-full">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Registro de Llegadas Tarde (Tardanzas)</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días en los que el estudiante registró ingreso tarde sobre los días programados.</p>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                         {studentMetrics.map(({ student, lateCount, lateDaysRate }: any) => (
+                                                             <div key={student.id} className="space-y-1.5">
+                                                                 <div className="flex items-center justify-between text-xs font-bold">
+                                                                     <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                                     <span className="text-amber-600 dark:text-amber-400 shrink-0 font-extrabold">
+                                                                         {lateCount} {lateCount === 1 ? "Tarde" : "Tardes"} / {totalClassDays} días ({lateDaysRate.toFixed(1)}%)
+                                                                     </span>
+                                                                 </div>
+                                                                 <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                     <div 
+                                                                         className="h-full bg-amber-500 rounded-full transition-all duration-500" 
+                                                                         style={{ width: `${lateDaysRate}%` }}
+                                                                     />
+                                                                 </div>
+                                                             </div>
+                                                         ))}
+                                                    </div>
+                                                </div>
+
+                                                </TabsContent>
+
+                                                <TabsContent value="horas" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                                {/* CHART 3: TOTAL ACCUMULATED HOURS & EFFECTIVE ATTENDANCE */}
+                                                <div className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 w-full">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Carga Horaria y Asistencia Efectiva (Horas Asistidas vs. Perdidas)</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Muestra la cantidad de horas acumuladas entre faltas y tardanzas, la diferencia (horas asistidas) y el porcentaje de asistencia efectiva con respecto a las horas totales.</p>
+                                                    </div>
+
+                                                    <div className="space-y-5">
+                                                         {studentMetrics.map(({ student, absentHours, lateHours, attendanceHoursRate }: any) => {
+                                                             const lostHours = absentHours + lateHours;
+                                                             const attendedHours = Math.max(0, totalScheduledHours - lostHours);
+                                                             return (
+                                                                 <div key={student.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
+                                                                     <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
+                                                                         <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
+                                                                             <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {attendedHours.toFixed(2)} hs</span>
+                                                                             <span className="text-red-500">Perdidas: {lostHours.toFixed(2)} hs</span>
+                                                                             <span className="text-blue-600 dark:text-blue-400 font-extrabold">Efectiva: {attendanceHoursRate.toFixed(1)}%</span>
+                                                                         </div>
+                                                                     </div>
+                                                                     
+                                                                     <div className="space-y-1">
+                                                                         {/* Stacked indicator bar representing Attended Hours vs. Lost Hours */}
+                                                                         <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                                                                             {/* Attended hours bar */}
+                                                                             <div 
+                                                                                 className="h-full bg-emerald-500 dark:bg-emerald-600 transition-all duration-500" 
+                                                                                 style={{ width: `${attendanceHoursRate}%` }}
+                                                                                 title={`Horas Asistidas: ${attendedHours.toFixed(2)} hs`}
+                                                                             />
+                                                                             {/* Absent hours bar (red) */}
+                                                                             {absentHours > 0 && (
+                                                                                 <div 
+                                                                                     className="h-full bg-red-500 dark:bg-red-600 transition-all duration-500" 
+                                                                                     style={{ width: `${(absentHours / totalScheduledHours) * 100}%` }}
+                                                                                     title={`Horas de Faltas: ${absentHours.toFixed(2)} hs`}
+                                                                                 />
+                                                                             )}
+                                                                             {/* Late hours bar (orange) */}
+                                                                             {lateHours > 0 && (
+                                                                                 <div 
+                                                                                     className="h-full bg-amber-500 dark:bg-amber-500 transition-all duration-500" 
+                                                                                     style={{ width: `${(lateHours / totalScheduledHours) * 100}%` }}
+                                                                                     title={`Horas de Tardanzas: ${lateHours.toFixed(2)} hs`}
+                                                                                 />
+                                                                             )}
+                                                                         </div>
+                                                                         
+                                                                         {/* Detailed breakdown subtext */}
+                                                                         <div className="text-[10px] text-muted-foreground flex justify-between">
+                                                                             <span>{totalScheduledHours.toFixed(1)} hs totales del curso</span>
+                                                                             <span>Desglose de pérdida: {absentHours.toFixed(1)} hs Faltas + {lateHours.toFixed(2)} hs Tardanzas</span>
+                                                                         </div>
+                                                                     </div>
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                    </div>
+                                                </div>
+                                                </TabsContent>
+                                            </Tabs>
+
+                                        </div>
+                                    );
+                                })() : attMode === "history" ? (() => {
                                     // MODE 4: HISTORIAL VIEW
                                     const studentsWithNovedades = selectedGroup.students?.filter((student: any) => {
                                         if (historyStudentFilter !== "all" && student.id !== historyStudentFilter) {
@@ -1831,12 +2432,14 @@ const handleOpenAnalytics = async () => {
                                     const threeMonthsAgo = new Date();
                                     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-                                    const startDate = selectedGroup.startDate
-                                        ? new Date(selectedGroup.startDate)
+                                    const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
+                                    const startDate = groupStart
+                                        ? new Date(groupStart)
                                         : (earliestAtt ?? threeMonthsAgo);
 
-                                    const endDate = selectedGroup.endDate
-                                        ? new Date(Math.min(new Date(selectedGroup.endDate).getTime(), Date.now()))
+                                    const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+                                    const endDate = groupEnd
+                                        ? new Date(Math.min(new Date(groupEnd).getTime(), Date.now()))
                                         : new Date();
 
                                     const classDays: Date[] = [];
@@ -1875,7 +2478,7 @@ const handleOpenAnalytics = async () => {
                                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">P</span>
                                         );
                                         if (record.justification) return (
-                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" title={record.justification}>E</span>
+                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">E</span>
                                         );
                                         if (record.status === "LATE") return (
                                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">T</span>
@@ -1956,99 +2559,141 @@ const handleOpenAnalytics = async () => {
                                                     <p className="text-sm mt-1">Selecciona otro día o restablece el filtro a "Todos"</p>
                                                 </div>
                                             ) : (
-                                                <div className="overflow-auto rounded-2xl border border-border/60 shadow-sm">
-                                                    <table className="text-xs border-collapse min-w-max w-full">
-                                                        <thead>
-                                                            <tr className="bg-muted/40 sticky top-0 z-10">
-                                                                <th className="sticky left-0 z-20 bg-muted text-left px-4 py-3 font-bold text-foreground min-w-[180px] border-b border-r border-border/60">
-                                                                    Estudiante
-                                                                </th>
-                                                                {displayedDays.map(d => {
-                                                                    const ds = toUTCDateStr(d);
-                                                                    const isToday = ds === toLocalDateStr(new Date());
+                                                <TooltipProvider>
+                                                    <div className="overflow-auto rounded-2xl border border-border/60 shadow-sm">
+                                                        <table className="text-xs border-collapse min-w-max w-full">
+                                                            <thead>
+                                                                <tr className="bg-muted/40 sticky top-0 z-10">
+                                                                    <th className="sticky left-0 z-20 bg-muted text-left px-4 py-3 font-bold text-foreground min-w-[180px] border-b border-r border-border/60">
+                                                                        Estudiante
+                                                                    </th>
+                                                                    {displayedDays.map(d => {
+                                                                        const ds = toUTCDateStr(d);
+                                                                        const isToday = ds === toLocalDateStr(new Date());
+                                                                        return (
+                                                                            <th key={ds} className={`px-1.5 py-3 text-center font-bold border-b border-border/40 min-w-[44px] ${isToday ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+                                                                                <div>{["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][d.getUTCDay()]}</div>
+                                                                                <div className={`text-[10px] font-mono mt-0.5 ${isToday ? "text-primary font-bold" : "text-muted-foreground/70"}`}>
+                                                                                    {String(d.getUTCDate()).padStart(2,"0")}/{String(d.getUTCMonth()+1).padStart(2,"0")}
+                                                                                </div>
+                                                                            </th>
+                                                                        );
+                                                                    })}
+                                                                    <th className="sticky right-0 z-20 bg-muted px-3 py-3 text-center font-bold text-muted-foreground border-b border-l border-border/60 min-w-[80px]">
+                                                                        F / T
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {(selectedGroup.students || []).map((s: any, i: number) => {
+                                                                    const uLookup = lookup[s.id] || {};
+                                                                    const absences = Object.values(uLookup).filter(v => v.status === "ABSENT" && !v.justification).length;
+                                                                    const lates = Object.values(uLookup).filter(v => v.status === "LATE").length;
                                                                     return (
-                                                                        <th key={ds} className={`px-1.5 py-3 text-center font-bold border-b border-border/40 min-w-[44px] ${isToday ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}>
-                                                                            <div>{["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][d.getUTCDay()]}</div>
-                                                                            <div className={`text-[10px] font-mono mt-0.5 ${isToday ? "text-primary font-bold" : "text-muted-foreground/70"}`}>
-                                                                                {String(d.getUTCDate()).padStart(2,"0")}/{String(d.getUTCMonth()+1).padStart(2,"0")}
-                                                                            </div>
-                                                                        </th>
+                                                                        <tr key={s.id} className={`group/row transition-colors ${i % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
+                                                                            <td className={`sticky left-0 z-10 px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap transition-colors ${
+                                                                                i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
+                                                                            } group-hover/row:bg-muted`}>
+                                                                                {formatName(s.name, s.profile)}
+                                                                            </td>
+                                                                            {displayedDays.map(d => {
+                                                                                const ds = toUTCDateStr(d);
+                                                                                const record = uLookup[ds];
+                                                                                const triggerButton = (
+                                                                                    <button className="outline-none focus:ring-2 focus:ring-primary/40 rounded-md transition-all cursor-pointer">
+                                                                                        {statusCell(record)}
+                                                                                    </button>
+                                                                                );
+
+                                                                                return (
+                                                                                    <td key={ds} className="px-1.5 py-2 text-center border-border/20 border-b">
+                                                                                        {record?.justification ? (
+                                                                                            <Tooltip delayDuration={200}>
+                                                                                                <TooltipTrigger asChild>
+                                                                                                    <div>
+                                                                                                        <DropdownMenu>
+                                                                                                            <DropdownMenuTrigger asChild>
+                                                                                                                {triggerButton}
+                                                                                                            </DropdownMenuTrigger>
+                                                                                                            <DropdownMenuContent align="center" className="font-semibold text-xs min-w-[120px]">
+                                                                                                                <DropdownMenuItem 
+                                                                                                                    className="text-emerald-600 font-bold flex items-center gap-1.5 cursor-pointer"
+                                                                                                                    onClick={() => handleUpdateSingleAttendance(s.id, ds, "PRESENT")}
+                                                                                                                >
+                                                                                                                    <span className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center text-[10px] font-black">P</span>
+                                                                                                                    Presente
+                                                                                                                </DropdownMenuItem>
+                                                                                                                <DropdownMenuItem 
+                                                                                                                    className="text-red-600 font-bold flex items-center gap-1.5 cursor-pointer"
+                                                                                                                    onClick={() => handleUpdateSingleAttendance(s.id, ds, "ABSENT")}
+                                                                                                                >
+                                                                                                                    <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[10px] font-black">F</span>
+                                                                                                                    Falta
+                                                                                                                </DropdownMenuItem>
+                                                                                                                <DropdownMenuItem 
+                                                                                                                    className="text-amber-600 font-bold flex items-center gap-1.5 cursor-pointer"
+                                                                                                                    onClick={() => handleUpdateSingleAttendance(s.id, ds, "LATE")}
+                                                                                                                >
+                                                                                                                    <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-[10px] font-black">T</span>
+                                                                                                                    Tarde
+                                                                                                                </DropdownMenuItem>
+                                                                                                            </DropdownMenuContent>
+                                                                                                        </DropdownMenu>
+                                                                                                    </div>
+                                                                                                </TooltipTrigger>
+                                                                                                <TooltipContent side="top">
+                                                                                                    <p className="max-w-[220px] font-bold text-xs p-1 break-words bg-primary-foreground text-foreground">
+                                                                                                        Excusa: {record.justification}
+                                                                                                    </p>
+                                                                                                </TooltipContent>
+                                                                                            </Tooltip>
+                                                                                        ) : (
+                                                                                            <DropdownMenu>
+                                                                                                <DropdownMenuTrigger asChild>
+                                                                                                    {triggerButton}
+                                                                                                </DropdownMenuTrigger>
+                                                                                                <DropdownMenuContent align="center" className="font-semibold text-xs min-w-[120px]">
+                                                                                                    <DropdownMenuItem 
+                                                                                                        className="text-emerald-600 font-bold flex items-center gap-1.5 cursor-pointer"
+                                                                                                        onClick={() => handleUpdateSingleAttendance(s.id, ds, "PRESENT")}
+                                                                                                    >
+                                                                                                        <span className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center text-[10px] font-black">P</span>
+                                                                                                        Presente
+                                                                                                    </DropdownMenuItem>
+                                                                                                    <DropdownMenuItem 
+                                                                                                        className="text-red-600 font-bold flex items-center gap-1.5 cursor-pointer"
+                                                                                                        onClick={() => handleUpdateSingleAttendance(s.id, ds, "ABSENT")}
+                                                                                                    >
+                                                                                                        <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[10px] font-black">F</span>
+                                                                                                        Falta
+                                                                                                    </DropdownMenuItem>
+                                                                                                    <DropdownMenuItem 
+                                                                                                        className="text-amber-600 font-bold flex items-center gap-1.5 cursor-pointer"
+                                                                                                        onClick={() => handleUpdateSingleAttendance(s.id, ds, "LATE")}
+                                                                                                    >
+                                                                                                        <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-[10px] font-black">T</span>
+                                                                                                        Tarde
+                                                                                                    </DropdownMenuItem>
+                                                                                                </DropdownMenuContent>
+                                                                                            </DropdownMenu>
+                                                                                        )}
+                                                                                    </td>
+                                                                                );
+                                                                            })}
+                                                                            <td className={`sticky right-0 z-10 px-3 py-2 text-center border-l border-border/40 border-b transition-colors ${
+                                                                                i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
+                                                                            } group-hover/row:bg-muted`}>
+                                                                                <span className="font-black text-red-600">{absences}</span>
+                                                                                <span className="text-muted-foreground mx-1">/</span>
+                                                                                <span className="font-black text-amber-600">{lates}</span>
+                                                                            </td>
+                                                                        </tr>
                                                                     );
                                                                 })}
-                                                                <th className="sticky right-0 z-20 bg-muted px-3 py-3 text-center font-bold text-muted-foreground border-b border-l border-border/60 min-w-[80px]">
-                                                                    F / T
-                                                                </th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {(selectedGroup.students || []).map((s: any, i: number) => {
-                                                                const uLookup = lookup[s.id] || {};
-                                                                const absences = Object.values(uLookup).filter(v => v.status === "ABSENT" && !v.justification).length;
-                                                                const lates = Object.values(uLookup).filter(v => v.status === "LATE").length;
-                                                                return (
-                                                                    <tr key={s.id} className={`group/row transition-colors ${i % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
-                                                                        <td className={`sticky left-0 z-10 px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap transition-colors ${
-                                                                            i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
-                                                                        } group-hover/row:bg-muted`}>
-                                                                            {formatName(s.name, s.profile)}
-                                                                        </td>
-                                                                        {displayedDays.map(d => {
-                                                                            const ds = toUTCDateStr(d);
-                                                                            return (
-                                                                                <td key={ds} className="px-1.5 py-2 text-center border-border/20 border-b">
-                                                                                    <DropdownMenu>
-                                                                                        <DropdownMenuTrigger asChild>
-                                                                                            <button className="outline-none focus:ring-2 focus:ring-primary/40 rounded-md transition-all cursor-pointer">
-                                                                                                {statusCell(uLookup[ds])}
-                                                                                            </button>
-                                                                                        </DropdownMenuTrigger>
-                                                                                        <DropdownMenuContent align="center" className="font-semibold text-xs min-w-[120px]">
-                                                                                            <DropdownMenuItem 
-                                                                                                className="text-emerald-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                onClick={() => handleUpdateSingleAttendance(s.id, ds, "PRESENT")}
-                                                                                            >
-                                                                                                <span className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center text-[10px] font-black">P</span>
-                                                                                                Presente
-                                                                                            </DropdownMenuItem>
-                                                                                            <DropdownMenuItem 
-                                                                                                className="text-red-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                onClick={() => handleUpdateSingleAttendance(s.id, ds, "ABSENT")}
-                                                                                            >
-                                                                                                <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[10px] font-black">F</span>
-                                                                                                Falta
-                                                                                            </DropdownMenuItem>
-                                                                                            <DropdownMenuItem 
-                                                                                                className="text-amber-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                onClick={() => handleUpdateSingleAttendance(s.id, ds, "LATE")}
-                                                                                            >
-                                                                                                <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-[10px] font-black">T</span>
-                                                                                                Tarde
-                                                                                            </DropdownMenuItem>
-                                                                                            <DropdownMenuItem 
-                                                                                                className="text-blue-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                onClick={() => handleUpdateSingleAttendance(s.id, ds, "EXCUSED")}
-                                                                                            >
-                                                                                                <span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-[10px] font-black">E</span>
-                                                                                                Excusa
-                                                                                            </DropdownMenuItem>
-                                                                                        </DropdownMenuContent>
-                                                                                    </DropdownMenu>
-                                                                                </td>
-                                                                            );
-                                                                        })}
-                                                                        <td className={`sticky right-0 z-10 px-3 py-2 text-center border-l border-border/40 border-b transition-colors ${
-                                                                            i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
-                                                                        } group-hover/row:bg-muted`}>
-                                                                            <span className="font-black text-red-600">{absences}</span>
-                                                                            <span className="text-muted-foreground mx-1">/</span>
-                                                                            <span className="font-black text-amber-600">{lates}</span>
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </TooltipProvider>
                                             )}
                                         </div>
                                     );

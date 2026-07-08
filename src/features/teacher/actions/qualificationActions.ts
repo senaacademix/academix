@@ -29,7 +29,7 @@ export async function getTeacherQualificationsAction(teacherId: string) {
                                 orderBy: { order: "asc" }
                             }
                         },
-                        orderBy: { createdAt: "asc" }
+                        orderBy: { order: "asc" }
                     }
                 }
             },

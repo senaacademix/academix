@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Trash2, Plus, Lock, CheckCircle2, AlertCircle, Edit2, X, Check } from "lucide-react";
+import { Calendar, Clock, Trash2, Plus, Lock, CheckCircle2, AlertCircle, Edit2, X, Check, Cloud, Sun, Moon } from "lucide-react";
 import { toast } from "sonner";
 import { DayOfWeek } from "@/generated/prisma/client";
 import { 
@@ -50,6 +50,37 @@ const toFormat12h = (t24: string) => {
     const ap = h >= 12 ? "p.m." : "a.m.";
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ap}`;
+};
+
+const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+};
+
+const getSchedulePeriodStyles = (startTimeStr: string) => {
+    const start = toMin(startTimeStr);
+    if (start < 720) {
+        return {
+            gradient: "from-sky-500/10 via-sky-500/5 to-transparent dark:from-sky-500/15 dark:to-transparent border-sky-500/20 dark:border-sky-500/30",
+            text: "text-sky-700 dark:text-sky-300",
+            icon: Cloud,
+            label: "Mañana"
+        };
+    } else if (start < 1080) {
+        return {
+            gradient: "from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-500/15 dark:to-transparent border-amber-500/20 dark:border-amber-500/30",
+            text: "text-amber-700 dark:text-amber-300",
+            icon: Sun,
+            label: "Tarde"
+        };
+    } else {
+        return {
+            gradient: "from-indigo-500/10 via-indigo-500/5 to-transparent dark:from-indigo-500/15 dark:to-transparent border-indigo-500/20 dark:border-indigo-500/30",
+            text: "text-indigo-700 dark:text-indigo-300",
+            icon: Moon,
+            label: "Noche"
+        };
+    }
 };
 
 interface TimeSlot {
@@ -452,28 +483,34 @@ export function TeacherAvailabilityView({ teacherId, isAdminMode, onAdminActionC
                                                     );
                                                 }
 
+                                                const styles = getSchedulePeriodStyles(slot.startTime);
+                                                const IconComp = styles.icon;
+
                                                 return (
                                                     <div 
                                                         key={index} 
-                                                        className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-muted/20 text-xs font-medium text-foreground/90 group"
+                                                        className={`bg-gradient-to-br flex items-center justify-between p-2 rounded-lg border text-xs font-medium group transition-all duration-200 ${styles.gradient}`}
                                                     >
-                                                        <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> {toFormat12h(slot.startTime)} – {toFormat12h(slot.endTime)}</span>
+                                                        <span className={`flex items-center gap-1.5 ${styles.text}`}>
+                                                            <IconComp className="w-3.5 h-3.5 shrink-0" /> 
+                                                            {toFormat12h(slot.startTime)} – {toFormat12h(slot.endTime)} ({styles.label})
+                                                        </span>
                                                         {!locked && !isAdminMode && (
                                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                    variant="ghost" size="icon"
-                                                                                                                                    onClick={() => handleStartEdit(index, slot)}
-                                                                                                                                    className="h-6 w-6 text-primary hover:bg-primary/10 hover:text-primary rounded transition-colors"
-                                                                                                                                >
-                                                                                                                                    <Edit2 className="w-3 h-3" />
-                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Editar ranura</p></TooltipContent></Tooltip>
+                                                                                                    variant="ghost" size="icon"
+                                                                                                    onClick={() => handleStartEdit(index, slot)}
+                                                                                                    className={`h-6 w-6 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors ${styles.text}`}
+                                                                                                >
+                                                                                                    <Edit2 className="w-3 h-3" />
+                                                                                                </Button></TooltipTrigger><TooltipContent><p>Editar ranura</p></TooltipContent></Tooltip>
                                                                 <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                    variant="ghost" size="icon"
-                                                                                                                                    onClick={() => handleRemoveSlot(index)}
-                                                                                                                                    className="h-6 w-6 text-destructive hover:bg-destructive/10 hover:text-destructive rounded transition-colors"
-                                                                                                                                >
-                                                                                                                                    <Trash2 className="w-3 h-3" />
-                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Eliminar ranura</p></TooltipContent></Tooltip>
+                                                                                                    variant="ghost" size="icon"
+                                                                                                    onClick={() => handleRemoveSlot(index)}
+                                                                                                    className="h-6 w-6 text-destructive hover:bg-destructive/10 hover:text-destructive rounded transition-colors"
+                                                                                                >
+                                                                                                    <Trash2 className="w-3 h-3" />
+                                                                                                </Button></TooltipTrigger><TooltipContent><p>Eliminar ranura</p></TooltipContent></Tooltip>
                                                             </div>
                                                         )}
                                                     </div>

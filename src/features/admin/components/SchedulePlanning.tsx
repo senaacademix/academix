@@ -553,6 +553,32 @@ export function SchedulePlanning({
         return { hasMorning, hasAfternoon, hasNight };
     }, []);
 
+    const getSchedulePeriodStyles = useCallback((startTimeStr: string) => {
+        const start = toMin(startTimeStr);
+        if (start < 720) {
+            return {
+                gradient: "from-sky-500/10 via-sky-500/5 to-transparent dark:from-sky-500/15 dark:to-transparent border-sky-500/20 dark:border-sky-500/30",
+                text: "text-sky-700 dark:text-sky-300",
+                icon: Cloud,
+                label: "Mañana"
+            };
+        } else if (start < 1080) {
+            return {
+                gradient: "from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-500/15 dark:to-transparent border-amber-500/20 dark:border-amber-500/30",
+                text: "text-amber-700 dark:text-amber-300",
+                icon: Sun,
+                label: "Tarde"
+            };
+        } else {
+            return {
+                gradient: "from-indigo-500/10 via-indigo-500/5 to-transparent dark:from-indigo-500/15 dark:to-transparent border-indigo-500/20 dark:border-indigo-500/30",
+                text: "text-indigo-700 dark:text-indigo-300",
+                icon: Moon,
+                label: "Noche"
+            };
+        }
+    }, []);
+
     const overviewPeriods = useMemo(() => getActivePeriods(visibleTeachersForOverview.flatMap(t => getTeacherAssignments(t.id))), [visibleTeachersForOverview, getTeacherAssignments, getActivePeriods]);
 
     const filteredEnvironments = useMemo(() => {
@@ -1225,13 +1251,27 @@ export function SchedulePlanning({
                                                             <td key={d.value} className="p-2 border border-border/80 vertical-align-top align-top relative bg-background/5">
                                                                 <div className="space-y-2">
                                                                     {overviewShowAvailability && avails.length > 0 && (
-                                                                        <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-md p-1.5 space-y-1">
-                                                                            <span className="text-[8px] uppercase tracking-wider font-extrabold text-emerald-600 dark:text-emerald-400 block">Disponibilidad</span>
-                                                                            {avails.map(av => (
-                                                                                <div key={av.id} className="text-[8.5px] font-bold text-emerald-700 dark:text-emerald-300">
-                                                                                    {toFormat12h(av.startTime)} – {toFormat12h(av.endTime)}
-                                                                                </div>
-                                                                            ))}
+                                                                        <div className="space-y-1">
+                                                                            {avails.map(av => {
+                                                                                const styles = getSchedulePeriodStyles(av.startTime);
+                                                                                const IconComp = styles.icon;
+                                                                                return (
+                                                                                    <div 
+                                                                                        key={av.id} 
+                                                                                        className={`bg-gradient-to-br border rounded-lg p-1.5 flex flex-col gap-0.5 leading-snug shadow-sm ${styles.gradient}`}
+                                                                                    >
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <IconComp className={`w-3.5 h-3.5 shrink-0 ${styles.text}`} />
+                                                                                            <span className={`text-[8px] uppercase tracking-wider font-extrabold block ${styles.text}`}>
+                                                                                                Disponibilidad ({styles.label})
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <div className={`text-[8.5px] font-bold ${styles.text}`}>
+                                                                                            {toFormat12h(av.startTime)} – {toFormat12h(av.endTime)}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
                                                                         </div>
                                                                     )}
 
