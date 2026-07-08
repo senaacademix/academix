@@ -12,7 +12,8 @@ const toISODateString = (dateVal: any) => {
 };
 
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import * as htmlToImage from "html-to-image";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react";
@@ -281,6 +282,9 @@ export function GroupManager({ groups }: GroupManagerProps) {
 
     // Attendance Tab State
     const [attMode, setAttMode] = useState<"list" | "matrix" | "summary" | "history" | "metrics">("list");
+    const printMetricsRef = useRef<HTMLDivElement>(null);
+    const matrixRef = useRef<HTMLDivElement>(null);
+    const historyRef = useRef<HTMLDivElement>(null);
     const [isSequentialFullscreen, setIsSequentialFullscreen] = useState(false);
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
@@ -821,36 +825,127 @@ const handleOpenAnalytics = async () => {
         toast.success("Planilla exportada a Excel");
     };
 
-    const exportMatrixToPDF = () => {
-        const data = getMatrixData();
-        if (!data) return toast.error("No hay datos para exportar");
-
-        const doc = new jsPDF({ orientation: "landscape" });
-        const groupName = selectedGroup?.name ?? "Grupo";
-        doc.setFontSize(14);
-        doc.text(`Planilla de Asistencia – ${groupName}`, 14, 15);
-        doc.setFontSize(9);
-        doc.text(`Referencia: F=Falta  T=Tarde  E=Excusa  (En blanco)=Presente`, 14, 21);
-
-        const headers = ["Estudiante", "ID", ...data.allDates, "F / T"];
-        const body = data.rows.map((row: Record<string, string>) => [
-            row["Estudiante"],
-            row["Identificación"],
-            ...data.allDates.map((d) => row[d] ?? ""),
-            row["F / T"],
-        ]);
-
-        autoTable(doc, {
-            head: [headers],
-            body,
-            startY: 26,
-            styles: { fontSize: 7, cellPadding: 2 },
-            headStyles: { fillColor: [30, 100, 200], textColor: 255, fontStyle: "bold" },
-            columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 22 } },
+    const generatePDFWithPageBreaks = async (
+        dataUrl: string, 
+        container: HTMLElement, 
+        pdfName: string, 
+        orientation: 'p' | 'l' = 'p'
+    ) => {
+        const margin = 10; // 10mm margin on all sides
+        const doc = new jsPDF(orientation, 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        const pdfWidth = pageWidth - (margin * 2);
+        const pdfHeight = pageHeight - (margin * 2);
+        
+        const img = new Image();
+        img.src = dataUrl;
+        await new Promise((resolve) => { img.onload = resolve; });
+        
+        const containerRect = container.getBoundingClientRect();
+        // The container width in pixels maps to pdfWidth in mm
+        const domToPdf = pdfWidth / containerRect.width;
+        const imgRatio = img.height / img.width;
+        const totalHeight = pdfWidth * imgRatio;
+        
+        const elements = container.querySelectorAll('.print-avoid-break');
+        const protectedZones = Array.from(elements).map(el => {
+            const rect = el.getBoundingClientRect();
+            return {
+                top: (rect.top - containerRect.top) * domToPdf,
+                bottom: (rect.bottom - containerRect.top) * domToPdf
+            };
         });
 
-        doc.save(`Planilla_${groupName}_${attDate}.pdf`);
-        toast.success("Planilla exportada a PDF");
+        let currentPdfY = 0;
+        let pages = 0;
+        while (currentPdfY < totalHeight - 1 && pages < 50) { 
+            pages++;
+            let pageBottom = currentPdfY + pdfHeight;
+            
+            // Find an element that is cut by the pageBottom
+            const intersectingZone = protectedZones.find(z => z.top < pageBottom && z.bottom > pageBottom);
+            
+            if (intersectingZone) {
+                // If the element can fit on a single page, and we make forward progress, break before it
+                if (intersectingZone.bottom - intersectingZone.top < pdfHeight && intersectingZone.top > currentPdfY + 2) {
+                    pageBottom = intersectingZone.top;
+                }
+            }
+            
+            // Draw the entire image, shifted so that currentPdfY is at the top margin
+            doc.addImage(dataUrl, 'PNG', margin, margin - currentPdfY, pdfWidth, totalHeight);
+            
+            // Mask top margin (hides image overflow from previous pages)
+            doc.setFillColor(255, 255, 255);
+            doc.rect(0, 0, pageWidth, margin, 'F');
+            
+            // Mask bottom margin (hides image overflow into bottom margin)
+            doc.rect(0, pageHeight - margin, pageWidth, margin, 'F');
+            
+            // If we broke early, mask the empty bottom area of this page
+            if (pageBottom < currentPdfY + pdfHeight && pageBottom < totalHeight) {
+                const maskY = margin + (pageBottom - currentPdfY);
+                doc.rect(0, maskY, pageWidth, pageHeight - maskY, 'F');
+            }
+            
+            currentPdfY = pageBottom;
+            if (currentPdfY < totalHeight - 1) {
+                doc.addPage();
+            }
+        }
+        
+        doc.save(pdfName);
+    };
+
+    const exportMatrixToPDF = async () => {
+        if (!matrixRef.current) return toast.error("No hay datos para exportar");
+
+        const styleSheets = Array.from(document.styleSheets);
+        const disabledSheets: any[] = [];
+        styleSheets.forEach((sheet) => {
+            try { const rules = sheet.cssRules; } catch (e) {
+                disabledSheets.push(sheet);
+                sheet.disabled = true;
+            }
+        });
+
+        const toastId = toast.loading("Generando PDF de Planilla...");
+        try {
+            // Expand container for capture to prevent cropping horizontal scroll
+            const tableContainer = matrixRef.current.querySelector('#matrix-table-container') as HTMLElement;
+            let oldOverflow = '';
+            let oldWidth = '';
+            if (tableContainer) {
+                oldOverflow = tableContainer.style.overflow;
+                oldWidth = tableContainer.style.width;
+                tableContainer.style.overflow = 'visible';
+                tableContainer.style.width = 'fit-content';
+            }
+            const oldRefWidth = matrixRef.current.style.width;
+            matrixRef.current.style.width = 'fit-content';
+
+            const dataUrl = await htmlToImage.toPng(matrixRef.current, {
+                quality: 1.0, backgroundColor: '#ffffff', pixelRatio: 2, skipFonts: true
+            });
+            
+            // Restore
+            if (tableContainer) {
+                tableContainer.style.overflow = oldOverflow;
+                tableContainer.style.width = oldWidth;
+            }
+            matrixRef.current.style.width = oldRefWidth;
+
+            const groupName = selectedGroup?.name ?? "Grupo";
+            await generatePDFWithPageBreaks(dataUrl, matrixRef.current, `Planilla_${groupName}_${attDate}.pdf`, 'l');
+            toast.success("Planilla exportada a PDF", { id: toastId });
+        } catch (error) {
+            console.error("Error generando PDF:", error);
+            toast.error("Ocurrió un error al generar el PDF.", { id: toastId });
+        } finally {
+            disabledSheets.forEach(sheet => { sheet.disabled = false; });
+        }
     };
 
     const exportHistoryToExcel = () => {
@@ -864,26 +959,53 @@ const handleOpenAnalytics = async () => {
         toast.success("Historial exportado a Excel");
     };
 
-    const exportHistoryToPDF = () => {
-        const rows = getHistoryData();
-        if (!rows || rows.length === 0) return toast.error("No hay registros de novedades");
+    const exportHistoryToPDF = async () => {
+        if (!historyRef.current) return toast.error("No hay datos para exportar");
 
-        const doc = new jsPDF({ orientation: "landscape" });
-        const groupName = selectedGroup?.name ?? "Grupo";
-        doc.setFontSize(14);
-        doc.text(`Historial de Asistencia – ${groupName}`, 14, 15);
-
-        autoTable(doc, {
-            head: [["Estudiante", "Identificación", "Fecha", "Tipo", "Hora", "Justificación"]],
-            body: rows.map((r) => [r["Estudiante"], r["Identificación"], r["Fecha"], r["Tipo"], r["Hora"], r["Justificación"]]),
-            startY: 22,
-            styles: { fontSize: 8, cellPadding: 2 },
-            headStyles: { fillColor: [30, 100, 200], textColor: 255, fontStyle: "bold" },
-            columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 28 }, 5: { cellWidth: 60 } },
+        const styleSheets = Array.from(document.styleSheets);
+        const disabledSheets: any[] = [];
+        styleSheets.forEach((sheet) => {
+            try { const rules = sheet.cssRules; } catch (e) {
+                disabledSheets.push(sheet);
+                sheet.disabled = true;
+            }
         });
 
-        doc.save(`Historial_${groupName}.pdf`);
-        toast.success("Historial exportado a PDF");
+        const toastId = toast.loading("Generando PDF de Historial...");
+        try {
+            // Expand container for capture
+            const tableContainer = historyRef.current.querySelector('#history-table-container') as HTMLElement;
+            let oldOverflow = '';
+            let oldWidth = '';
+            if (tableContainer) {
+                oldOverflow = tableContainer.style.overflow;
+                oldWidth = tableContainer.style.width;
+                tableContainer.style.overflow = 'visible';
+                tableContainer.style.width = 'fit-content';
+            }
+            const oldRefWidth = historyRef.current.style.width;
+            historyRef.current.style.width = 'fit-content';
+
+            const dataUrl = await htmlToImage.toPng(historyRef.current, {
+                quality: 1.0, backgroundColor: '#ffffff', pixelRatio: 2, skipFonts: true
+            });
+            
+            // Restore
+            if (tableContainer) {
+                tableContainer.style.overflow = oldOverflow;
+                tableContainer.style.width = oldWidth;
+            }
+            historyRef.current.style.width = oldRefWidth;
+
+            const groupName = selectedGroup?.name ?? "Grupo";
+            await generatePDFWithPageBreaks(dataUrl, historyRef.current, `Historial_${groupName}.pdf`, 'l');
+            toast.success("Historial exportado a PDF", { id: toastId });
+        } catch (error) {
+            console.error("Error generando PDF:", error);
+            toast.error("Ocurrió un error al generar el PDF.", { id: toastId });
+        } finally {
+            disabledSheets.forEach(sheet => { sheet.disabled = false; });
+        }
     };
     // ── END EXPORT FUNCTIONS ─────────────────────────────────────────────────────
 
@@ -1596,37 +1718,7 @@ const handleOpenAnalytics = async () => {
                                         </div>
                                     </div>
 
-                                    {/* Export buttons - only for Planilla and Historial */}
-                                    {(attMode === "matrix" || attMode === "history") && (
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    disabled={!attCourseId}
-                                                    className="h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-border hover:bg-muted/60"
-                                                >
-                                                    <FileDown className="w-3.5 h-3.5" />
-                                                    Exportar
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48">
-                                                <DropdownMenuItem
-                                                    onClick={() => attMode === "matrix" ? exportMatrixToExcel() : exportHistoryToExcel()}
-                                                    className="gap-2 cursor-pointer"
-                                                >
-                                                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                                                    <span>Exportar a Excel</span>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    onClick={() => attMode === "matrix" ? exportMatrixToPDF() : exportHistoryToPDF()}
-                                                    className="gap-2 cursor-pointer"
-                                                >
-                                                    <FileText className="w-4 h-4 text-red-600" />
-                                                    <span>Exportar a PDF</span>
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    )}
+
 
                                     {/* Play Sequential button */}
                                     <Button
@@ -2017,8 +2109,87 @@ const handleOpenAnalytics = async () => {
                                         ? studentMetrics.reduce((acc: number, m: any) => acc + m.lateHoursRate, 0) / studentMetrics.length
                                         : 0;
 
+                                    const exportMetricsExcel = () => {
+                                        const wb = XLSX.utils.book_new();
+                                        const wsData = [
+                                            ["Estudiante", "Faltas", "Tardanzas", "Asistencia Efectiva (%)", "Horas Programadas", "Horas Asistidas", "Horas Perdidas"]
+                                        ];
+                                        studentMetrics.forEach((m: any) => {
+                                            const totalLost = m.absentHours + m.lateHours;
+                                            const attended = Math.max(0, totalScheduledHours - totalLost);
+                                            wsData.push([
+                                                formatName(m.student.name, m.student.profile),
+                                                m.absentCount,
+                                                m.lateCount,
+                                                m.attendanceHoursRate.toFixed(1) + "%",
+                                                totalScheduledHours.toFixed(1),
+                                                attended.toFixed(1),
+                                                totalLost.toFixed(1)
+                                            ]);
+                                        });
+                                        const ws = XLSX.utils.aoa_to_sheet(wsData);
+                                        XLSX.utils.book_append_sheet(wb, ws, "Métricas");
+                                        XLSX.writeFile(wb, `Metricas_${selectedGroup.name.replace(/\s+/g, '_')}.xlsx`);
+                                    };
+
+                                    const exportMetricsPDF = async () => {
+                                        if (!printMetricsRef.current) return;
+                                        
+                                        // 1. Deshabilitar temporalmente hojas de estilo cruzadas (evita SecurityError en cssRules)
+                                        const styleSheets = Array.from(document.styleSheets);
+                                        const disabledSheets: any[] = [];
+                                        styleSheets.forEach((sheet) => {
+                                            try {
+                                                const rules = sheet.cssRules; // Lanza excepción si es cross-origin y no tiene CORS
+                                            } catch (e) {
+                                                disabledSheets.push(sheet);
+                                                sheet.disabled = true;
+                                            }
+                                        });
+
+                                        try {
+                                            // 2. Hacer temporalmente visible el div para imprimir
+                                            printMetricsRef.current.style.display = 'block';
+                                            
+                                            const dataUrl = await htmlToImage.toPng(printMetricsRef.current, {
+                                                quality: 1.0,
+                                                backgroundColor: '#ffffff',
+                                                pixelRatio: 2,
+                                                skipFonts: true // Evita peticiones a fuentes externas que pueden fallar
+                                            });
+                                            
+                                            // Ocultarlo nuevamente
+                                            printMetricsRef.current.style.display = 'none';
+
+                                            await generatePDFWithPageBreaks(dataUrl, printMetricsRef.current, `Metricas_${selectedGroup.name.replace(/\s+/g, '_')}.pdf`, 'p');
+                                        } catch (error) {
+                                            console.error("Error generando PDF con html-to-image", error);
+                                            toast.error("Ocurrió un error al generar el PDF gráfico.");
+                                        } finally {
+                                            // 3. Rehabilitar las hojas de estilo externas
+                                            disabledSheets.forEach(sheet => { sheet.disabled = false; });
+                                            if (printMetricsRef.current) {
+                                                printMetricsRef.current.style.display = 'none';
+                                            }
+                                        }
+                                    };
+
                                     return (
                                         <div className="space-y-6">
+                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                                <div>
+                                                    <h3 className="text-lg font-bold">Resumen Analítico</h3>
+                                                    <p className="text-sm text-muted-foreground">Estadísticas calculadas para la materia seleccionada</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" onClick={exportMetricsExcel}>
+                                                        <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Excel
+                                                    </Button>
+                                                    <Button variant="outline" size="sm" onClick={exportMetricsPDF}>
+                                                        <FileDown className="w-4 h-4 mr-2 text-red-600" /> PDF
+                                                    </Button>
+                                                </div>
+                                            </div>
                                             {/* KPI Grid */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                                 <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
@@ -2178,6 +2349,100 @@ const handleOpenAnalytics = async () => {
                                                 </TabsContent>
                                             </Tabs>
 
+                                            {/* HIDDEN PRINT VIEW FOR PDF EXPORT - Contains all 3 charts un-tabbed with inline styles to prevent CSS parsing errors */}
+                                            <div ref={printMetricsRef} style={{ display: 'none', width: '800px', padding: '32px', backgroundColor: '#ffffff', color: '#0f172a' }}>
+                                                <h2 style={{ fontSize: '24px', fontWeight: '900', marginBottom: '8px', margin: 0 }}>Métricas de Asistencia - {selectedGroup.name}</h2>
+                                                <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '24px', color: '#475569', margin: '4px 0 24px 0' }}>Materia: {selectedGroup.courses?.find((c: any) => c.id === attCourseId)?.title || "General"}</h3>
+                                                
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px', marginBottom: '32px' }}>
+                                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', backgroundColor: '#f8fafc' }}>
+                                                        <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Total Días Programados</span>
+                                                        <span style={{ display: 'block', fontSize: '24px', fontWeight: '900', marginTop: '8px' }}>{totalClassDays} días</span>
+                                                    </div>
+                                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', backgroundColor: '#f8fafc' }}>
+                                                        <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Horas Programadas</span>
+                                                        <span style={{ display: 'block', fontSize: '24px', fontWeight: '900', marginTop: '8px' }}>{totalScheduledHours.toFixed(1)} hs</span>
+                                                    </div>
+                                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', backgroundColor: '#f8fafc' }}>
+                                                        <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Asistencia Promedio</span>
+                                                        <span style={{ display: 'block', fontSize: '24px', fontWeight: '900', marginTop: '8px', color: '#059669' }}>{avgAttendanceHours.toFixed(1)}%</span>
+                                                    </div>
+                                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', backgroundColor: '#f8fafc' }}>
+                                                        <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Pérdida (Tardanzas)</span>
+                                                        <span style={{ display: 'block', fontSize: '24px', fontWeight: '900', marginTop: '8px', color: '#d97706' }}>{avgLateHours.toFixed(2)}%</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* CHART 1: Faltas */}
+                                                <div className="print-avoid-break" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', backgroundColor: '#ffffff' }}>
+                                                    <h3 style={{ fontSize: '18px', fontWeight: '900', marginBottom: '4px', margin: 0 }}>Registro de Inasistencias (Faltas)</h3>
+                                                    <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px', margin: '4px 0 16px 0' }}>Total de días no asistidos por estudiante</p>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                        {studentMetrics.map(({ student, absentCount, attendanceDaysRate }: any) => {
+                                                            const absenceRate = 100 - attendanceDaysRate;
+                                                            return (
+                                                                <div key={student.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700' }}>
+                                                                        <span>{formatName(student.name, student.profile)}</span>
+                                                                        <span style={{ color: '#dc2626' }}>{absentCount} Faltas ({absenceRate.toFixed(1)}%)</span>
+                                                                    </div>
+                                                                    <div style={{ height: '12px', width: '100%', backgroundColor: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
+                                                                        <div style={{ height: '100%', backgroundColor: '#ef4444', width: `${absenceRate}%` }} />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* CHART 2: Tardanzas */}
+                                                <div className="print-avoid-break" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', backgroundColor: '#ffffff' }}>
+                                                    <h3 style={{ fontSize: '18px', fontWeight: '900', marginBottom: '4px', margin: 0 }}>Registro de Llegadas Tarde (Tardanzas)</h3>
+                                                    <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px', margin: '4px 0 16px 0' }}>Total de días con llegada tarde por estudiante</p>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                        {studentMetrics.map(({ student, lateCount, lateDaysRate }: any) => (
+                                                            <div key={student.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} className="print-avoid-break">
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700' }}>
+                                                                    <span>{formatName(student.name, student.profile)}</span>
+                                                                    <span style={{ color: '#d97706' }}>{lateCount} Tardes ({lateDaysRate.toFixed(1)}%)</span>
+                                                                </div>
+                                                                <div style={{ height: '12px', width: '100%', backgroundColor: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
+                                                                    <div style={{ height: '100%', backgroundColor: '#f59e0b', width: `${lateDaysRate}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* CHART 3: Horas */}
+                                                <div className="print-avoid-break" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', backgroundColor: '#ffffff' }}>
+                                                    <h3 style={{ fontSize: '18px', fontWeight: '900', marginBottom: '4px', margin: 0 }}>Carga Horaria y Asistencia Efectiva</h3>
+                                                    <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px', margin: '4px 0 16px 0' }}>Horas Asistidas vs Perdidas</p>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                                        {studentMetrics.map(({ student, absentHours, lateHours, attendanceHoursRate }: any) => {
+                                                            const lostHours = absentHours + lateHours;
+                                                            const attendedHours = Math.max(0, totalScheduledHours - lostHours);
+                                                            return (
+                                                                <div key={student.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', fontWeight: '700' }}>
+                                                                        <span>{formatName(student.name, student.profile)}</span>
+                                                                        <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
+                                                                            <span style={{ color: '#059669' }}>Asistidas: {attendedHours.toFixed(1)} hs</span>
+                                                                            <span style={{ color: '#ef4444' }}>Perdidas: {lostHours.toFixed(1)} hs</span>
+                                                                            <span style={{ color: '#2563eb' }}>Efectiva: {attendanceHoursRate.toFixed(1)}%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{ height: '12px', width: '100%', backgroundColor: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden', display: 'flex' }}>
+                                                                        <div style={{ height: '100%', backgroundColor: '#10b981', width: `${attendanceHoursRate}%` }} />
+                                                                        {absentHours > 0 && <div style={{ height: '100%', backgroundColor: '#ef4444', width: `${(absentHours / totalScheduledHours) * 100}%` }} />}
+                                                                        {lateHours > 0 && <div style={{ height: '100%', backgroundColor: '#f59e0b', width: `${(lateHours / totalScheduledHours) * 100}%` }} />}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 })() : attMode === "history" ? (() => {
@@ -2216,14 +2481,24 @@ const handleOpenAnalytics = async () => {
 
                                     return (
                                         <div className="space-y-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                                                    <History className="w-3.5 h-3.5 mr-1" />
-                                                    Historial de Asistencia Agrupado por Estudiante
-                                                </Badge>
-                                                <span className="text-xs font-semibold text-muted-foreground">
-                                                    {totalRecordsCount} Registros en total ({sortedStudentsWithNovedades.length} Estudiantes)
-                                                </span>
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 w-fit">
+                                                        <History className="w-3.5 h-3.5 mr-1" />
+                                                        Historial de Asistencia Agrupado por Estudiante
+                                                    </Badge>
+                                                    <span className="text-xs font-semibold text-muted-foreground">
+                                                        {totalRecordsCount} Registros en total ({sortedStudentsWithNovedades.length} Estudiantes)
+                                                    </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" onClick={exportHistoryToExcel}>
+                                                        <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Excel
+                                                    </Button>
+                                                    <Button variant="outline" size="sm" onClick={exportHistoryToPDF}>
+                                                        <FileDown className="w-4 h-4 mr-2 text-red-600" /> PDF
+                                                    </Button>
+                                                </div>
                                             </div>
 
                                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border border-border/40 mb-4">
@@ -2256,7 +2531,7 @@ const handleOpenAnalytics = async () => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="space-y-4">
+                                                <div ref={historyRef} id="history-table-container" className="space-y-4 bg-background p-2 rounded-xl">
                                                     {sortedStudentsWithNovedades.map((student: any) => {
                                                         const studentRecords = attendanceHistory.filter((rec: any) => 
                                                             rec.courseId === attCourseId && 
@@ -2268,7 +2543,7 @@ const handleOpenAnalytics = async () => {
                                                         const lateCount = studentRecords.filter(r => r.status === "LATE").length;
 
                                                         return (
-                                                            <div key={student.id} className="rounded-2xl border bg-card shadow-sm overflow-hidden hover:border-primary/20 transition-all duration-200">
+                                                            <div key={student.id} className="print-avoid-break rounded-2xl border bg-card shadow-sm overflow-hidden hover:border-primary/20 transition-all duration-200">
                                                                 {/* Student Header summary */}
                                                                 <div className="bg-muted/30 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b">
                                                                     <div className="flex items-center gap-3">
@@ -2498,72 +2773,87 @@ const handleOpenAnalytics = async () => {
 
                                     return (
                                         <div className="space-y-3">
-                                            {/* Legend */}
-                                            <div className="flex flex-wrap items-center gap-3 px-1">
-                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest shrink-0">Leyenda:</span>
-                                                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
-                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-emerald-100 text-emerald-700">P</span> Presente
-                                                </span>
-                                                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
-                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-amber-100 text-amber-700">T</span> Tarde
-                                                </span>
-                                                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
-                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-red-100 text-red-700">F</span> Falta
-                                                </span>
-                                                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
-                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-blue-100 text-blue-700">E</span> Excusa
-                                                </span>
-
-                                                {/* Quick selection day filters */}
-                                                <div className="w-px h-5 bg-border mx-1 shrink-0" />
-                                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest shrink-0">Filtrar Día:</span>
-                                                <div className="flex gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40 shrink-0">
-                                                    {([
-                                                        { value: null, label: "Todos" },
-                                                        { value: 1, label: "Lun" },
-                                                        { value: 2, label: "Mar" },
-                                                        { value: 3, label: "Mié" },
-                                                        { value: 4, label: "Jue" },
-                                                        { value: 5, label: "Vie" },
-                                                        { value: 6, label: "Sáb" },
-                                                        { value: 0, label: "Dom" }
-                                                    ]).map(({ value, label }) => {
-                                                        const isSelected = selectedDayFilter === value;
-                                                        const hasDays = value === null || finalDays.some(d => d.getUTCDay() === value);
-                                                        if (!hasDays) return null;
-
-                                                        return (
-                                                            <button
-                                                                key={label}
-                                                                type="button"
-                                                                onClick={() => setSelectedDayFilter(value)}
-                                                                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                                                                    isSelected 
-                                                                        ? "bg-background shadow-xs text-primary border border-border/40" 
-                                                                        : "text-muted-foreground hover:text-foreground"
-                                                                }`}
-                                                            >
-                                                                {label}
-                                                            </button>
-                                                        );
-                                                    })}
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-1 mb-2">
+                                                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 w-fit">
+                                                    <LayoutList className="w-3.5 h-3.5 mr-1" />
+                                                    Planilla de Asistencia General
+                                                </Badge>
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" onClick={exportMatrixToExcel}>
+                                                        <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Excel
+                                                    </Button>
+                                                    <Button variant="outline" size="sm" onClick={exportMatrixToPDF}>
+                                                        <FileDown className="w-4 h-4 mr-2 text-red-600" /> PDF
+                                                    </Button>
                                                 </div>
-
-                                                <span className="ml-auto text-xs text-muted-foreground shrink-0">{displayedDays.length} clases · {selectedGroup.students?.length || 0} estudiantes</span>
                                             </div>
+                                            {/* Legend */}
+                                            <div ref={matrixRef} className="bg-background rounded-xl">
+                                                <div className="flex flex-wrap items-center gap-3 px-1 mb-3">
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest shrink-0">Leyenda:</span>
+                                                    <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+                                                        <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-emerald-100 text-emerald-700">P</span> Presente
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+                                                        <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-amber-100 text-amber-700">T</span> Tarde
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+                                                        <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-red-100 text-red-700">F</span> Falta
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+                                                        <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-black bg-blue-100 text-blue-700">E</span> Excusa
+                                                    </span>
 
-                                            {displayedDays.length === 0 ? (
-                                                <div className="flex flex-col items-center justify-center py-16 border border-dashed rounded-xl text-muted-foreground">
-                                                    <LayoutList className="w-10 h-10 mb-3 opacity-30" />
-                                                    <p className="font-semibold">Sin clases registradas para este filtro</p>
-                                                    <p className="text-sm mt-1">Selecciona otro día o restablece el filtro a "Todos"</p>
+                                                    {/* Quick selection day filters */}
+                                                    <div className="w-px h-5 bg-border mx-1 shrink-0" />
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest shrink-0">Filtrar Día:</span>
+                                                    <div className="flex gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40 shrink-0">
+                                                        {([
+                                                            { value: null, label: "Todos" },
+                                                            { value: 1, label: "Lun" },
+                                                            { value: 2, label: "Mar" },
+                                                            { value: 3, label: "Mié" },
+                                                            { value: 4, label: "Jue" },
+                                                            { value: 5, label: "Vie" },
+                                                            { value: 6, label: "Sáb" },
+                                                            { value: 0, label: "Dom" }
+                                                        ]).map(({ value, label }) => {
+                                                            const isSelected = selectedDayFilter === value;
+                                                            const hasDays = value === null || finalDays.some(d => d.getUTCDay() === value);
+                                                            if (!hasDays) return null;
+
+                                                            return (
+                                                                <button
+                                                                    key={label}
+                                                                    type="button"
+                                                                    onClick={() => setSelectedDayFilter(value)}
+                                                                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                                                                        isSelected 
+                                                                            ? "bg-background shadow-xs text-primary border border-border/40" 
+                                                                            : "text-muted-foreground hover:text-foreground"
+                                                                    }`}
+                                                                >
+                                                                    {label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    <span className="ml-auto text-xs text-muted-foreground shrink-0">{displayedDays.length} clases · {selectedGroup.students?.length || 0} estudiantes</span>
                                                 </div>
-                                            ) : (
-                                                <TooltipProvider>
-                                                    <div className="overflow-auto rounded-2xl border border-border/60 shadow-sm">
+
+                                                {displayedDays.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-16 border border-dashed rounded-xl text-muted-foreground">
+                                                        <LayoutList className="w-10 h-10 mb-3 opacity-30" />
+                                                        <p className="font-semibold">Sin clases registradas para este filtro</p>
+                                                        <p className="text-sm mt-1">Selecciona otro día o restablece el filtro a "Todos"</p>
+                                                    </div>
+                                                ) : (
+                                                    <TooltipProvider>
+                                                        <div id="matrix-table-container" className="overflow-auto rounded-2xl border border-border/60 shadow-sm bg-background">
                                                         <table className="text-xs border-collapse min-w-max w-full">
                                                             <thead>
-                                                                <tr className="bg-muted/40 sticky top-0 z-10">
+                                                                <tr className="print-avoid-break bg-muted/40 sticky top-0 z-10">
                                                                     <th className="sticky left-0 z-20 bg-muted text-left px-4 py-3 font-bold text-foreground min-w-[180px] border-b border-r border-border/60">
                                                                         Estudiante
                                                                     </th>
@@ -2590,7 +2880,7 @@ const handleOpenAnalytics = async () => {
                                                                     const absences = Object.values(uLookup).filter(v => v.status === "ABSENT" && !v.justification).length;
                                                                     const lates = Object.values(uLookup).filter(v => v.status === "LATE").length;
                                                                     return (
-                                                                        <tr key={s.id} className={`group/row transition-colors ${i % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
+                                                                        <tr key={s.id} className={`print-avoid-break group/row transition-colors ${i % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
                                                                             <td className={`sticky left-0 z-10 px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap transition-colors ${
                                                                                 i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
                                                                             } group-hover/row:bg-muted`}>
@@ -2695,6 +2985,7 @@ const handleOpenAnalytics = async () => {
                                                     </div>
                                                 </TooltipProvider>
                                             )}
+                                            </div>
                                         </div>
                                     );
                                 })()}

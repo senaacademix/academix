@@ -50,6 +50,8 @@
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.36.0",
+    "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
     "jotai": "^2.20.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

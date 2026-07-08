@@ -396,7 +396,7 @@ export async function getGroupRemarksHistory(groupId: string) {
         };
     });
 
-    const coursesList = group.courses.map(c => ({ id: c.id, title: c.title }));
+    const coursesList = coursesTaught.map(c => ({ id: c.id, title: c.title }));
 
     return {
         studentMetrics,
