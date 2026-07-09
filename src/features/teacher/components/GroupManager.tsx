@@ -71,7 +71,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { formatName } from "@/lib/utils";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -100,6 +99,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 
 interface GroupManagerProps {
     groups: any[];
@@ -337,6 +337,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     }, []);
     const [seqIndex, setSeqIndex] = useState(0);
     const [attDate, setAttDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+    const [hideOtherDates, setHideOtherDates] = useState<boolean>(true);
     const [attCourseId, setAttCourseId] = useState<string>("");
     // We only store ABSENT or LATE in attRecords. If a student is not here, they are PRESENT.
     const [attRecords, setAttRecords] = useState<Record<string, { status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY", arrivalTime?: string, departureTime?: string, justification?: string }>>({});
@@ -347,7 +348,6 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [isGroupGeneratorOpen, setIsGroupGeneratorOpen] = useState(false);
     const [attendanceToDelete, setAttendanceToDelete] = useState<{ studentId: string; studentName: string; date: string } | null>(null);
     const [markAllConfirmOpen, setMarkAllConfirmOpen] = useState<boolean>(false);
-    const [hideOtherDates, setHideOtherDates] = useState<boolean>(true);
 
     const [isDateLocked, setIsDateLocked] = useState<boolean>(false);
     const [hasEditPermission, setHasEditPermission] = useState<boolean>(true);
@@ -1737,15 +1737,7 @@ const handleOpenAnalytics = async () => {
                             </TabsContent>
 
                             {/* TAB 2: ATTENDANCE */}
-                            <TabsContent value="attendance" className="m-0 space-y-4 outline-none relative">
-                                {isSavingAtt && (
-                                    <div className="absolute inset-0 bg-background/50 backdrop-blur-[0.5px] z-50 flex items-center justify-center rounded-2xl cursor-wait" style={{ minHeight: '400px' }}>
-                                        <div className="bg-card border shadow-xl px-5 py-4 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in-95 duration-150">
-                                            <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                                            <span className="text-sm font-bold text-foreground">Guardando cambios...</span>
-                                        </div>
-                                    </div>
-                                )}
+                            <TabsContent value="attendance" className="m-0 space-y-4 outline-none">
                                 {isDateLocked && (
                                     <div className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300 ${
                                         hasEditPermission 
@@ -1812,19 +1804,20 @@ const handleOpenAnalytics = async () => {
                                 {attMode !== "matrix" && attMode !== "history" && attMode !== "metrics" && (
                                     <div className="flex flex-col gap-2 bg-muted/10 p-4 rounded-2xl border mb-3 w-full animate-in fade-in duration-300">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full mb-1">
-                                             <div className="flex items-center gap-4">
-                                                 <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Fecha de Asistencia</Label>
-                                                 <div className="flex items-center gap-2 bg-background px-3 py-1 rounded-xl border border-muted-foreground/15 shadow-sm">
-                                                     <Switch
-                                                         id="show-only-current-date"
-                                                         checked={hideOtherDates}
-                                                         onCheckedChange={setHideOtherDates}
-                                                     />
-                                                     <Label htmlFor="show-only-current-date" className="text-xs font-bold text-foreground cursor-pointer select-none">
-                                                         Solo fecha actual
-                                                     </Label>
-                                                 </div>
-                                             </div>
+                                            <div className="flex items-center gap-4">
+                                                <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Fecha de Asistencia</Label>
+                                                <div className="flex items-center gap-2 bg-background px-3 py-1 rounded-xl border border-muted-foreground/15 shadow-sm">
+                                                    <Switch
+                                                        id="hide-other-dates"
+                                                        checked={hideOtherDates}
+                                                        onCheckedChange={setHideOtherDates}
+                                                        className="scale-75"
+                                                    />
+                                                    <Label htmlFor="hide-other-dates" className="text-[10px] font-bold text-muted-foreground cursor-pointer select-none">
+                                                        Solo fecha actual
+                                                    </Label>
+                                                </div>
+                                            </div>
                                             <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-sm border ${
                                                 limitSettingsActive
                                                     ? "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400"
@@ -1846,11 +1839,12 @@ const handleOpenAnalytics = async () => {
                                         <div className="flex flex-wrap gap-1.5 p-1 bg-background rounded-xl border border-muted-foreground/15 shadow-sm max-h-[120px] overflow-y-auto">
                                             {(() => {
                                                 const validDaysList = getValidClassDaysList();
-                                                 const filteredDaysList = hideOtherDates
-                                                     ? (validDaysList.includes(attDate) ? [attDate] : (validDaysList.length > 0 ? [attDate] : []))
-                                                     : validDaysList;
-                                                 const todayStr = format(new Date(), "yyyy-MM-dd");
-                                                 return filteredDaysList.map((ds) => {
+                                                const todayStr = format(new Date(), "yyyy-MM-dd");
+                                                const filteredDaysList = hideOtherDates 
+                                                    ? (validDaysList.includes(attDate) ? [attDate] : (validDaysList.length > 0 ? [attDate] : []))
+                                                    : validDaysList;
+
+                                                return filteredDaysList.map((ds) => {
                                                     const d = new Date(ds + "T12:00:00Z");
                                                     const dayNamesShort = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
                                                     const label = `${dayNamesShort[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -1994,11 +1988,7 @@ const handleOpenAnalytics = async () => {
                                 ) : attMode === "list" ? (
                                     // MODE 1: LIST VIEW
                                     <div className="space-y-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                                                <CheckSquare className="w-3 h-3 mr-1" />
-                                                Por defecto todos están presentes
-                                            </Badge>
+                                        <div className="flex items-center justify-end mb-2">
                                             <span className="text-xs font-bold flex items-center gap-1.5 flex-wrap">
                                                 <span className="text-emerald-600 dark:text-emerald-400">
                                                     {Object.values(attRecords).filter(r => r.status === "PRESENT").length} Presentes
@@ -4181,16 +4171,15 @@ const handleOpenAnalytics = async () => {
                                              <Button 
                                                  size="lg" 
                                                  variant="outline" 
-                                                 disabled={isSavingAtt}
                                                  className={`flex-1 h-20 rounded-2xl font-black text-lg transition-all border-2 ${
                                                      isAbsent 
                                                          ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md' 
                                                          : 'border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
                                                  }`}
-                                                 onClick={async () => { 
-                                                     await setStudentAttendance(currentStudent.id, isAbsent ? "UNMARKED" : "ABSENT"); 
+                                                 onClick={() => { 
+                                                     setStudentAttendance(currentStudent.id, isAbsent ? "UNMARKED" : "ABSENT"); 
                                                      if (!isAbsent) {
-                                                         nextSeqStudent(); 
+                                                         setTimeout(nextSeqStudent, 300); 
                                                      }
                                                  }}
                                              >
@@ -4199,17 +4188,14 @@ const handleOpenAnalytics = async () => {
 
                                              <Button 
                                                  size="lg" 
-                                                 disabled={isSavingAtt}
                                                  className={`flex-1 h-20 rounded-2xl font-black text-lg text-white shadow-md flex items-center justify-center gap-2 transition-all ${
                                                      isPresent 
                                                          ? 'bg-emerald-700 hover:bg-emerald-800' 
                                                          : 'bg-emerald-600 hover:bg-emerald-700'
                                                  }`}
-                                                 onClick={async () => { 
-                                                     await setStudentAttendance(currentStudent.id, isPresent ? "UNMARKED" : "PRESENT"); 
-                                                     if (!isPresent) {
-                                                         nextSeqStudent(); 
-                                                     }
+                                                 onClick={() => { 
+                                                     setStudentAttendance(currentStudent.id, isPresent ? "UNMARKED" : "PRESENT"); 
+                                                     nextSeqStudent(); 
                                                  }}
                                              >
                                                  <UserCheck className="w-6 h-6" /> Presente
@@ -4220,7 +4206,7 @@ const handleOpenAnalytics = async () => {
                                         <div className="flex justify-between items-center pt-2 text-muted-foreground">
                                             <Button 
                                                 variant="ghost" 
-                                                disabled={seqIndex === 0 || isSavingAtt} 
+                                                disabled={seqIndex === 0} 
                                                 onClick={prevSeqStudent} 
                                                 className="font-bold text-xs"
                                             >
@@ -4228,7 +4214,7 @@ const handleOpenAnalytics = async () => {
                                             </Button>
                                             <Button 
                                                 variant="ghost" 
-                                                disabled={seqIndex === filteredStudents.length - 1 || isSavingAtt} 
+                                                disabled={seqIndex === filteredStudents.length - 1} 
                                                 onClick={nextSeqStudent} 
                                                 className="font-bold text-xs"
                                             >
