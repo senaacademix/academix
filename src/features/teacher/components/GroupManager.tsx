@@ -71,6 +71,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { formatName } from "@/lib/utils";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -346,6 +347,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [isGroupGeneratorOpen, setIsGroupGeneratorOpen] = useState(false);
     const [attendanceToDelete, setAttendanceToDelete] = useState<{ studentId: string; studentName: string; date: string } | null>(null);
     const [markAllConfirmOpen, setMarkAllConfirmOpen] = useState<boolean>(false);
+    const [hideOtherDates, setHideOtherDates] = useState<boolean>(true);
 
     const [isDateLocked, setIsDateLocked] = useState<boolean>(false);
     const [hasEditPermission, setHasEditPermission] = useState<boolean>(true);
@@ -1809,8 +1811,20 @@ const handleOpenAnalytics = async () => {
                                 {/* Dedicated Date Selection Bar */}
                                 {attMode !== "matrix" && attMode !== "history" && attMode !== "metrics" && (
                                     <div className="flex flex-col gap-2 bg-muted/10 p-4 rounded-2xl border mb-3 w-full animate-in fade-in duration-300">
-                                        <div className="flex justify-between items-center w-full mb-1">
-                                            <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Fecha de Asistencia</Label>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full mb-1">
+                                             <div className="flex items-center gap-4">
+                                                 <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Fecha de Asistencia</Label>
+                                                 <div className="flex items-center gap-2 bg-background px-3 py-1 rounded-xl border border-muted-foreground/15 shadow-sm">
+                                                     <Switch
+                                                         id="show-only-current-date"
+                                                         checked={hideOtherDates}
+                                                         onCheckedChange={setHideOtherDates}
+                                                     />
+                                                     <Label htmlFor="show-only-current-date" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                                                         Solo fecha actual
+                                                     </Label>
+                                                 </div>
+                                             </div>
                                             <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-sm border ${
                                                 limitSettingsActive
                                                     ? "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400"
@@ -1832,8 +1846,11 @@ const handleOpenAnalytics = async () => {
                                         <div className="flex flex-wrap gap-1.5 p-1 bg-background rounded-xl border border-muted-foreground/15 shadow-sm max-h-[120px] overflow-y-auto">
                                             {(() => {
                                                 const validDaysList = getValidClassDaysList();
-                                                const todayStr = format(new Date(), "yyyy-MM-dd");
-                                                return validDaysList.map((ds) => {
+                                                 const filteredDaysList = hideOtherDates
+                                                     ? (validDaysList.includes(attDate) ? [attDate] : (validDaysList.length > 0 ? [attDate] : []))
+                                                     : validDaysList;
+                                                 const todayStr = format(new Date(), "yyyy-MM-dd");
+                                                 return filteredDaysList.map((ds) => {
                                                     const d = new Date(ds + "T12:00:00Z");
                                                     const dayNamesShort = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
                                                     const label = `${dayNamesShort[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
