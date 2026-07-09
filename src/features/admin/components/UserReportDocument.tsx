@@ -95,6 +95,7 @@ const styles = StyleSheet.create({
     statusPresent: { color: 'green' },
     statusAbsent: { color: 'red' },
     statusLate: { color: '#b45309' }, // amber-700
+    statusLeaveEarly: { color: '#2563eb' }, // blue-600
 });
 
 interface UserReportProps {
@@ -195,9 +196,13 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                                     <Text style={[
                                         styles.tableCell,
                                         record.status === 'PRESENT' ? styles.statusPresent :
-                                            record.status === 'ABSENT' ? styles.statusAbsent : styles.statusLate
+                                            record.status === 'ABSENT' ? styles.statusAbsent :
+                                            record.status === 'LEAVE_EARLY' ? styles.statusLeaveEarly : styles.statusLate
                                     ]}>
-                                        {record.status}
+                                        {record.status === 'PRESENT' ? 'Presente' :
+                                         record.status === 'ABSENT' ? 'Falta' :
+                                         record.status === 'LEAVE_EARLY' ? 'Retiro' :
+                                         record.status === 'LATE' ? 'Tarde' : record.status}
                                     </Text>
                                 </View>
                             </View>

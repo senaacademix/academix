@@ -506,7 +506,7 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
     // Fetch attendances
     const attendances = await prisma.attendance.findMany({
         where: { courseId: { in: courseIds } },
-        select: { status: true, date: true, userId: true, arrivalTime: true, courseId: true }
+        select: { status: true, date: true, userId: true, arrivalTime: true, departureTime: true, courseId: true }
     });
 
     // Fetch remarks
@@ -595,14 +595,16 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
         let totalScore = 0;
         let gradesCount = 0;
         const courseGrades: Record<string, number> = {};
-        const courseAttendances: Record<string, { present: number, absent: number, late: number, absentHours: number, lateHours: number, totalClasses: number }> = {};
+        const courseAttendances: Record<string, { present: number, absent: number, late: number, leaveEarly: number, absentHours: number, lateHours: number, leaveEarlyHours: number, totalClasses: number }> = {};
         const courseRemarks: Record<string, { attention: number, commendation: number }> = {};
 
         let globalAbsent = 0;
         let globalLate = 0;
         let globalPresent = 0;
+        let globalLeaveEarly = 0;
         let globalAbsentHours = 0;
         let globalLateHours = 0;
+        let globalLeaveEarlyHours = 0;
         
         let globalAttention = 0;
         let globalCommendation = 0;
@@ -625,9 +627,10 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
             const cAtts = sAttendances.filter(a => a.courseId === c.id);
             const cAbsent = cAtts.filter(a => a.status === 'ABSENT').length;
             const cLate = cAtts.filter(a => a.status === 'LATE').length;
+            const cLeaveEarly = cAtts.filter(a => a.status === 'LEAVE_EARLY').length;
             
             const cTotalClasses = courseTotalClassesMap[c.id];
-            const cPresent = Math.max(0, cTotalClasses - cAbsent - cLate);
+            const cPresent = Math.max(0, cTotalClasses - cAbsent - cLate - cLeaveEarly);
             
             const cAbsentHours = cAbsent * groupDailyHours;
             let cLateHours = 0;
@@ -637,7 +640,7 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
                 try {
                     const dateObj = new Date(rec.arrivalTime);
                     if (!isNaN(dateObj.getTime())) {
-                        timePart = `${dateObj.getUTCHours().toString().padStart(2, '0')}:${dateObj.getUTCMinutes().toString().padStart(2, '0')}`;
+                        timePart = dateObj.getUTCHours().toString().padStart(2, '0') + ":" + dateObj.getUTCMinutes().toString().padStart(2, '0');
                     } else {
                         timePart = String(rec.arrivalTime);
                     }
@@ -652,13 +655,49 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
                     }
                 }
             });
-            courseAttendances[c.id] = { present: cPresent, absent: cAbsent, late: cLate, absentHours: cAbsentHours, lateHours: cLateHours, totalClasses: cTotalClasses };
+
+            let cLeaveEarlyHours = 0;
+            cAtts.filter(a => a.status === 'LEAVE_EARLY').forEach(rec => {
+                if (!rec.departureTime) return;
+                let timePart = "";
+                try {
+                    const dateObj = new Date(rec.departureTime);
+                    if (!isNaN(dateObj.getTime())) {
+                        timePart = dateObj.getUTCHours().toString().padStart(2, '0') + ":" + dateObj.getUTCMinutes().toString().padStart(2, '0');
+                    } else {
+                        timePart = String(rec.departureTime);
+                    }
+                } catch {
+                    timePart = String(rec.departureTime);
+                }
+                const [dh, dm] = timePart.split(":").map(Number);
+                if (!isNaN(dh) && !isNaN(dm)) {
+                    const [eh, em] = gEnd.split(":").map(Number);
+                    const lostMinutes = (eh * 60 + em) - (dh * 60 + dm);
+                    if (lostMinutes > 0) {
+                        cLeaveEarlyHours += lostMinutes / 60;
+                    }
+                }
+            });
+
+            courseAttendances[c.id] = { 
+                present: cPresent, 
+                absent: cAbsent, 
+                late: cLate, 
+                leaveEarly: cLeaveEarly,
+                absentHours: cAbsentHours, 
+                lateHours: cLateHours, 
+                leaveEarlyHours: cLeaveEarlyHours,
+                totalClasses: cTotalClasses 
+            };
 
             globalAbsent += cAbsent;
             globalLate += cLate;
             globalPresent += cPresent;
+            globalLeaveEarly += cLeaveEarly;
             globalAbsentHours += cAbsentHours;
             globalLateHours += cLateHours;
+            globalLeaveEarlyHours += cLeaveEarlyHours;
 
             // Remarks
             const cRems = sRemarks.filter(r => r.courseId === c.id);
@@ -680,7 +719,7 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
             courseGrades,
             courseAttendances,
             courseRemarks,
-            attendances: { present: globalPresent, absent: globalAbsent, late: globalLate, absentHours: globalAbsentHours, lateHours: globalLateHours },
+            attendances: { present: globalPresent, absent: globalAbsent, late: globalLate, leaveEarly: globalLeaveEarly, absentHours: globalAbsentHours, lateHours: globalLateHours, leaveEarlyHours: globalLeaveEarlyHours },
             remarks: { attention: globalAttention, commendation: globalCommendation }
         };
     });
@@ -708,7 +747,8 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
         coursesList: group.courses.map(c => ({ 
             id: c.id, 
             title: c.title,
-            teacherName: c.teacher?.name || "No asignado"
+            teacherName: c.teacher?.name || "No asignado",
+            schedules: c.schedules || []
         }))
     };
 }
@@ -761,7 +801,9 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
         const totalAttendances = student.attendances.length;
         const absentCount = student.attendances.filter(a => a.status === "ABSENT").length;
         const lateCount = student.attendances.filter(a => a.status === "LATE").length;
+        const leaveEarlyCount = student.attendances.filter(a => a.status === "LEAVE_EARLY").length;
         const absenceRate = totalAttendances > 0 ? Number(((absentCount / totalAttendances) * 100).toFixed(1)) : 0;
+        const anomalyRate = totalAttendances > 0 ? Number((((absentCount + lateCount + leaveEarlyCount) / totalAttendances) * 100).toFixed(1)) : 0;
 
         // Remarks
         const attentionCount = student.remarks.filter(r => r.type === "ATTENTION").length;
@@ -777,8 +819,10 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
             programName: student.group?.program?.name || "Sin Programa",
             avgGrade,
             absenceRate,
+            anomalyRate,
             absentCount,
             lateCount,
+            leaveEarlyCount,
             totalAttendances,
             attentionCount,
             citationCount,
@@ -798,10 +842,10 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
         .filter(s => s.avgGrade > 0 && s.avgGrade < 3.0)
         .sort((a, b) => a.avgGrade - b.avgGrade);
 
-    // 3. Students at Absence Risk (absence rate > 15%)
+    // 3. Students at Absence Risk (anomaly rate > 15%)
     const attendanceRiskStudents = [...studentData]
-        .filter(s => s.absenceRate > 15)
-        .sort((a, b) => b.absenceRate - a.absenceRate);
+        .filter(s => s.anomalyRate > 15)
+        .sort((a, b) => b.anomalyRate - a.anomalyRate);
 
     // 4. Students with Disciplinary Attention / Citation
     const disciplinaryRiskStudents = [...studentData]

@@ -24,12 +24,16 @@ export async function updateSettingsAction(formData: FormData) {
     const limitRaw = formData.get("studentDailyLimit");
     const studentDailyLimit = limitRaw ? parseInt(limitRaw as string, 10) : null;
 
+    const limitWeekRaw = formData.get("limitAttendanceToCurrentWeek");
+    const limitAttendanceToCurrentWeek = limitWeekRaw === "true";
+
     const rawData = {
         institutionName: formData.get("institutionName") as string,
         institutionLogo: formData.get("institutionLogo") as string,
         institutionHeroImage: formData.get("institutionHeroImage") as string,
         footerText: formData.get("footerText") as string,
         studentDailyLimit: studentDailyLimit !== null && !isNaN(studentDailyLimit) ? studentDailyLimit : null,
+        limitAttendanceToCurrentWeek: limitAttendanceToCurrentWeek,
     };
 
     const data: any = {};

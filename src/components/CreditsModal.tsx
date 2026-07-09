@@ -62,6 +62,7 @@ export function CreditsModal() {
                     <div className="space-y-2">
                         <h3 className="text-lg font-bold">Jhon Fredy Valencia Gómez</h3>
                         <h3 className="text-lg font-bold">Deimer Andrés Miranda Montoya</h3>
+                        <h3 className="text-lg font-bold">Jaime Alberto Zapata Valencia</h3>
                         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase pt-1">
                             Instructores Desarrollo de Software
                         </p>

@@ -819,12 +819,17 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                     
                                     let absentHours = 0;
                                     let lateHours = 0;
+                                    let leaveHours = 0;
                                     
                                     entries.forEach(rec => {
+                                        const daysMap: Record<string, number> = {
+                                            SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6
+                                        };
+                                        const targetDay = new Date(rec.date).getUTCDay();
                                         if (rec.status === "ABSENT") {
                                             absentHours += dailyHours;
                                         } else if (rec.status === "LATE" && rec.arrivalTime && course.schedules && course.schedules.length > 0) {
-                                            const sch = course.schedules.find((s: any) => s.dayOfWeek === new Date(rec.date).getUTCDay()) || course.schedules[0];
+                                            const sch = course.schedules.find((s: any) => daysMap[s.dayOfWeek] === targetDay) || course.schedules[0];
                                             if (sch && sch.startTime) {
                                                 const [sh, sm] = sch.startTime.split(":").map(Number);
                                                 let ah = 0, am = 0;
@@ -841,13 +846,33 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                     lateHours += (arrMin - schedMin) / 60;
                                                 }
                                             }
+                                        } else if (rec.status === "LEAVE_EARLY" && rec.departureTime && course.schedules && course.schedules.length > 0) {
+                                            const sch = course.schedules.find((s: any) => daysMap[s.dayOfWeek] === targetDay) || course.schedules[0];
+                                            if (sch && sch.endTime) {
+                                                const [eh, em] = sch.endTime.split(":").map(Number);
+                                                let dh = 0, dm = 0;
+                                                try {
+                                                    const dateObj = new Date(rec.departureTime);
+                                                    if (!isNaN(dateObj.getTime())) {
+                                                        dh = parseInt(dateObj.toISOString().substring(11, 13));
+                                                        dm = parseInt(dateObj.toISOString().substring(14, 16));
+                                                    }
+                                                } catch(e) {}
+                                                const depMin = dh * 60 + dm;
+                                                const schedEndMin = eh * 60 + em;
+                                                if (schedEndMin > depMin) {
+                                                    leaveHours += (schedEndMin - depMin) / 60;
+                                                }
+                                            }
                                         }
                                     });
 
+                                    const leaveCount = entries.filter(e => e.status === "LEAVE_EARLY").length;
                                     const absenceRate = totalClassDays > 0 ? Math.max(0, Math.min(100, (absentCount / totalClassDays) * 100)) : 0;
                                     const lateRate = totalClassDays > 0 ? Math.max(0, Math.min(100, (lateCount / totalClassDays) * 100)) : 0;
+                                    const leaveRate = totalClassDays > 0 ? Math.max(0, Math.min(100, (leaveCount / totalClassDays) * 100)) : 0;
                                     
-                                    const totalLostHours = absentHours + lateHours;
+                                    const totalLostHours = absentHours + lateHours + leaveHours;
                                     const attendedHours = Math.max(0, totalScheduledHours - totalLostHours);
                                     const attendanceHoursRate = totalScheduledHours > 0 ? Math.max(0, Math.min(100, (attendedHours / totalScheduledHours) * 100)) : 100;
                                     
@@ -857,10 +882,13 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                         totalScheduledHours,
                                         absentCount,
                                         lateCount,
+                                        leaveCount,
                                         absentHours,
                                         lateHours,
+                                        leaveHours,
                                         absenceRate,
                                         lateRate,
+                                        leaveRate,
                                         attendedHours,
                                         attendanceHoursRate
                                     };
@@ -893,9 +921,10 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
 
                                         {/* Chart Section */}
                                         <Tabs defaultValue="faltas" className="w-full">
-                                            <TabsList className="grid w-full sm:w-[450px] grid-cols-3 mb-6 mx-auto">
+                                            <TabsList className="grid w-full sm:w-[600px] grid-cols-4 mb-6 mx-auto">
                                                 <TabsTrigger value="faltas">Faltas</TabsTrigger>
                                                 <TabsTrigger value="tardanzas">Tardanzas</TabsTrigger>
+                                                <TabsTrigger value="retiros">Retiros</TabsTrigger>
                                                 <TabsTrigger value="horas">Carga Horaria</TabsTrigger>
                                             </TabsList>
                                             
@@ -943,6 +972,28 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                 </div>
                                             </TabsContent>
 
+                                            <TabsContent value="retiros" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                <div>
+                                                    <h3 className="text-base font-black text-foreground">Registro de Retiros Tempranos por Materia</h3>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días con retiro temprano en cada materia.</p>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    {filteredMetrics.map(m => (
+                                                        <div key={m.course.id} className="space-y-1.5">
+                                                            <div className="flex items-center justify-between text-xs font-bold">
+                                                                <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
+                                                                <span className="text-blue-600 shrink-0 font-extrabold">
+                                                                    {m.leaveCount} / {m.totalClassDays} días ({m.leaveRate.toFixed(1)}%)
+                                                                </span>
+                                                            </div>
+                                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${m.leaveRate}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </TabsContent>
+
                                             <TabsContent value="horas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
                                                 <div>
                                                     <h3 className="text-base font-black text-foreground">Carga Horaria y Asistencia Efectiva</h3>
@@ -950,7 +1001,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                 </div>
                                                 <div className="space-y-5">
                                                     {filteredMetrics.map(m => {
-                                                        const lostHours = m.absentHours + m.lateHours;
+                                                        const lostHours = m.absentHours + m.lateHours + m.leaveHours;
                                                         return (
                                                             <div key={m.course.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
                                                                 <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
@@ -968,6 +1019,9 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                     )}
                                                                     {m.lateHours > 0 && (
                                                                         <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${(m.lateHours / m.totalScheduledHours) * 100}%` }} title={`Horas Tardes: ${m.lateHours.toFixed(1)} hs`} />
+                                                                    )}
+                                                                    {m.leaveHours > 0 && (
+                                                                        <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(m.leaveHours / m.totalScheduledHours) * 100}%` }} title={`Horas Retiros: ${m.leaveHours.toFixed(1)} hs`} />
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -1019,16 +1073,23 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                     <TableBody>
                                                         {entries.map(att => {
                                                             const isJustified = !!att.justification;
-                                                            const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE') && currentUserRole === "student";
+                                                            const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE' || att.status === 'LEAVE_EARLY') && currentUserRole === "student";
                                                             return (
                                                                 <TableRow key={att.id}>
                                                                     <TableCell>
                                                                         <div className="font-semibold">{format(new Date(att.date), "EEE d MMM yyyy", { locale: es })}</div>
                                                                         {att.arrivalTime && <div className="text-xs text-muted-foreground mt-0.5">Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</div>}
+                                                                        {att.departureTime && <div className="text-xs text-muted-foreground mt-0.5">Retiro: {format(new Date(att.departureTime), "HH:mm")}</div>}
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
-                                                                        <Badge variant="outline" className={`text-xs font-bold w-28 h-6 inline-flex items-center justify-center ${att.status === 'LATE' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-red-600 border-red-200 bg-red-50'}`}>
-                                                                            {att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'}
+                                                                        <Badge variant="outline" className={`text-xs font-bold w-28 h-6 inline-flex items-center justify-center ${
+                                                                            att.status === 'LATE' 
+                                                                                ? 'text-amber-600 border-amber-200 bg-amber-50' 
+                                                                                : att.status === 'LEAVE_EARLY'
+                                                                                    ? 'text-blue-600 border-blue-200 bg-blue-50'
+                                                                                    : 'text-red-600 border-red-200 bg-red-50'
+                                                                        }`}>
+                                                                            {att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}
                                                                         </Badge>
                                                                     </TableCell>
                                                                     <TableCell className="text-center">
@@ -1058,7 +1119,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                                 </DialogTrigger>
                                                                                 <DialogContent>
                                                                                     <DialogHeader>
-                                                                                        <DialogTitle>Justificar {att.status === 'LATE' ? 'Retardo' : 'Ausencia'}</DialogTitle>
+                                                                                        <DialogTitle>Justificar {att.status === 'LATE' ? 'Retardo' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}</DialogTitle>
                                                                                         <DialogDescription>Explica el motivo y adjunta un enlace a tu soporte. Una vez enviada, no podrás modificarla.</DialogDescription>
                                                                                     </DialogHeader>
                                                                                     <div className="space-y-4 py-4">
@@ -1084,7 +1145,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                                         justification: att.justification || "",
                                                                                         url: att.justificationUrl,
                                                                                         date: att.date,
-                                                                                        statusName: att.status === 'LATE' ? 'Llegada Tarde' : 'Ausencia'
+                                                                                        statusName: att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'
                                                                                     })}
                                                                                 >
                                                                                     <FileText className="w-3 h-3" /> Ver

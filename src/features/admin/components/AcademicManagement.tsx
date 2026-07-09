@@ -49,7 +49,7 @@ import {
     Search, Trash2, Edit, Plus, Folder, BookOpen, Users, Calendar, 
     ChevronRight, Layers, Clock, X, Info, GraduationCap, ArrowLeft, ArrowUpRight, GripVertical,
     AlertCircle, Building, Code, Database, Binary, MessageSquare, Terminal,
-    ShieldCheck, Cloud, Rocket, NotebookTabs
+    ShieldCheck, Cloud, Rocket, NotebookTabs, Lock as LockIcon
 } from "lucide-react";
 import {
     DndContext,
@@ -296,6 +296,8 @@ interface Teacher {
     id: string;
     name: string | null;
     email: string;
+    availabilityLocked?: boolean;
+    qualifiedCoursesLocked?: boolean;
     profile?: {
         identificacion: string;
         nombres: string;
@@ -538,6 +540,64 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
 
     // Selection states
     const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
+    const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]);
+    const [bulkDeleteConfirmationOpen, setBulkDeleteConfirmationOpen] = useState(false);
+
+    useEffect(() => {
+        setSelectedTeacherIds([]);
+    }, [selectedProgram]);
+
+    const handleBulkAvailabilityLock = async (lock: boolean) => {
+        if (selectedTeacherIds.length === 0) return;
+        startTransition(async () => {
+            try {
+                if (lock) {
+                    await Promise.all(selectedTeacherIds.map(id => adminLockTeacherAvailabilityAction(id)));
+                    toast.success("Disponibilidad aprobada y bloqueada para los docentes seleccionados");
+                } else {
+                    await Promise.all(selectedTeacherIds.map(id => unlockTeacherAvailabilityAction(id)));
+                    toast.success("Disponibilidad desbloqueada para los docentes seleccionados");
+                }
+                setSelectedTeacherIds([]);
+                await refreshAll();
+            } catch (error: any) {
+                toast.error(error.message || "Error al procesar la acción en lote");
+            }
+        });
+    };
+
+    const handleBulkQualificationsLock = async (lock: boolean) => {
+        if (selectedTeacherIds.length === 0) return;
+        startTransition(async () => {
+            try {
+                if (lock) {
+                    await Promise.all(selectedTeacherIds.map(id => adminLockTeacherQualificationsAction(id)));
+                    toast.success("Materias aprobadas y bloqueadas para los docentes seleccionados");
+                } else {
+                    await Promise.all(selectedTeacherIds.map(id => unlockTeacherQualificationsAction(id)));
+                    toast.success("Materias desbloqueadas para los docentes seleccionados");
+                }
+                setSelectedTeacherIds([]);
+                await refreshAll();
+            } catch (error: any) {
+                toast.error(error.message || "Error al procesar la acción en lote");
+            }
+        });
+    };
+
+    const handleBulkDeleteTeachers = async () => {
+        if (selectedTeacherIds.length === 0) return;
+        startTransition(async () => {
+            try {
+                await Promise.all(selectedTeacherIds.map(id => deleteUserAction(id)));
+                toast.success("Docentes seleccionados eliminados con éxito del sistema");
+                setSelectedTeacherIds([]);
+                await refreshAll();
+            } catch (error: any) {
+                toast.error(error.message || "Error al eliminar los docentes seleccionados");
+            }
+        });
+    };
     const [managingGroup, setManagingGroup] = useState<Group | null>(null);
 
     useEffect(() => {
@@ -2328,24 +2388,128 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     </Button>
                                 </div>
                             ) : (
-                                <Card className="border-none shadow-sm bg-background overflow-hidden">
-                                    <CardContent className="p-0">
-                                        <Table>
-                                            <TableHeader className="bg-muted/10">
-                                                <TableRow>
-                                                    <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
-                                                    <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
-                                                    <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
-                                                    <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
-                                                    <TableHead className="py-3 text-xs font-semibold text-right">Acciones</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {selectedProgram.teachers.map(teacher => (
-                                                    <TableRow key={teacher.id} className="hover:bg-muted/5 group">
-                                                        <TableCell className="py-3 text-xs font-medium text-foreground">
-                                                            {teacher.profile?.identificacion || "—"}
-                                                        </TableCell>
+                                <>
+                                    {selectedTeacherIds.length > 0 && (
+                                        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-primary/5 border border-primary/10 rounded-xl mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="flex items-center gap-2">
+                                                <Checkbox 
+                                                    checked={selectedTeacherIds.length === selectedProgram.teachers.length}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            setSelectedTeacherIds(selectedProgram.teachers.map(t => t.id));
+                                                        } else {
+                                                            setSelectedTeacherIds([]);
+                                                        }
+                                                    }}
+                                                    className="border-primary/30 data-[state=checked]:bg-primary"
+                                                />
+                                                <span className="text-xs font-black text-primary">
+                                                    {selectedTeacherIds.length} seleccionado{selectedTeacherIds.length === 1 ? "" : "s"}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center flex-wrap gap-1.5 ml-auto">
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px] font-bold border-emerald-500/20 text-emerald-700 bg-emerald-50 hover:bg-emerald-500 hover:text-white cursor-pointer"
+                                                    onClick={() => handleBulkAvailabilityLock(true)}
+                                                    disabled={isPending}
+                                                >
+                                                    <LockIcon className="w-3 h-3 mr-1" /> Aprobar Disp.
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px] font-bold border-emerald-500/20 text-emerald-700 bg-emerald-50 hover:bg-emerald-500 hover:text-white cursor-pointer"
+                                                    onClick={() => handleBulkQualificationsLock(true)}
+                                                    disabled={isPending}
+                                                >
+                                                    <LockIcon className="w-3 h-3 mr-1" /> Aprobar Mat.
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px] font-bold border-amber-500/20 text-amber-700 bg-amber-50 hover:bg-amber-500 hover:text-white cursor-pointer"
+                                                    onClick={() => handleBulkAvailabilityLock(false)}
+                                                    disabled={isPending}
+                                                >
+                                                    <Clock className="w-3 h-3 mr-1" /> Desbloquear Disp.
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px] font-bold border-amber-500/20 text-amber-700 bg-amber-50 hover:bg-amber-500 hover:text-white cursor-pointer"
+                                                    onClick={() => handleBulkQualificationsLock(false)}
+                                                    disabled={isPending}
+                                                >
+                                                    <BookOpen className="w-3 h-3 mr-1" /> Desbloquear Mat.
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px] font-bold border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive hover:text-white cursor-pointer"
+                                                    onClick={() => setBulkDeleteConfirmationOpen(true)}
+                                                    disabled={isPending}
+                                                >
+                                                    <Trash2 className="w-3 h-3 mr-1" /> Eliminar
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-[10px] font-bold cursor-pointer"
+                                                    onClick={() => setSelectedTeacherIds([])}
+                                                >
+                                                    Cancelar
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <Card className="border-none shadow-sm bg-background overflow-hidden">
+                                        <CardContent className="p-0">
+                                            <Table>
+                                                <TableHeader className="bg-muted/10">
+                                                    <TableRow>
+                                                        <TableHead className="w-[45px] py-3 text-center">
+                                                            <Checkbox 
+                                                                checked={selectedTeacherIds.length === selectedProgram.teachers.length && selectedProgram.teachers.length > 0}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        setSelectedTeacherIds(selectedProgram.teachers.map(t => t.id));
+                                                                    } else {
+                                                                        setSelectedTeacherIds([]);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold text-center">Materias</TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold text-center">Disponibilidad</TableHead>
+                                                        <TableHead className="py-3 text-xs font-semibold text-right">Acciones</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {selectedProgram.teachers.map(teacher => {
+                                                        const isTeacherSelected = selectedTeacherIds.includes(teacher.id);
+                                                        return (
+                                                            <TableRow key={teacher.id} className={cn("hover:bg-muted/5 group", isTeacherSelected && "bg-primary/5 hover:bg-primary/5")}>
+                                                                <TableCell className="py-3 text-center">
+                                                                    <Checkbox 
+                                                                        checked={isTeacherSelected}
+                                                                        onCheckedChange={(checked) => {
+                                                                            if (checked) {
+                                                                                setSelectedTeacherIds(prev => [...prev, teacher.id]);
+                                                                            } else {
+                                                                                setSelectedTeacherIds(prev => prev.filter(id => id !== teacher.id));
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell className="py-3 text-xs font-medium text-foreground">
+                                                                    {teacher.profile?.identificacion || "—"}
+                                                                </TableCell>
                                                         <TableCell className="py-3 text-xs font-bold text-foreground">
                                                             {teacher.name || "Sin nombre"}
                                                         </TableCell>
@@ -2354,6 +2518,30 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                         </TableCell>
                                                         <TableCell className="py-3 text-xs text-muted-foreground font-sans">
                                                             {teacher.profile?.telefono || "—"}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-center">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={`font-bold text-[10.5px] px-2 py-0.5 rounded ${
+                                                                    teacher.qualifiedCoursesLocked
+                                                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                                                        : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
+                                                                }`}
+                                                            >
+                                                                {teacher.qualifiedCoursesLocked ? "Publicado" : "Borrador"}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-center">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={`font-bold text-[10.5px] px-2 py-0.5 rounded ${
+                                                                    teacher.availabilityLocked
+                                                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                                                        : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
+                                                                }`}
+                                                            >
+                                                                {teacher.availabilityLocked ? "Publicado" : "Borrador"}
+                                                            </Badge>
                                                         </TableCell>
                                                         <TableCell className="py-3 text-right">
                                                             <div className="flex justify-end items-center gap-1.5 ml-auto opacity-80 group-hover:opacity-100 transition-opacity">
@@ -2393,11 +2581,13 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                             </div>
                                                         </TableCell>
                                                     </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </CardContent>
-                                </Card>
+                                                        );
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+                                        </CardContent>
+                                    </Card>
+                                </>
                             )}
                         </TabsContent>
 
@@ -3156,6 +3346,31 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ============ DIALOG: BULK DELETE CONFIRMATION ============ */}
+            <AlertDialog open={bulkDeleteConfirmationOpen} onOpenChange={setBulkDeleteConfirmationOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                            <Trash2 className="w-5 h-5" />
+                            ¿Eliminar profesores seleccionados?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción eliminará de forma permanente a los <strong>{selectedTeacherIds.length}</strong> profesores seleccionados de este programa y del sistema. Esta acción no se puede deshacer.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={handleBulkDeleteTeachers}
+                            className="bg-destructive hover:bg-destructive/90 text-white font-bold cursor-pointer"
+                            disabled={isPending}
+                        >
+                            {isPending ? "Eliminando..." : `Eliminar (${selectedTeacherIds.length})`}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* ============ DIALOG: DELETE CONFIRMATION ============ */}
             <AlertDialog open={deleteConfirmationOpen} onOpenChange={setDeleteConfirmationOpen}>

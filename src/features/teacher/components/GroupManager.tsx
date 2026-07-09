@@ -11,12 +11,56 @@ const toISODateString = (dateVal: any) => {
     return `${y}-${m}-${day}`;
 };
 
+const calculateHoursDiff = (startTimeStr: string, endTimeStr: string): number => {
+    if (!startTimeStr || !endTimeStr) return 0;
+    const [sh, sm] = startTimeStr.split(":").map(Number);
+    const [eh, em] = endTimeStr.split(":").map(Number);
+    
+    const startMins = sh * 60 + sm;
+    const endMins = eh * 60 + em;
+    
+    if (endMins <= startMins) return 0;
+    
+    const diffMins = endMins - startMins;
+    const hours = diffMins / 60;
+    
+    return Math.round(hours * 100) / 100;
+};
+
+const formatTime12h = (timeStr: any): string => {
+    if (!timeStr) return "";
+    let match = "";
+    if (timeStr instanceof Date) {
+        const hours = timeStr.getUTCHours().toString().padStart(2, "0");
+        const minutes = timeStr.getUTCMinutes().toString().padStart(2, "0");
+        match = `${hours}:${minutes}`;
+    } else if (typeof timeStr === "string") {
+        match = timeStr;
+        if (match.includes("T")) {
+            match = match.substring(11, 16);
+        }
+    } else {
+        return String(timeStr);
+    }
+    
+    const parts = match.split(":");
+    if (parts.length < 2) return match;
+    const hour = parseInt(parts[0], 10);
+    const min = parseInt(parts[1], 10);
+    if (isNaN(hour) || isNaN(min)) return match;
+    
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    const minutesStr = min.toString().padStart(2, "0");
+    return `${hour12}:${minutesStr} ${ampm}`;
+};
+
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import * as htmlToImage from "html-to-image";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react";
+import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -294,13 +338,39 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [attDate, setAttDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
     const [attCourseId, setAttCourseId] = useState<string>("");
     // We only store ABSENT or LATE in attRecords. If a student is not here, they are PRESENT.
-    const [attRecords, setAttRecords] = useState<Record<string, { status: "ABSENT" | "LATE", arrivalTime?: string, justification?: string }>>({});
+    const [attRecords, setAttRecords] = useState<Record<string, { status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY", arrivalTime?: string, departureTime?: string, justification?: string }>>({});
     const [isSavingAtt, setIsSavingAtt] = useState(false);
     const [selectedDayFilter, setSelectedDayFilter] = useState<number | null>(null);
     const [historyStudentFilter, setHistoryStudentFilter] = useState<string>("all");
     const [isRouletteOpen, setIsRouletteOpen] = useState(false);
     const [isGroupGeneratorOpen, setIsGroupGeneratorOpen] = useState(false);
     const [attendanceToDelete, setAttendanceToDelete] = useState<{ studentId: string; studentName: string; date: string } | null>(null);
+    const [markAllConfirmOpen, setMarkAllConfirmOpen] = useState<boolean>(false);
+
+    const [isDateLocked, setIsDateLocked] = useState<boolean>(false);
+    const [hasEditPermission, setHasEditPermission] = useState<boolean>(true);
+    const [limitSettingsActive, setLimitSettingsActive] = useState<boolean>(false);
+    const [permissionRequestStatus, setPermissionRequestStatus] = useState<"PENDING" | "APPROVED" | "REJECTED" | null>(null);
+    const [permissionReason, setPermissionReason] = useState<string | null>(null);
+    const [requestingPermissionReason, setRequestingPermissionReason] = useState<string>("");
+    const [isRequestingPermission, setIsRequestingPermission] = useState<boolean>(false);
+
+    const checkEditPermission = async () => {
+        if (!attCourseId || !attDate) return;
+        const { getAttendanceEditPermissionStatusAction } = await import("../actions/groupActions");
+        const res = await getAttendanceEditPermissionStatusAction(attCourseId, attDate);
+        if (res.success) {
+            setIsDateLocked(res.isLocked || false);
+            setHasEditPermission(res.hasPermission || false);
+            setPermissionRequestStatus(res.requestStatus as any);
+            setPermissionReason(res.reason as any);
+            setLimitSettingsActive(res.limitSettingsActive || false);
+        }
+    };
+
+    useEffect(() => {
+        checkEditPermission();
+    }, [attDate, attCourseId]);
 
     // Remarks Tab State
     const [remarkType, setRemarkType] = useState<"ATTENTION" | "COMMENDATION" | "CITATION" | "OTHER">("ATTENTION");
@@ -352,6 +422,10 @@ export function GroupManager({ groups }: GroupManagerProps) {
     };
 
     const saveAndConfirmPendingAction = async () => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
         if (!pendingAction || !attCourseId || !attDate) return;
         
         const recordsArray = filteredStudents.map((s: any) => {
@@ -360,6 +434,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
                 studentId: s.id,
                 status: rec?.status || "PRESENT",
                 arrivalTime: rec?.arrivalTime || undefined,
+                departureTime: rec?.departureTime || undefined,
                 justification: rec?.justification || undefined
             };
         });
@@ -515,12 +590,11 @@ export function GroupManager({ groups }: GroupManagerProps) {
 
         const newRecords: Record<string, any> = {};
         recordsForDateAndCourse.forEach((rec: any) => {
-            // Ignoramos PRESENT explícitos para no llenar el estado de records inútiles
-            if (rec.status === "PRESENT") return;
-            
+            // Keep PRESENT status in state so the card style stays green
             newRecords[rec.userId] = {
                 status: rec.status,
                 arrivalTime: rec.arrivalTime ? new Date(rec.arrivalTime).toISOString().substring(11, 16) : undefined,
+                departureTime: rec.departureTime ? new Date(rec.departureTime).toISOString().substring(11, 16) : undefined,
                 justification: rec.justification || undefined
             };
         });
@@ -628,12 +702,16 @@ const handleOpenAnalytics = async () => {
         }
     };
 
-    const setStudentAttendance = async (studentId: string, status: "PRESENT" | "ABSENT" | "LATE") => {
+    const setStudentAttendance = async (studentId: string, status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "UNMARKED") => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
         if (!attCourseId) return toast.error("Selecciona una materia");
 
         let timeString: string | undefined = undefined;
 
-        if (status === "LATE") {
+        if (status === "LATE" || status === "LEAVE_EARLY") {
             const now = new Date();
             const currentHour = now.getHours();
             const currentMin = now.getMinutes();
@@ -659,12 +737,13 @@ const handleOpenAnalytics = async () => {
         // Optimistic UI update
         setAttRecords(prev => {
             const newRecords = { ...prev };
-            if (status === "PRESENT") {
-                delete newRecords[studentId]; // Removiendo = Presente
+            if (status === "UNMARKED") {
+                delete newRecords[studentId]; // Removiendo = Sin asistencia
             } else {
                 newRecords[studentId] = { 
-                    status, 
-                    arrivalTime: timeString 
+                    status: status as any, 
+                    arrivalTime: status === "LATE" ? timeString : undefined,
+                    departureTime: status === "LEAVE_EARLY" ? timeString : undefined
                 };
             }
             return newRecords;
@@ -675,9 +754,10 @@ const handleOpenAnalytics = async () => {
                 attCourseId,
                 studentId,
                 attDate,
-                status,
+                status as any,
                 undefined,
-                timeString
+                status === "LATE" ? timeString : undefined,
+                status === "LEAVE_EARLY" ? timeString : undefined
             );
             if (res.success) {
                 loadHistory(selectedGroup!.id);
@@ -692,6 +772,10 @@ const handleOpenAnalytics = async () => {
     };
 
     const updateLateTime = async (studentId: string, time: string) => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
         // Optimistic update
         setAttRecords(prev => {
             if (!prev[studentId]) return prev;
@@ -714,6 +798,42 @@ const handleOpenAnalytics = async () => {
                 loadHistory(selectedGroup!.id);
             } else {
                 toast.error("Error al actualizar la hora de ingreso: " + res.error);
+                loadHistory(selectedGroup!.id);
+            }
+        } catch (e) {
+            toast.error("Error de red al actualizar la hora");
+            loadHistory(selectedGroup!.id);
+        }
+    };
+
+    const updateLeaveTime = async (studentId: string, time: string) => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
+        // Optimistic update
+        setAttRecords(prev => {
+            if (!prev[studentId]) return prev;
+            return {
+                ...prev,
+                [studentId]: { ...prev[studentId], departureTime: time }
+            };
+        });
+
+        try {
+            const res = await saveSingleAttendanceAction(
+                attCourseId,
+                studentId,
+                attDate,
+                "LEAVE_EARLY",
+                undefined,
+                undefined,
+                time
+            );
+            if (res.success) {
+                loadHistory(selectedGroup!.id);
+            } else {
+                toast.error("Error al actualizar la hora de retiro: " + res.error);
                 loadHistory(selectedGroup!.id);
             }
         } catch (e) {
@@ -765,6 +885,7 @@ const handleOpenAnalytics = async () => {
             };
             let absences = 0;
             let lates = 0;
+            let leaves = 0;
             for (const date of allDates) {
                 const rec = history.find((r: any) => r.userId === s.id && r.date === date);
                 if (rec) {
@@ -776,6 +897,9 @@ const handleOpenAnalytics = async () => {
                     } else if (rec.status === "LATE") {
                         row[date] = "T";
                         lates++;
+                    } else if (rec.status === "LEAVE_EARLY") {
+                        row[date] = "R";
+                        leaves++;
                     } else {
                         row[date] = "";
                     }
@@ -783,7 +907,7 @@ const handleOpenAnalytics = async () => {
                     row[date] = "";
                 }
             }
-            row["F / T"] = `${absences} / ${lates}`;
+            row["F / T / R"] = `${absences} / ${lates} / ${leaves}`;
             return row;
         });
         return { rows, allDates, students };
@@ -1009,7 +1133,58 @@ const handleOpenAnalytics = async () => {
     };
     // ── END EXPORT FUNCTIONS ─────────────────────────────────────────────────────
 
+    const executeMarkAllPresent = async () => {
+        setIsSavingAtt(true);
+        const toastId = toast.loading("Registrando asistencia para todos los estudiantes...");
+
+        const updatedRecords = { ...attRecords };
+        filteredStudents.forEach((s: any) => {
+            updatedRecords[s.id] = { status: "PRESENT" };
+        });
+
+        setAttRecords(updatedRecords);
+
+        const records = Object.entries(updatedRecords).map(([studentId, rec]) => ({
+            studentId,
+            status: rec.status,
+            arrivalTime: rec.arrivalTime ? `${attDate}T${rec.arrivalTime}:00Z` : undefined,
+            departureTime: rec.departureTime ? `${attDate}T${rec.departureTime}:00Z` : undefined,
+            justification: rec.justification
+        }));
+
+        try {
+            const res = await saveAttendanceBatch(attCourseId, attDate, records as any);
+            if (res.success) {
+                toast.success("Todos los estudiantes marcados como presentes", { id: toastId });
+                await loadHistory(selectedGroup!.id);
+            } else {
+                toast.error("Error al guardar asistencia: " + res.error, { id: toastId });
+                await loadHistory(selectedGroup!.id);
+            }
+        } catch (error) {
+            toast.error("Error al guardar asistencia", { id: toastId });
+            await loadHistory(selectedGroup!.id);
+        } finally {
+            setIsSavingAtt(false);
+        }
+    };
+
+    const handleMarkAllPresent = async () => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
+        if (!attCourseId) return toast.error("Selecciona una materia");
+        if (filteredStudents.length === 0) return;
+
+        setMarkAllConfirmOpen(true);
+    };
+
     const handleSaveAttendance = async () => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
         if (!attCourseId) return toast.error("Selecciona una materia");
         
         // Send ONLY ABSENT or LATE records. PRESENT is implicit.
@@ -1017,6 +1192,7 @@ const handleOpenAnalytics = async () => {
             studentId,
             status: rec.status,
             arrivalTime: rec.arrivalTime ? `${attDate}T${rec.arrivalTime}:00Z` : undefined,
+            departureTime: rec.departureTime ? `${attDate}T${rec.departureTime}:00Z` : undefined,
             justification: rec.justification
         }));
 
@@ -1031,7 +1207,11 @@ const handleOpenAnalytics = async () => {
         setIsSavingAtt(false);
     };
 
-    const handleUpdateSingleAttendance = async (studentId: string, dateStr: string, status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED") => {
+    const handleUpdateSingleAttendance = async (studentId: string, dateStr: string, status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "EXCUSED") => {
+        if (isDateLocked && !hasEditPermission) {
+            toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
+            return;
+        }
         if (!attCourseId) return toast.error("Selecciona una materia");
 
         let justification: string | undefined = undefined;
@@ -1541,119 +1721,130 @@ const handleOpenAnalytics = async () => {
 
                             {/* TAB 2: ATTENDANCE */}
                             <TabsContent value="attendance" className="m-0 space-y-4 outline-none">
+                                {isDateLocked && (
+                                    <div className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300 ${
+                                        hasEditPermission 
+                                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-400" 
+                                            : permissionRequestStatus === "PENDING"
+                                                ? "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-400"
+                                                : permissionRequestStatus === "REJECTED"
+                                                    ? "bg-red-500/10 border-red-500/20 text-red-800 dark:text-red-400"
+                                                    : "bg-slate-500/10 border-slate-500/20 text-slate-800 dark:text-slate-400"
+                                    }`}>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 font-bold text-sm">
+                                                <Lock className="w-4 h-4" />
+                                                <span>
+                                                    {hasEditPermission 
+                                                        ? "Edición Autorizada (Semana Anterior)" 
+                                                        : "Fecha Bloqueada (Semana Anterior)"}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs opacity-90">
+                                                {hasEditPermission 
+                                                    ? "El administrador ha aprobado tu solicitud de edición para esta fecha. Puedes registrar asistencia." 
+                                                    : permissionRequestStatus === "PENDING"
+                                                        ? "Has solicitado permiso para modificar la asistencia de esta fecha. Esperando aprobación del administrador."
+                                                        : permissionRequestStatus === "REJECTED"
+                                                            ? `Tu solicitud de edición fue rechazada. Motivo: ${permissionReason || "Sin justificación."}`
+                                                            : "Esta fecha pertenece a una semana anterior. Debes solicitar permiso al administrador para modificar la asistencia."}
+                                            </p>
+                                        </div>
+                                        
+                                        {!hasEditPermission && permissionRequestStatus !== "PENDING" && (
+                                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md w-full md:w-auto">
+                                                <Input 
+                                                    placeholder="Motivo del cambio..." 
+                                                    value={requestingPermissionReason}
+                                                    onChange={e => setRequestingPermissionReason(e.target.value)}
+                                                    className="h-8 text-xs bg-background text-foreground"
+                                                />
+                                                <Button 
+                                                    size="sm" 
+                                                    disabled={isRequestingPermission || !requestingPermissionReason.trim()}
+                                                    onClick={async () => {
+                                                        setIsRequestingPermission(true);
+                                                        const { requestAttendanceEditPermissionAction } = await import("../actions/groupActions");
+                                                        const res = await requestAttendanceEditPermissionAction(attCourseId, attDate, requestingPermissionReason);
+                                                        if (res.success) {
+                                                            toast.success("Solicitud de permiso enviada.");
+                                                            setRequestingPermissionReason("");
+                                                            checkEditPermission();
+                                                        } else {
+                                                            toast.error(res.error || "Error al enviar solicitud.");
+                                                        }
+                                                        setIsRequestingPermission(false);
+                                                    }}
+                                                    className="h-8 text-xs font-bold shrink-0"
+                                                >
+                                                    Solicitar Permiso
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {/* Dedicated Date Selection Bar */}
+                                {attMode !== "matrix" && attMode !== "history" && attMode !== "metrics" && (
+                                    <div className="flex flex-col gap-2 bg-muted/10 p-4 rounded-2xl border mb-3 w-full animate-in fade-in duration-300">
+                                        <div className="flex justify-between items-center w-full mb-1">
+                                            <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground">Fecha de Asistencia</Label>
+                                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-sm border ${
+                                                limitSettingsActive
+                                                    ? "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400"
+                                                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                                            }`}>
+                                                {limitSettingsActive ? (
+                                                    <>
+                                                        <Lock className="w-3 h-3" />
+                                                        <span>Edición de semanas anteriores restringida</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Unlock className="w-3.5 h-3.5" />
+                                                        <span>Modificación libre del historial habilitada</span>
+                                                    </>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5 p-1 bg-background rounded-xl border border-muted-foreground/15 shadow-sm max-h-[120px] overflow-y-auto">
+                                            {(() => {
+                                                const validDaysList = getValidClassDaysList();
+                                                const todayStr = format(new Date(), "yyyy-MM-dd");
+                                                return validDaysList.map((ds) => {
+                                                    const d = new Date(ds + "T12:00:00Z");
+                                                    const dayNamesShort = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+                                                    const label = `${dayNamesShort[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+                                                    const isFuture = ds > todayStr;
+                                                    const isSelected = ds === attDate;
+                                                    const isToday = ds === todayStr;
+
+                                                    return (
+                                                        <Button
+                                                            key={ds}
+                                                            size="sm"
+                                                            variant={isSelected ? "default" : "outline"}
+                                                            disabled={isFuture}
+                                                            type="button"
+                                                            onClick={() => handleDateChangeAttempt(ds)}
+                                                            className={`h-7 px-2.5 text-xs font-bold transition-all rounded-lg shrink-0 cursor-pointer ${
+                                                                isSelected 
+                                                                    ? "shadow-sm font-extrabold" 
+                                                                    : isToday
+                                                                        ? "border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/10 font-extrabold"
+                                                                        : "text-muted-foreground hover:text-foreground"
+                                                            }`}
+                                                            title={isFuture ? "Fecha futura (deshabilitada)" : `Seleccionar ${ds}`}
+                                                        >
+                                                            {label}
+                                                        </Button>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    </div>
+                                )}
                                 {/* Header Controls for Attendance — single compact row */}
                                 <div className="flex flex-wrap items-center gap-2 bg-muted/20 px-4 py-3 rounded-2xl border">
-                                    {attMode !== "matrix" && attMode !== "history" && attMode !== "metrics" && (
-                                        <>
-                                            <div className="flex items-center gap-2 min-w-0 shrink-0">
-                                                <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Fecha</Label>
-                                                
-                                                <div className="flex items-center gap-1 bg-background rounded-lg border border-muted-foreground/20 p-0.5 shadow-sm">
-                                                    {(() => {
-                                                        const validDaysList = getValidClassDaysList();
-                                                        const currentIdx = validDaysList.indexOf(attDate);
-                                                        const isPrevDisabled = currentIdx <= 0;
-                                                        const isNextDisabled = currentIdx === -1 || currentIdx >= validDaysList.length - 1;
-
-                                                        const handlePrevDate = () => {
-                                                            if (currentIdx > 0) {
-                                                                handleDateChangeAttempt(validDaysList[currentIdx - 1]);
-                                                            }
-                                                        };
-
-                                                        const handleNextDate = () => {
-                                                            if (currentIdx !== -1 && currentIdx < validDaysList.length - 1) {
-                                                                handleDateChangeAttempt(validDaysList[currentIdx + 1]);
-                                                            }
-                                                        };
-
-                                                        const handleTodayDate = () => {
-                                                            const todayStr = format(new Date(), "yyyy-MM-dd");
-                                                            handleDateChangeAttempt(todayStr);
-                                                        };
-
-                                                        return (
-                                                            <>
-                                                                {/* Backward Button */}
-                                                                <Button 
-                                                                    variant="ghost" 
-                                                                    size="icon" 
-                                                                    className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-                                                                    onClick={handlePrevDate}
-                                                                    disabled={isPrevDisabled}
-                                                                    type="button"
-                                                                >
-                                                                    <ChevronLeft className="w-4 h-4" />
-                                                                </Button>
-
-                                                                {/* Date Select Dropdown */}
-                                                                <Select value={attDate} onValueChange={handleDateChangeAttempt}>
-                                                                    <SelectTrigger className={`h-8 rounded-md border-0 shadow-none font-bold bg-transparent text-sm w-[190px] focus:ring-0 ${
-                                                                             attDate < format(new Date(), "yyyy-MM-dd")
-                                                                                 ? "text-red-600 dark:text-red-400" 
-                                                                                 : "text-foreground"
-                                                                         }`}>
-                                                                        <SelectValue>
-                                                                            {(() => {
-                                                                                const d = new Date(attDate + "T12:00:00Z");
-                                                                                if (isNaN(d.getTime())) return "Seleccionar Fecha";
-                                                                                const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-                                                                                return `${dayNames[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
-                                                                            })()}
-                                                                        </SelectValue>
-                                                                    </SelectTrigger>
-                                                                    <SelectContent className="max-h-[300px]">
-                                                                        {validDaysList.map((ds) => {
-                                                                            const d = new Date(ds + "T12:00:00Z");
-                                                                            const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-                                                                            const label = `${dayNames[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
-                                                                            const todayStr = format(new Date(), "yyyy-MM-dd");
-                                                                            const isPast = ds < todayStr;
-                                                                            return (
-                                                                                <SelectItem 
-                                                                                    key={ds} 
-                                                                                    value={ds} 
-                                                                                    className={`font-semibold ${isPast ? "text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20 cursor-pointer" : "cursor-pointer"}`}
-                                                                                >
-                                                                                    {label}
-                                                                                </SelectItem>
-                                                                            );
-                                                                        })}
-                                                                    </SelectContent>
-                                                                </Select>
-
-                                                                {/* Forward Button */}
-                                                                <Button 
-                                                                    variant="ghost" 
-                                                                    size="icon" 
-                                                                    className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-                                                                    onClick={handleNextDate}
-                                                                    disabled={isNextDisabled}
-                                                                    type="button"
-                                                                >
-                                                                    <ChevronRight className="w-4 h-4" />
-                                                                </Button>
-
-                                                                <div className="w-px h-5 bg-border/60 shrink-0 mx-0.5" />
-
-                                                                {/* Today / Hoy Button */}
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-8 px-2.5 rounded-md text-xs font-bold text-primary hover:bg-primary/10 shrink-0 cursor-pointer"
-                                                                    onClick={handleTodayDate}
-                                                                    type="button"
-                                                                >
-                                                                    Hoy
-                                                                </Button>
-                                                            </>
-                                                        );
-                                                    })()}
-                                                </div>
-                                            </div>
-                                            <div className="w-px h-6 bg-border/60 shrink-0" />
-                                        </>
-                                    )}
 
                                     {/* Course */}
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1730,6 +1921,16 @@ const handleOpenAnalytics = async () => {
                                         <Play className="w-3.5 h-3.5" />
                                         Llamar por Secuencia
                                     </Button>
+
+                                    <Button
+                                        onClick={handleMarkAllPresent}
+                                        disabled={!attCourseId || isSavingAtt}
+                                        variant="outline"
+                                        className="h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-emerald-500/20 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 font-extrabold"
+                                    >
+                                        <UserCheck className="w-3.5 h-3.5" />
+                                        Marcar todos como Presentes
+                                    </Button>
                                 </div>
 
                                 {!isCurrentDateValid && (attMode === "list" || attMode === "summary") ? (
@@ -1752,8 +1953,22 @@ const handleOpenAnalytics = async () => {
                                                 <CheckSquare className="w-3 h-3 mr-1" />
                                                 Por defecto todos están presentes
                                             </Badge>
-                                            <span className="text-xs font-semibold text-muted-foreground">
-                                                {Object.keys(attRecords).length} Inasistencias/Tardanzas marcadas
+                                            <span className="text-xs font-bold flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-emerald-600 dark:text-emerald-400">
+                                                    {Object.values(attRecords).filter(r => r.status === "PRESENT").length} Presentes
+                                                </span>
+                                                <span className="text-muted-foreground/35">|</span>
+                                                <span className="text-red-600 dark:text-red-400">
+                                                    {Object.values(attRecords).filter(r => r.status === "ABSENT").length} Faltas
+                                                </span>
+                                                <span className="text-muted-foreground/35">|</span>
+                                                <span className="text-amber-600 dark:text-amber-400">
+                                                    {Object.values(attRecords).filter(r => r.status === "LATE").length} Tardes
+                                                </span>
+                                                <span className="text-muted-foreground/35">|</span>
+                                                <span className="text-blue-600 dark:text-blue-400">
+                                                    {Object.values(attRecords).filter(r => r.status === "LEAVE_EARLY").length} Retiros
+                                                </span>
                                             </span>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1761,10 +1976,45 @@ const handleOpenAnalytics = async () => {
                                                 const rec = attRecords[s.id];
                                                 const isAbsent = rec?.status === "ABSENT";
                                                 const isLate = rec?.status === "LATE";
+                                                const isLeaveEarly = rec?.status === "LEAVE_EARLY";
+                                                const isPresent = rec?.status === "PRESENT";
                                                 
                                                 const studentHistory = attendanceHistory.filter(a => a.userId === s.id);
-                                                const absentCount = studentHistory.filter(a => a.status === 'ABSENT').length;
-                                                const lateCount = studentHistory.filter(a => a.status === 'LATE').length;
+                                                const courseHistory = studentHistory.filter(a => a.courseId === attCourseId);
+                                                const absentCount = courseHistory.filter(a => a.status === 'ABSENT').length;
+                                                const lateCount = courseHistory.filter(a => a.status === 'LATE').length;
+                                                const leaveCount = courseHistory.filter(a => a.status === 'LEAVE_EARLY').length;
+
+                                                const daysOfWeekEng = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
+                                                const totalLateHours = courseHistory
+                                                    .filter(a => a.status === 'LATE' && a.arrivalTime)
+                                                    .reduce((sum, a) => {
+                                                        const aDate = new Date(a.date);
+                                                        const dayIndex = aDate.getUTCDay();
+                                                        const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                        const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                        const scheduleForDay = course?.schedules?.find((sched: any) => sched.dayOfWeek === dayOfWeekName);
+                                                        const startTimeStr = scheduleForDay?.startTime || selectedGroup.startTime || "06:00";
+                                                        const arrivalTimeStr = a.arrivalTime ? (typeof a.arrivalTime === 'string' ? a.arrivalTime : new Date(a.arrivalTime).toISOString().substring(11, 16)) : "";
+                                                        const diff = arrivalTimeStr ? calculateHoursDiff(startTimeStr, arrivalTimeStr) : 0;
+                                                        return sum + diff;
+                                                    }, 0);
+
+                                                const totalLeaveHours = courseHistory
+                                                    .filter(a => a.status === 'LEAVE_EARLY' && a.departureTime)
+                                                    .reduce((sum, a) => {
+                                                        const aDate = new Date(a.date);
+                                                        const dayIndex = aDate.getUTCDay();
+                                                        const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                        const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                        const scheduleForDay = course?.schedules?.find((sched: any) => sched.dayOfWeek === dayOfWeekName);
+                                                        const endTimeStr = scheduleForDay?.endTime || selectedGroup.endTime || "12:00";
+                                                        const departureTimeStr = a.departureTime ? (typeof a.departureTime === 'string' ? a.departureTime : new Date(a.departureTime).toISOString().substring(11, 16)) : "";
+                                                        const diff = departureTimeStr ? calculateHoursDiff(departureTimeStr, endTimeStr) : 0;
+                                                        return sum + diff;
+                                                    }, 0);
+
                                                  return (
                                                     <div 
                                                         key={s.id} 
@@ -1773,7 +2023,11 @@ const handleOpenAnalytics = async () => {
                                                                 ? 'bg-red-50/70 border-red-300 dark:bg-red-950/20 dark:border-red-900/60' 
                                                                 : isLate 
                                                                     ? 'bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900/60' 
-                                                                    : 'bg-primary/5 border-primary/20 hover:border-primary/35 dark:bg-primary/10 dark:border-primary/30 dark:hover:border-primary/50'
+                                                                    : isLeaveEarly
+                                                                        ? 'bg-blue-50/70 border-blue-300 dark:bg-blue-950/20 dark:border-blue-900/60'
+                                                                        : isPresent
+                                                                            ? 'bg-emerald-50/65 border-emerald-300 dark:bg-emerald-950/25 dark:border-emerald-900/65'
+                                                                            : 'bg-muted/15 border-muted/70 hover:border-muted-foreground/30 dark:bg-muted/10 dark:border-muted/30 dark:hover:border-muted/50 border-dashed'
                                                         }`}
                                                     >
                                                         {/* Header: Name, ID, Historial */}
@@ -1785,7 +2039,11 @@ const handleOpenAnalytics = async () => {
                                                                             ? 'text-red-900 dark:text-red-200' 
                                                                             : isLate 
                                                                                 ? 'text-amber-900 dark:text-amber-200' 
-                                                                                : 'text-foreground'
+                                                                                : isLeaveEarly
+                                                                                    ? 'text-blue-900 dark:text-blue-200'
+                                                                                    : isPresent
+                                                                                        ? 'text-emerald-900 dark:text-emerald-200'
+                                                                                        : 'text-foreground'
                                                                     }`}
                                                                     title={formatName(s.name, s.profile)}
                                                                 >
@@ -1808,8 +2066,8 @@ const handleOpenAnalytics = async () => {
                                                                     <Eye className="w-3 h-3" />
                                                                     <span>Historial</span>
                                                                 </Button>
-                                                                {(absentCount > 0 || lateCount > 0) && (
-                                                                    <div className="flex gap-1">
+                                                                {(absentCount > 0 || lateCount > 0 || leaveCount > 0) && (
+                                                                    <div className="flex gap-1 flex-wrap justify-end">
                                                                         {absentCount > 0 && (
                                                                             <Badge className="h-4 text-[8px] px-1 bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 hover:bg-red-100 font-bold shadow-none">
                                                                                 Faltas: {absentCount}
@@ -1817,7 +2075,12 @@ const handleOpenAnalytics = async () => {
                                                                         )}
                                                                         {lateCount > 0 && (
                                                                             <Badge className="h-4 text-[8px] px-1 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 hover:bg-amber-100 font-bold shadow-none">
-                                                                                Tardes: {lateCount}
+                                                                                Tardes: {lateCount} {totalLateHours > 0 && `(${totalLateHours.toFixed(1)} hrs)`}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {leaveCount > 0 && (
+                                                                            <Badge className="h-4 text-[8px] px-1 bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-100 font-bold shadow-none">
+                                                                                Retiros: {leaveCount} {totalLeaveHours > 0 && `(${totalLeaveHours.toFixed(1)} hrs)`}
                                                                             </Badge>
                                                                         )}
                                                                     </div>
@@ -1826,61 +2089,143 @@ const handleOpenAnalytics = async () => {
                                                         </div>
 
                                                         {/* Quick Actions Row */}
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex flex-wrap items-center gap-1.5 w-full">
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant={isPresent ? "default" : "outline"}
+                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
+                                                                    isPresent 
+                                                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-extrabold' 
+                                                                        : 'text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50/50 hover:border-emerald-200 border-border/80'
+                                                                }`}
+                                                                onClick={() => setStudentAttendance(s.id, isPresent ? "UNMARKED" : "PRESENT")}
+                                                            >
+                                                                <UserCheck className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
+                                                                Presente
+                                                            </Button>
                                                             <Button 
                                                                 size="sm" 
                                                                 variant={isAbsent ? "default" : "outline"}
-                                                                className={`flex-1 h-8 font-bold text-xs rounded-lg transition-all ${
+                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
                                                                     isAbsent 
-                                                                        ? 'bg-red-600 hover:bg-red-700 text-white shadow-sm' 
+                                                                        ? 'bg-red-600 hover:bg-red-700 text-white shadow-sm font-extrabold' 
                                                                         : 'text-muted-foreground hover:text-red-600 hover:bg-red-50/50 hover:border-red-200 border-border/80'
                                                                 }`}
-                                                                onClick={() => setStudentAttendance(s.id, isAbsent ? "PRESENT" : "ABSENT")}
+                                                                onClick={() => setStudentAttendance(s.id, isAbsent ? "UNMARKED" : "ABSENT")}
                                                             >
-                                                                <UserX className="w-3.5 h-3.5 mr-1" />
+                                                                <UserX className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
                                                                 Falta
                                                             </Button>
                                                             <Button 
                                                                 size="sm" 
                                                                 variant={isLate ? "default" : "outline"}
-                                                                className={`flex-1 h-8 font-bold text-xs rounded-lg transition-all ${
+                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
                                                                     isLate 
-                                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' 
+                                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm font-extrabold' 
                                                                         : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-50/50 hover:border-amber-200 border-border/80'
                                                                 }`}
-                                                                onClick={() => setStudentAttendance(s.id, isLate ? "PRESENT" : "LATE")}
+                                                                onClick={() => setStudentAttendance(s.id, isLate ? "UNMARKED" : "LATE")}
                                                             >
-                                                                <Clock className="w-3.5 h-3.5 mr-1" />
+                                                                <Clock className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
                                                                 Tarde
+                                                            </Button>
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant={isLeaveEarly ? "default" : "outline"}
+                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
+                                                                    isLeaveEarly 
+                                                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-extrabold' 
+                                                                        : 'text-muted-foreground hover:text-blue-600 hover:bg-blue-50/50 hover:border-blue-200 border-border/80'
+                                                                }`}
+                                                                onClick={() => setStudentAttendance(s.id, isLeaveEarly ? "UNMARKED" : "LEAVE_EARLY")}
+                                                            >
+                                                                <LogOut className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
+                                                                Retiro
                                                             </Button>
                                                         </div>
 
                                                         {/* Time input nested if Late */}
                                                         <AnimatePresence>
-                                                            {isLate && (
-                                                                <motion.div 
-                                                                    initial={{ opacity: 0, height: 0, marginTop: 0 }} 
-                                                                    animate={{ opacity: 1, height: "auto", marginTop: 8 }} 
-                                                                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                    className="overflow-hidden"
-                                                                >
-                                                                    <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-amber-100/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
-                                                                        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 pl-1">Hora Ingreso:</span>
-                                                                        <select
-                                                                            className="h-6 w-[115px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
-                                                                            value={rec?.arrivalTime || ""}
-                                                                            onChange={e => updateLateTime(s.id, e.target.value)}
-                                                                        >
-                                                                            <option value="" disabled>Seleccione...</option>
-                                                                            {timeOptions.map(time => (
-                                                                                <option key={time} value={time}>
-                                                                                    {time}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </div>
-                                                                </motion.div>
-                                                            )}
+                                                            {isLate && (() => {
+                                                                const dayIndex = new Date(attDate + "T12:00:00").getDay();
+                                                                const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                                const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                                const scheduleForDay = course?.schedules?.find((sched: any) => sched.dayOfWeek === dayOfWeekName);
+                                                                const startTimeStr = scheduleForDay?.startTime || selectedGroup.startTime || "06:00";
+                                                                const diff = rec?.arrivalTime ? calculateHoursDiff(startTimeStr, rec.arrivalTime) : 0;
+                                                                return (
+                                                                    <motion.div 
+                                                                        initial={{ opacity: 0, height: 0, marginTop: 0 }} 
+                                                                        animate={{ opacity: 1, height: "auto", marginTop: 8 }} 
+                                                                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                        className="overflow-hidden"
+                                                                    >
+                                                                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-amber-100/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 pl-1">Hora Ingreso:</span>
+                                                                                <select
+                                                                                    className="h-6 w-[115px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                                                    value={rec?.arrivalTime || ""}
+                                                                                    onChange={e => updateLateTime(s.id, e.target.value)}
+                                                                                >
+                                                                                    <option value="" disabled>Seleccione...</option>
+                                                                                    {timeOptions.map(time => (
+                                                                                        <option key={time} value={time}>
+                                                                                            {time}
+                                                                                        </option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </div>
+                                                                            <div className="flex justify-between items-center text-[10px] font-bold text-amber-800 dark:text-amber-300 px-1 border-t border-amber-200/30 pt-1">
+                                                                                <span>Horas perdidas:</span>
+                                                                                <span className="text-xs font-black">{diff.toFixed(1)} hrs</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                );
+                                                            })()}
+                                                        </AnimatePresence>
+
+                                                        {/* Time input nested if Leave Early */}
+                                                        <AnimatePresence>
+                                                            {isLeaveEarly && (() => {
+                                                                const dayIndex = new Date(attDate + "T12:00:00").getDay();
+                                                                const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                                const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                                const scheduleForDay = course?.schedules?.find((sched: any) => sched.dayOfWeek === dayOfWeekName);
+                                                                const endTimeStr = scheduleForDay?.endTime || selectedGroup.endTime || "12:00";
+                                                                const diff = rec?.departureTime ? calculateHoursDiff(rec.departureTime, endTimeStr) : 0;
+                                                                return (
+                                                                    <motion.div 
+                                                                        initial={{ opacity: 0, height: 0, marginTop: 0 }} 
+                                                                        animate={{ opacity: 1, height: "auto", marginTop: 8 }} 
+                                                                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                        className="overflow-hidden"
+                                                                    >
+                                                                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-blue-100/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40">
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 pl-1">Hora Retiro:</span>
+                                                                                <select
+                                                                                    className="h-6 w-[115px] rounded-md border border-blue-300 dark:border-blue-900/60 bg-white dark:bg-black text-[10px] font-bold text-blue-900 dark:text-blue-200 px-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                                                    value={rec?.departureTime || ""}
+                                                                                    onChange={e => updateLeaveTime(s.id, e.target.value)}
+                                                                                >
+                                                                                    <option value="" disabled>Seleccione...</option>
+                                                                                    {timeOptions.map(time => (
+                                                                                        <option key={time} value={time}>
+                                                                                            {time}
+                                                                                        </option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </div>
+                                                                            <div className="flex justify-between items-center text-[10px] font-bold text-blue-800 dark:text-blue-300 px-1 border-t border-blue-200/30 pt-1">
+                                                                                <span>Horas perdidas:</span>
+                                                                                <span className="text-xs font-black">{diff.toFixed(1)} hrs</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                );
+                                                            })()}
                                                         </AnimatePresence>
                                                     </div>
                                                 );
@@ -1896,11 +2241,11 @@ const handleOpenAnalytics = async () => {
                                                 Resumen de Inasistencias y Tardanzas de Hoy
                                             </Badge>
                                             <span className="text-xs font-semibold text-muted-foreground">
-                                                {Object.keys(attRecords).length} Estudiantes con novedades marcadas
+                                                {Object.values(attRecords).filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "LEAVE_EARLY").length} Estudiantes con novedades marcadas
                                             </span>
                                         </div>
 
-                                        {Object.keys(attRecords).length === 0 ? (
+                                        {Object.values(attRecords).filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "LEAVE_EARLY").length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 rounded-2xl border border-dashed bg-card shadow-sm">
                                                 <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-full text-emerald-600 dark:text-emerald-400">
                                                     <CheckSquare className="w-8 h-8" />
@@ -1924,11 +2269,16 @@ const handleOpenAnalytics = async () => {
                                                     </TableHeader>
                                                     <TableBody>
                                                         {filteredStudents
-                                                            .filter((s: any) => attRecords[s.id])
+                                                            .filter((s: any) => {
+                                                                const rec = attRecords[s.id];
+                                                                return rec && (rec.status === "ABSENT" || rec.status === "LATE" || rec.status === "LEAVE_EARLY");
+                                                            })
                                                             .map((s: any) => {
+                                                                const daysOfWeekEng = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
                                                                 const rec = attRecords[s.id];
                                                                 const isAbsent = rec.status === "ABSENT";
                                                                 const isLate = rec.status === "LATE";
+                                                                const isLeaveEarly = rec.status === "LEAVE_EARLY";
                                                                 return (
                                                                     <TableRow key={s.id} className="hover:bg-muted/10 transition-colors">
                                                                         <TableCell className="pl-6 py-3.5">
@@ -1953,21 +2303,75 @@ const handleOpenAnalytics = async () => {
                                                                             <Badge variant="outline" className={`font-bold text-xs ${
                                                                                 isAbsent 
                                                                                     ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-950/20' 
-                                                                                    : 'text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20'
+                                                                                    : isLate 
+                                                                                        ? 'text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20'
+                                                                                        : 'text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/20'
                                                                             }`}>
-                                                                                {isAbsent ? "Inasistencia" : "Llegada Tarde"}
+                                                                                {isAbsent ? "Inasistencia" : isLate ? "Llegada Tarde" : "Retiro Temprano"}
                                                                             </Badge>
                                                                         </TableCell>
                                                                         <TableCell className="text-center">
                                                                             {isLate ? (
-                                                                                <div className="flex items-center justify-center gap-2">
-                                                                                    <span className="text-xs text-muted-foreground">Hora:</span>
-                                                                                    <Input 
-                                                                                        type="time" 
-                                                                                        className="h-7 w-24 text-xs font-bold text-center border-amber-300 dark:border-amber-900/60" 
-                                                                                        value={rec.arrivalTime || ""}
-                                                                                        onChange={e => updateLateTime(s.id, e.target.value)}
-                                                                                    />
+                                                                                <div className="flex flex-col gap-1 items-center justify-center">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Ingreso:</span>
+                                                                                        <select
+                                                                                            className="h-6 w-[105px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                                                            value={rec.arrivalTime || ""}
+                                                                                            onChange={e => updateLateTime(s.id, e.target.value)}
+                                                                                        >
+                                                                                            <option value="" disabled>Seleccione...</option>
+                                                                                            {timeOptions.map(time => (
+                                                                                                <option key={time} value={time}>
+                                                                                                    {time}
+                                                                                                </option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    {(() => {
+                                                                                        const dayIndex = new Date(attDate + "T12:00:00").getDay();
+                                                                                        const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                                                        const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                                                        const scheduleForDay = course?.schedules?.find((sched: any) => sched.dayOfWeek === dayOfWeekName);
+                                                                                        const startTimeStr = scheduleForDay?.startTime || selectedGroup.startTime || "06:00";
+                                                                                        const diff = rec.arrivalTime ? calculateHoursDiff(startTimeStr, rec.arrivalTime) : 0;
+                                                                                        return (
+                                                                                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                                                                                {diff.toFixed(1)} hrs perdidas
+                                                                                            </span>
+                                                                                        );
+                                                                                    })()}
+                                                                                </div>
+                                                                            ) : isLeaveEarly ? (
+                                                                                <div className="flex flex-col gap-1 items-center justify-center">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300">Retiro:</span>
+                                                                                        <select
+                                                                                            className="h-6 w-[105px] rounded-md border border-blue-300 dark:border-blue-900/60 bg-white dark:bg-black text-[10px] font-bold text-blue-900 dark:text-blue-200 px-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                                                            value={rec.departureTime || ""}
+                                                                                            onChange={e => updateLeaveTime(s.id, e.target.value)}
+                                                                                        >
+                                                                                            <option value="" disabled>Seleccione...</option>
+                                                                                            {timeOptions.map(time => (
+                                                                                                <option key={time} value={time}>
+                                                                                                    {time}
+                                                                                                </option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    {(() => {
+                                                                                        const dayIndex = new Date(attDate + "T12:00:00").getDay();
+                                                                                        const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                                                        const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                                                        const scheduleForDay = course?.schedules?.find((sched: any) => sched.dayOfWeek === dayOfWeekName);
+                                                                                        const endTimeStr = scheduleForDay?.endTime || selectedGroup.endTime || "12:00";
+                                                                                        const diff = rec.departureTime ? calculateHoursDiff(rec.departureTime, endTimeStr) : 0;
+                                                                                        return (
+                                                                                            <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400">
+                                                                                                {diff.toFixed(1)} hrs perdidas
+                                                                                            </span>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             ) : (
                                                                                 <span className="text-xs text-muted-foreground">Día completo</span>
@@ -2063,12 +2467,41 @@ const handleOpenAnalytics = async () => {
                                             }
                                         });
 
+                                        // Leave early arrivals
+                                        const leaveRecords = studentRecords.filter(r => r.status === "LEAVE_EARLY");
+                                        const leaveCount = leaveRecords.length;
+
+                                        let leaveHours = 0;
+                                        leaveRecords.forEach(rec => {
+                                            if (!rec.departureTime) return;
+                                            
+                                            const [eh, em] = gEnd.split(":").map(Number);
+                                            let timePart = "";
+                                            try {
+                                                const dateObj = new Date(rec.departureTime);
+                                                if (isNaN(dateObj.getTime())) {
+                                                    throw new Error("Invalid date");
+                                                }
+                                                timePart = dateObj.toISOString().substring(11, 16);
+                                            } catch (e) {
+                                                timePart = typeof rec.departureTime === "string" ? rec.departureTime : "00:00";
+                                            }
+                                            const [dh, dm] = timePart.split(":").map(Number);
+
+                                            const schedMin = eh * 60 + em;
+                                            const depMin = dh * 60 + dm;
+
+                                            if (schedMin > depMin) {
+                                                leaveHours += (schedMin - depMin) / 60;
+                                            }
+                                        });
+
                                         // Attendance rates
                                         const attendanceDaysRate = totalClassDays > 0 
                                             ? Math.max(0, Math.min(100, ((totalClassDays - absentCount) / totalClassDays) * 100))
                                             : 100;
 
-                                        const totalLostHours = absentHours + lateHours;
+                                        const totalLostHours = absentHours + lateHours + leaveHours;
                                         const attendanceHoursRate = totalScheduledHours > 0
                                             ? Math.max(0, Math.min(100, ((totalScheduledHours - totalLostHours) / totalScheduledHours) * 100))
                                             : 100;
@@ -2088,6 +2521,8 @@ const handleOpenAnalytics = async () => {
                                             absentHours,
                                             lateCount,
                                             lateHours,
+                                            leaveCount,
+                                            leaveHours,
                                             attendanceDaysRate,
                                             attendanceHoursRate,
                                             lateDaysRate,
@@ -2108,19 +2543,26 @@ const handleOpenAnalytics = async () => {
                                     const avgLateHours = studentMetrics.length > 0
                                         ? studentMetrics.reduce((acc: number, m: any) => acc + m.lateHoursRate, 0) / studentMetrics.length
                                         : 0;
+                                    const avgLeaveDays = studentMetrics.length > 0
+                                        ? studentMetrics.reduce((acc: number, m: any) => acc + (m.leaveCount / totalClassDays) * 100, 0) / studentMetrics.length
+                                        : 0;
+                                    const avgLeaveHours = studentMetrics.length > 0
+                                        ? studentMetrics.reduce((acc: number, m: any) => acc + (m.leaveHours / totalScheduledHours) * 100, 0) / studentMetrics.length
+                                        : 0;
 
                                     const exportMetricsExcel = () => {
                                         const wb = XLSX.utils.book_new();
                                         const wsData = [
-                                            ["Estudiante", "Faltas", "Tardanzas", "Asistencia Efectiva (%)", "Horas Programadas", "Horas Asistidas", "Horas Perdidas"]
+                                            ["Estudiante", "Faltas", "Tardanzas", "Retiros", "Asistencia Efectiva (%)", "Horas Programadas", "Horas Asistidas", "Horas Perdidas"]
                                         ];
                                         studentMetrics.forEach((m: any) => {
-                                            const totalLost = m.absentHours + m.lateHours;
+                                            const totalLost = m.absentHours + m.lateHours + m.leaveHours;
                                             const attended = Math.max(0, totalScheduledHours - totalLost);
                                             wsData.push([
                                                 formatName(m.student.name, m.student.profile),
                                                 m.absentCount,
                                                 m.lateCount,
+                                                m.leaveCount,
                                                 m.attendanceHoursRate.toFixed(1) + "%",
                                                 totalScheduledHours.toFixed(1),
                                                 attended.toFixed(1),
@@ -2193,32 +2635,20 @@ const handleOpenAnalytics = async () => {
                                             {/* KPI Grid */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                                 <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Días Programados</span>
-                                                    <span className="text-3xl font-black text-foreground mt-2">{totalClassDays} días</span>
-                                                </div>
-                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Horas Programadas</span>
-                                                    <span className="text-3xl font-black text-foreground mt-2">{totalScheduledHours.toFixed(1)} hs</span>
-                                                </div>
-                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Asistencia Promedio</span>
-                                                    <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-2">
-                                                        {avgAttendanceHours.toFixed(1)}%
-                                                    </span>
-                                                </div>
-                                                <div className="bg-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pérdida de Tiempo (Tardanzas)</span>
-                                                    <span className="text-3xl font-black text-amber-600 dark:text-amber-400 mt-2">
-                                                        {avgLateHours.toFixed(2)}%
+                                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pérdida (Tardes y Retiros)</span>
+                                                    <span className="text-3xl font-black text-amber-600 dark:text-amber-400 mt-2 flex flex-col items-start gap-0.5">
+                                                        <span>{(avgLateHours + avgLeaveHours).toFixed(2)}%</span>
+                                                        <span className="text-[10px] font-bold text-muted-foreground">({avgLateHours.toFixed(1)}% Tardes / {avgLeaveHours.toFixed(1)}% Retiros)</span>
                                                     </span>
                                                 </div>
                                             </div>
 
                                             {/* Stacked Full-Width Charts Section Organized by Tabs */}
                                             <Tabs defaultValue="faltas" className="w-full mt-6">
-                                                <TabsList className="grid w-full sm:w-[450px] grid-cols-3 mb-6 mx-auto">
+                                                <TabsList className="grid w-full sm:w-[600px] grid-cols-4 mb-6 mx-auto">
                                                     <TabsTrigger value="faltas">Faltas</TabsTrigger>
                                                     <TabsTrigger value="tardanzas">Tardanzas</TabsTrigger>
+                                                    <TabsTrigger value="retiros">Retiros</TabsTrigger>
                                                     <TabsTrigger value="horas">Carga Horaria</TabsTrigger>
                                                 </TabsList>
 
@@ -2285,6 +2715,38 @@ const handleOpenAnalytics = async () => {
 
                                                 </TabsContent>
 
+                                                <TabsContent value="retiros" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                                {/* CHART 2b: LEAVE EARLY (RETIROS) */}
+                                                <div className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 w-full">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Registro de Retiros Tempranos</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días en los que el estudiante registró retiro temprano sobre los días programados.</p>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                         {studentMetrics.map(({ student, leaveCount }: any) => {
+                                                             const leaveDaysRate = totalClassDays > 0 ? (leaveCount / totalClassDays) * 100 : 0;
+                                                             return (
+                                                                 <div key={student.id} className="space-y-1.5">
+                                                                     <div className="flex items-center justify-between text-xs font-bold">
+                                                                         <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                                         <span className="text-blue-600 dark:text-blue-400 shrink-0 font-extrabold">
+                                                                             {leaveCount} {leaveCount === 1 ? "Retiro" : "Retiros"} / {totalClassDays} días ({leaveDaysRate.toFixed(1)}%)
+                                                                         </span>
+                                                                     </div>
+                                                                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                         <div 
+                                                                             className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                                                                             style={{ width: `${leaveDaysRate}%` }}
+                                                                         />
+                                                                     </div>
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                    </div>
+                                                </div>
+                                                </TabsContent>
+
                                                 <TabsContent value="horas" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
                                                 {/* CHART 3: TOTAL ACCUMULATED HOURS & EFFECTIVE ATTENDANCE */}
                                                 <div className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 w-full">
@@ -2294,56 +2756,64 @@ const handleOpenAnalytics = async () => {
                                                     </div>
 
                                                     <div className="space-y-5">
-                                                         {studentMetrics.map(({ student, absentHours, lateHours, attendanceHoursRate }: any) => {
-                                                             const lostHours = absentHours + lateHours;
-                                                             const attendedHours = Math.max(0, totalScheduledHours - lostHours);
-                                                             return (
-                                                                 <div key={student.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
-                                                                     <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
-                                                                         <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
-                                                                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
-                                                                             <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {attendedHours.toFixed(2)} hs</span>
-                                                                             <span className="text-red-500">Perdidas: {lostHours.toFixed(2)} hs</span>
-                                                                             <span className="text-blue-600 dark:text-blue-400 font-extrabold">Efectiva: {attendanceHoursRate.toFixed(1)}%</span>
-                                                                         </div>
-                                                                     </div>
-                                                                     
-                                                                     <div className="space-y-1">
-                                                                         {/* Stacked indicator bar representing Attended Hours vs. Lost Hours */}
-                                                                         <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
-                                                                             {/* Attended hours bar */}
-                                                                             <div 
-                                                                                 className="h-full bg-emerald-500 dark:bg-emerald-600 transition-all duration-500" 
-                                                                                 style={{ width: `${attendanceHoursRate}%` }}
-                                                                                 title={`Horas Asistidas: ${attendedHours.toFixed(2)} hs`}
-                                                                             />
-                                                                             {/* Absent hours bar (red) */}
-                                                                             {absentHours > 0 && (
-                                                                                 <div 
-                                                                                     className="h-full bg-red-500 dark:bg-red-600 transition-all duration-500" 
-                                                                                     style={{ width: `${(absentHours / totalScheduledHours) * 100}%` }}
-                                                                                     title={`Horas de Faltas: ${absentHours.toFixed(2)} hs`}
-                                                                                 />
-                                                                             )}
-                                                                             {/* Late hours bar (orange) */}
-                                                                             {lateHours > 0 && (
-                                                                                 <div 
-                                                                                     className="h-full bg-amber-500 dark:bg-amber-500 transition-all duration-500" 
-                                                                                     style={{ width: `${(lateHours / totalScheduledHours) * 100}%` }}
-                                                                                     title={`Horas de Tardanzas: ${lateHours.toFixed(2)} hs`}
-                                                                                 />
-                                                                             )}
-                                                                         </div>
-                                                                         
-                                                                         {/* Detailed breakdown subtext */}
-                                                                         <div className="text-[10px] text-muted-foreground flex justify-between">
-                                                                             <span>{totalScheduledHours.toFixed(1)} hs totales del curso</span>
-                                                                             <span>Desglose de pérdida: {absentHours.toFixed(1)} hs Faltas + {lateHours.toFixed(2)} hs Tardanzas</span>
-                                                                         </div>
-                                                                     </div>
-                                                                 </div>
-                                                             );
-                                                         })}
+                                                         {studentMetrics.map(({ student, absentHours, lateHours, leaveHours, attendanceHoursRate }: any) => {
+                                                              const lostHours = absentHours + lateHours + leaveHours;
+                                                              const attendedHours = Math.max(0, totalScheduledHours - lostHours);
+                                                              return (
+                                                                  <div key={student.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
+                                                                      <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
+                                                                          <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{formatName(student.name, student.profile)}</span>
+                                                                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
+                                                                              <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {attendedHours.toFixed(2)} hs</span>
+                                                                              <span className="text-red-500">Perdidas: {lostHours.toFixed(2)} hs</span>
+                                                                              <span className="text-blue-600 dark:text-blue-400 font-extrabold">Efectiva: {attendanceHoursRate.toFixed(1)}%</span>
+                                                                          </div>
+                                                                      </div>
+                                                                      
+                                                                      <div className="space-y-1">
+                                                                          {/* Stacked indicator bar representing Attended Hours vs. Lost Hours */}
+                                                                          <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                                                                              {/* Attended hours bar */}
+                                                                              <div 
+                                                                                  className="h-full bg-emerald-500 dark:bg-emerald-600 transition-all duration-500" 
+                                                                                  style={{ width: `${attendanceHoursRate}%` }}
+                                                                                  title={`Horas Asistidas: ${attendedHours.toFixed(2)} hs`}
+                                                                              />
+                                                                              {/* Absent hours bar (red) */}
+                                                                              {absentHours > 0 && (
+                                                                                  <div 
+                                                                                      className="h-full bg-red-500 dark:bg-red-600 transition-all duration-500" 
+                                                                                      style={{ width: `${(absentHours / totalScheduledHours) * 100}%` }}
+                                                                                      title={`Horas de Faltas: ${absentHours.toFixed(2)} hs`}
+                                                                                  />
+                                                                              )}
+                                                                              {/* Late hours bar (orange) */}
+                                                                              {lateHours > 0 && (
+                                                                                  <div 
+                                                                                      className="h-full bg-amber-500 dark:bg-amber-500 transition-all duration-500" 
+                                                                                      style={{ width: `${(lateHours / totalScheduledHours) * 100}%` }}
+                                                                                      title={`Horas de Tardanzas: ${lateHours.toFixed(2)} hs`}
+                                                                                  />
+                                                                              )}
+                                                                              {/* Leave hours bar (blue) */}
+                                                                              {leaveHours > 0 && (
+                                                                                  <div 
+                                                                                      className="h-full bg-blue-500 dark:bg-blue-600 transition-all duration-500" 
+                                                                                      style={{ width: `${(leaveHours / totalScheduledHours) * 100}%` }}
+                                                                                      title={`Horas de Retiros: ${leaveHours.toFixed(2)} hs`}
+                                                                                  />
+                                                                              )}
+                                                                          </div>
+                                                                          
+                                                                          {/* Detailed breakdown subtext */}
+                                                                          <div className="text-[10px] text-muted-foreground flex justify-between">
+                                                                              <span>{totalScheduledHours.toFixed(1)} hs totales del curso</span>
+                                                                              <span>Desglose de pérdida: {absentHours.toFixed(1)} hs Faltas + {lateHours.toFixed(2)} hs Tardanzas + {leaveHours.toFixed(2)} hs Retiros</span>
+                                                                          </div>
+                                                                      </div>
+                                                                  </div>
+                                                              );
+                                                          })}
                                                     </div>
                                                 </div>
                                                 </TabsContent>
@@ -2414,13 +2884,35 @@ const handleOpenAnalytics = async () => {
                                                     </div>
                                                 </div>
 
+                                                {/* CHART 2b: Retiros */}
+                                                <div className="print-avoid-break" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', backgroundColor: '#ffffff' }}>
+                                                    <h3 style={{ fontSize: '18px', fontWeight: '900', marginBottom: '4px', margin: 0 }}>Registro de Retiros Tempranos</h3>
+                                                    <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px', margin: '4px 0 16px 0' }}>Total de días con retiro temprano por estudiante</p>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                        {studentMetrics.map(({ student, leaveCount }: any) => {
+                                                            const leaveDaysRate = totalClassDays > 0 ? (leaveCount / totalClassDays) * 100 : 0;
+                                                            return (
+                                                                <div key={student.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} className="print-avoid-break">
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700' }}>
+                                                                        <span>{formatName(student.name, student.profile)}</span>
+                                                                        <span style={{ color: '#3b82f6' }}>{leaveCount} Retiros ({leaveDaysRate.toFixed(1)}%)</span>
+                                                                    </div>
+                                                                    <div style={{ height: '12px', width: '100%', backgroundColor: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
+                                                                        <div style={{ height: '100%', backgroundColor: '#3b82f6', width: `${leaveDaysRate}%` }} />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
                                                 {/* CHART 3: Horas */}
                                                 <div className="print-avoid-break" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', backgroundColor: '#ffffff' }}>
                                                     <h3 style={{ fontSize: '18px', fontWeight: '900', marginBottom: '4px', margin: 0 }}>Carga Horaria y Asistencia Efectiva</h3>
                                                     <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px', margin: '4px 0 16px 0' }}>Horas Asistidas vs Perdidas</p>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                        {studentMetrics.map(({ student, absentHours, lateHours, attendanceHoursRate }: any) => {
-                                                            const lostHours = absentHours + lateHours;
+                                                        {studentMetrics.map(({ student, absentHours, lateHours, leaveHours, attendanceHoursRate }: any) => {
+                                                            const lostHours = absentHours + lateHours + leaveHours;
                                                             const attendedHours = Math.max(0, totalScheduledHours - lostHours);
                                                             return (
                                                                 <div key={student.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
@@ -2436,6 +2928,7 @@ const handleOpenAnalytics = async () => {
                                                                         <div style={{ height: '100%', backgroundColor: '#10b981', width: `${attendanceHoursRate}%` }} />
                                                                         {absentHours > 0 && <div style={{ height: '100%', backgroundColor: '#ef4444', width: `${(absentHours / totalScheduledHours) * 100}%` }} />}
                                                                         {lateHours > 0 && <div style={{ height: '100%', backgroundColor: '#f59e0b', width: `${(lateHours / totalScheduledHours) * 100}%` }} />}
+                                                                        {leaveHours > 0 && <div style={{ height: '100%', backgroundColor: '#3b82f6', width: `${(leaveHours / totalScheduledHours) * 100}%` }} />}
                                                                     </div>
                                                                 </div>
                                                             );
@@ -2541,6 +3034,7 @@ const handleOpenAnalytics = async () => {
                                                         const sortedRecs = [...studentRecords].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
                                                         const absentCount = studentRecords.filter(r => r.status === "ABSENT").length;
                                                         const lateCount = studentRecords.filter(r => r.status === "LATE").length;
+                                                        const leaveEarlyCount = studentRecords.filter(r => r.status === "LEAVE_EARLY").length;
 
                                                         return (
                                                             <div key={student.id} className="print-avoid-break rounded-2xl border bg-card shadow-sm overflow-hidden hover:border-primary/20 transition-all duration-200">
@@ -2574,6 +3068,11 @@ const handleOpenAnalytics = async () => {
                                                                                 {lateCount} {lateCount === 1 ? "Llegada Tarde" : "Llegadas Tardes"}
                                                                             </Badge>
                                                                         )}
+                                                                        {leaveEarlyCount > 0 && (
+                                                                            <Badge className="bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-900/60 font-extrabold shadow-none px-2.5 py-0.5 rounded-full text-xs">
+                                                                                {leaveEarlyCount} {leaveEarlyCount === 1 ? "Retiro" : "Retiros"}
+                                                                            </Badge>
+                                                                        )}
                                                                     </div>
                                                                 </div>
 
@@ -2593,6 +3092,7 @@ const handleOpenAnalytics = async () => {
                                                                             {sortedRecs.map((rec: any) => {
                                                                                 const isAbsent = rec.status === "ABSENT";
                                                                                 const isLate = rec.status === "LATE";
+                                                                                const isLeaveEarly = rec.status === "LEAVE_EARLY";
                                                                                 const formattedDate = format(new Date(rec.date), "dd/MM/yyyy");
                                                                                 
                                                                                 return (
@@ -2604,19 +3104,25 @@ const handleOpenAnalytics = async () => {
                                                                                             <Badge variant="outline" className={`font-bold text-[10px] uppercase px-2 py-0.5 rounded-md ${
                                                                                                 isAbsent 
                                                                                                     ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-950/20' 
-                                                                                                    : 'text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20'
+                                                                                                    : isLate
+                                                                                                        ? 'text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20'
+                                                                                                        : 'text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/20'
                                                                                             }`}>
-                                                                                                {isAbsent ? "Falta" : "Tarde"}
+                                                                                                {isAbsent ? "Falta" : isLate ? "Tarde" : "Retiro"}
                                                                                             </Badge>
                                                                                         </TableCell>
                                                                                         <TableCell className="text-center text-xs py-3 font-medium text-foreground/70">
-                                                                                            {isLate && rec.arrivalTime ? (
-                                                                                                <span className="font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded text-[11px] border border-amber-500/20">
-                                                                                                    {new Date(rec.arrivalTime).toISOString().substring(11, 16)} hs
-                                                                                                </span>
-                                                                                            ) : (
-                                                                                                <span className="text-muted-foreground text-[11px]">Día completo</span>
-                                                                                            )}
+                                                                                             {isLate && rec.arrivalTime ? (
+                                                                                                 <span className="font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded text-[11px] border border-amber-500/20">
+                                                                                                     {formatTime12h(rec.arrivalTime)}
+                                                                                                 </span>
+                                                                                             ) : isLeaveEarly && rec.departureTime ? (
+                                                                                                 <span className="font-mono bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded text-[11px] border border-blue-500/20">
+                                                                                                     {formatTime12h(rec.departureTime)}
+                                                                                                 </span>
+                                                                                             ) : (
+                                                                                                 <span className="text-muted-foreground text-[11px]">Día completo</span>
+                                                                                             )}
                                                                                         </TableCell>
                                                                                         <TableCell className="text-xs py-3 max-w-[300px]">
                                                                                             {rec.justification ? (
@@ -2758,6 +3264,9 @@ const handleOpenAnalytics = async () => {
                                         if (record.status === "LATE") return (
                                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">T</span>
                                         );
+                                        if (record.status === "LEAVE_EARLY") return (
+                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">R</span>
+                                        );
                                         if (record.status === "ABSENT") return (
                                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-xs font-black bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">F</span>
                                         );
@@ -2870,7 +3379,7 @@ const handleOpenAnalytics = async () => {
                                                                         );
                                                                     })}
                                                                     <th className="sticky right-0 z-20 bg-muted px-3 py-3 text-center font-bold text-muted-foreground border-b border-l border-border/60 min-w-[80px]">
-                                                                        F / T
+                                                                        F / T / R
                                                                     </th>
                                                                 </tr>
                                                             </thead>
@@ -2879,6 +3388,7 @@ const handleOpenAnalytics = async () => {
                                                                     const uLookup = lookup[s.id] || {};
                                                                     const absences = Object.values(uLookup).filter(v => v.status === "ABSENT" && !v.justification).length;
                                                                     const lates = Object.values(uLookup).filter(v => v.status === "LATE").length;
+                                                                    const leaves = Object.values(uLookup).filter(v => v.status === "LEAVE_EARLY").length;
                                                                     return (
                                                                         <tr key={s.id} className={`print-avoid-break group/row transition-colors ${i % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
                                                                             <td className={`sticky left-0 z-10 px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap transition-colors ${
@@ -2964,6 +3474,7 @@ const handleOpenAnalytics = async () => {
                                                                                                         <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-[10px] font-black">T</span>
                                                                                                         Tarde
                                                                                                     </DropdownMenuItem>
+                                                                                                    <DropdownMenuItem className="text-blue-600 font-bold flex items-center gap-1.5 cursor-pointer" onClick={() => handleUpdateSingleAttendance(s.id, ds, "LEAVE_EARLY")}><span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-[10px] font-black">R</span>Retiro</DropdownMenuItem>
                                                                                                 </DropdownMenuContent>
                                                                                             </DropdownMenu>
                                                                                         )}
@@ -2976,6 +3487,8 @@ const handleOpenAnalytics = async () => {
                                                                                 <span className="font-black text-red-600">{absences}</span>
                                                                                 <span className="text-muted-foreground mx-1">/</span>
                                                                                 <span className="font-black text-amber-600">{lates}</span>
+                                                                                <span className="text-muted-foreground mx-1">/</span>
+                                                                                <span className="font-black text-blue-600">{leaves}</span>
                                                                             </td>
                                                                         </tr>
                                                                     );
@@ -3477,10 +3990,13 @@ const handleOpenAnalytics = async () => {
                             const rec = attRecords[currentStudent.id];
                             const isAbsent = rec?.status === "ABSENT";
                             const isLate = rec?.status === "LATE";
+                            const isLeaveEarly = rec?.status === "LEAVE_EARLY";
+                            const isPresent = rec?.status === "PRESENT";
                             
                             const studentHistory = attendanceHistory.filter(a => a.userId === currentStudent.id);
                             const absentCount = studentHistory.filter(a => a.status === 'ABSENT').length;
                             const lateCount = studentHistory.filter(a => a.status === 'LATE').length;
+                            const leaveCount = studentHistory.filter(a => a.status === 'LEAVE_EARLY').length;
 
                             return (
                                 <div className="flex-1 flex flex-col justify-between py-6 min-h-0">
@@ -3514,32 +4030,41 @@ const handleOpenAnalytics = async () => {
                                         </div>
 
                                         {/* Quick badge indicating if attendance is marked for this session */}
-                                        <div className="h-10 mt-4 shrink-0">
-                                            {rec && (
-                                                <Badge className={`text-xs font-black px-4 py-1.5 shadow-sm ${
-                                                    isAbsent 
-                                                        ? 'bg-red-500 hover:bg-red-600 text-white' 
-                                                        : 'bg-amber-500 hover:bg-amber-600 text-white'
-                                                }`}>
-                                                    {isAbsent ? 'Falta Marcada' : 'Llegada Tarde Marcada'}
-                                                </Badge>
-                                            )}
-                                        </div>
+                                         <div className="h-10 mt-4 shrink-0">
+                                             {rec && (
+                                                 <Badge className={`text-xs font-black px-4 py-1.5 shadow-sm ${
+                                                     isAbsent 
+                                                         ? 'bg-red-500 hover:bg-red-600 text-white' 
+                                                         : isLate 
+                                                             ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                                                             : isLeaveEarly
+                                                                 ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                 : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                                 }`}>
+                                                     {isAbsent ? 'Falta Marcada' : isLate ? 'Llegada Tarde Marcada' : isLeaveEarly ? 'Retiro Temprano Marcado' : 'Presente Marcado'}
+                                                 </Badge>
+                                             )}
+                                         </div>
 
-                                        {/* Statistics block */}
-                                        <div className="mt-6 p-4 rounded-2xl bg-muted/30 border border-border/60 w-full max-w-sm flex justify-around shrink-0">
-                                            <div className="text-center">
-                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Inasistencias</p>
-                                                <p className="text-3xl font-black text-red-600 dark:text-red-400">{absentCount}</p>
-                                            </div>
-                                            <div className="w-px bg-border/60" />
-                                            <div className="text-center">
-                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Retrasos</p>
-                                                <p className="text-3xl font-black text-amber-600 dark:text-amber-400">{lateCount}</p>
-                                            </div>
-                                        </div>
+                                         {/* Statistics block */}
+                                         <div className="mt-6 p-4 rounded-2xl bg-muted/30 border border-border/60 w-full max-w-sm flex justify-around shrink-0">
+                                             <div className="text-center">
+                                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Inasistencias</p>
+                                                 <p className="text-3xl font-black text-red-600 dark:text-red-400">{absentCount}</p>
+                                             </div>
+                                             <div className="w-px bg-border/60" />
+                                             <div className="text-center">
+                                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Retrasos</p>
+                                                 <p className="text-3xl font-black text-amber-600 dark:text-amber-400">{lateCount}</p>
+                                             </div>
+                                             <div className="w-px bg-border/60" />
+                                             <div className="text-center">
+                                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Retiros</p>
+                                                 <p className="text-3xl font-black text-blue-600 dark:text-blue-400">{leaveCount}</p>
+                                             </div>
+                                         </div>
 
-                                        {/* Time entry selector nested under avatar for late arrivals */}
+                                         {/* Time entry selectors nested under avatar */}
                                         <AnimatePresence>
                                             {isLate && (
                                                 <motion.div 
@@ -3555,58 +4080,91 @@ const handleOpenAnalytics = async () => {
                                                         value={rec?.arrivalTime || ""}
                                                         onChange={e => updateLateTime(currentStudent.id, e.target.value)} 
                                                     />
+                                                    {rec?.arrivalTime && (() => {
+                                                         const daysOfWeekEng = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+                                                         const dayIndex = new Date(attDate + "T12:00:00").getDay();
+                                                         const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                         const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                         const scheduleForDay = course?.schedules?.find((s: any) => s.dayOfWeek === dayOfWeekName);
+                                                         const startTimeStr = scheduleForDay?.startTime || selectedGroup.startTime || "06:00";
+                                                         const lostHrs = calculateHoursDiff(startTimeStr, rec.arrivalTime);
+                                                         return lostHrs > 0 ? (
+                                                             <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">
+                                                                 Horas perdidas: {lostHrs.toFixed(2)} hs
+                                                             </p>
+                                                         ) : null;
+                                                     })()}
+                                                </motion.div>
+                                            )}
+                                            {isLeaveEarly && (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: 10 }}
+                                                    className="mt-6 w-full max-w-xs shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex flex-col items-center gap-2"
+                                                >
+                                                    <Label className="text-xs font-bold text-blue-700 dark:text-blue-400">HORA DE RETIRO</Label>
+                                                    <Input 
+                                                        type="time" 
+                                                        className="h-10 w-36 text-center text-base font-bold bg-background border-blue-300 dark:border-blue-900"
+                                                        value={rec?.departureTime || ""}
+                                                        onChange={e => updateLeaveTime(currentStudent.id, e.target.value)} 
+                                                    />
+                                                    {rec?.departureTime && (() => {
+                                                         const daysOfWeekEng = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+                                                         const dayIndex = new Date(attDate + "T12:00:00").getDay();
+                                                         const dayOfWeekName = daysOfWeekEng[dayIndex];
+                                                         const course = selectedGroup.courses?.find((c: any) => c.id === attCourseId);
+                                                         const scheduleForDay = course?.schedules?.find((s: any) => s.dayOfWeek === dayOfWeekName);
+                                                         const endTimeStr = scheduleForDay?.endTime || selectedGroup.endTime || "12:00";
+                                                         const lostHrs = calculateHoursDiff(rec.departureTime, endTimeStr);
+                                                         return lostHrs > 0 ? (
+                                                             <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+                                                                 Horas perdidas: {lostHrs.toFixed(2)} hs
+                                                             </p>
+                                                         ) : null;
+                                                     })()}
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
                                     </div>
 
                                     {/* Action Buttons: Giant controls for easy click/touch */}
-                                    <div className="shrink-0 w-full max-w-xl mx-auto space-y-4">
-                                        <div className="flex gap-4">
-                                            <Button 
-                                                size="lg" 
-                                                variant="outline" 
-                                                className={`flex-1 h-16 rounded-2xl font-bold text-base transition-all border-2 ${
-                                                    isAbsent 
-                                                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-600' 
-                                                        : 'border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
-                                                }`}
-                                                onClick={() => { 
-                                                    setStudentAttendance(currentStudent.id, isAbsent ? "PRESENT" : "ABSENT"); 
-                                                    if (!isAbsent) {
-                                                        setTimeout(nextSeqStudent, 300); 
-                                                    }
-                                                }}
-                                            >
-                                                <UserX className="w-5 h-5 mr-2" /> Inasistencia
-                                            </Button>
+                                     <div className="shrink-0 w-full max-w-xl mx-auto space-y-4">
+                                         <div className="flex gap-4">
+                                             <Button 
+                                                 size="lg" 
+                                                 variant="outline" 
+                                                 className={`flex-1 h-20 rounded-2xl font-black text-lg transition-all border-2 ${
+                                                     isAbsent 
+                                                         ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md' 
+                                                         : 'border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
+                                                 }`}
+                                                 onClick={() => { 
+                                                     setStudentAttendance(currentStudent.id, isAbsent ? "UNMARKED" : "ABSENT"); 
+                                                     if (!isAbsent) {
+                                                         setTimeout(nextSeqStudent, 300); 
+                                                     }
+                                                 }}
+                                             >
+                                                 <UserX className="w-6 h-6 mr-2" /> Ausente
+                                             </Button>
 
-                                            <Button 
-                                                size="lg" 
-                                                variant="outline" 
-                                                className={`flex-1 h-16 rounded-2xl font-bold text-base transition-all border-2 ${
-                                                    isLate 
-                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500' 
-                                                        : 'border-amber-200 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20'
-                                                }`}
-                                                onClick={() => { 
-                                                    setStudentAttendance(currentStudent.id, isLate ? "PRESENT" : "LATE"); 
-                                                }}
-                                            >
-                                                <Clock className="w-5 h-5 mr-2" /> Llegada Tarde
-                                            </Button>
-                                        </div>
-
-                                        <Button 
-                                            size="lg" 
-                                            className="w-full h-16 rounded-2xl font-black text-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-2"
-                                            onClick={() => { 
-                                                setStudentAttendance(currentStudent.id, "PRESENT"); 
-                                                nextSeqStudent(); 
-                                            }}
-                                        >
-                                            <UserCheck className="w-6 h-6" /> Presente (Siguiente)
-                                        </Button>
+                                             <Button 
+                                                 size="lg" 
+                                                 className={`flex-1 h-20 rounded-2xl font-black text-lg text-white shadow-md flex items-center justify-center gap-2 transition-all ${
+                                                     isPresent 
+                                                         ? 'bg-emerald-700 hover:bg-emerald-800' 
+                                                         : 'bg-emerald-600 hover:bg-emerald-700'
+                                                 }`}
+                                                 onClick={() => { 
+                                                     setStudentAttendance(currentStudent.id, isPresent ? "UNMARKED" : "PRESENT"); 
+                                                     nextSeqStudent(); 
+                                                 }}
+                                             >
+                                                 <UserCheck className="w-6 h-6" /> Presente
+                                             </Button>
+                                         </div>
 
                                         {/* Secondary navigation */}
                                         <div className="flex justify-between items-center pt-2 text-muted-foreground">
@@ -3743,6 +4301,29 @@ const handleOpenAnalytics = async () => {
                                 }
                             }}
                             className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg font-bold cursor-pointer"
+                        >
+                            Confirmar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={markAllConfirmOpen} onOpenChange={setMarkAllConfirmOpen}>
+                <AlertDialogContent className="rounded-xl border-primary/20 bg-background">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-lg font-black text-foreground">¿Marcar todos como Presentes?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-sm text-muted-foreground">
+                            ¿Estás seguro de que deseas marcar a todos los estudiantes de este grupo como PRESENTES? Esto sobrescribirá y cambiará el estado de asistencia actual de todos los alumnos.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2">
+                        <AlertDialogCancel className="rounded-lg font-semibold cursor-pointer">Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={async () => {
+                                setMarkAllConfirmOpen(false);
+                                await executeMarkAllPresent();
+                            }}
+                            className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer"
                         >
                             Confirmar
                         </AlertDialogAction>

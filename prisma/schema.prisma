@@ -189,8 +189,10 @@ enum EnrollmentStatus {
 }
 
 enum AttendanceStatus {
+  PRESENT
   ABSENT
   LATE
+  LEAVE_EARLY
 }
 
 model Attendance {
@@ -198,6 +200,7 @@ model Attendance {
   date             DateTime
   status           AttendanceStatus @default(ABSENT)
   arrivalTime      DateTime?
+  departureTime    DateTime?
   justification    String?
   justificationUrl String?
   courseId         String
@@ -312,6 +315,7 @@ model SystemSettings {
   scheduleEndDate             DateTime?
   maxTeacherHours             Int               @default(40)
   studentDailyLimit           Int               @default(2)
+  limitAttendanceToCurrentWeek Boolean           @default(false)
   
   updatedAt             DateTime         @updatedAt
 
@@ -531,4 +535,18 @@ model StudentGrade {
   @@unique([activityId, userId])
   @@map("student_grade")
 }
+
+model AttendancePermissionRequest {
+  id          String   @id @default(cuid())
+  courseId    String
+  teacherId   String
+  date        DateTime
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reason      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("attendance_permission_request")
+}
+
 

@@ -407,7 +407,8 @@ export const courseService = {
             prisma.attendance.findMany({
                 where: {
                     courseId: { in: courseIds },
-                    userId: userId
+                    userId: userId,
+                    status: { not: "PRESENT" }
                 },
                 orderBy: { date: "desc" }
             })
@@ -624,7 +625,8 @@ export const courseService = {
         const attendances = await prisma.attendance.findMany({
             where: {
                 courseId: courseId,
-                userId: userId
+                userId: userId,
+                status: { not: "PRESENT" }
             },
             orderBy: { date: "desc" }
         });

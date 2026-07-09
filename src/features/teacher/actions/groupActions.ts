@@ -11,6 +11,28 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
+function isDateInCurrentWeek(date: Date): boolean {
+    const today = new Date();
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    
+    const now = new Date(today);
+    now.setHours(0, 0, 0, 0);
+    
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    
+    return d.getTime() >= monday.getTime() && d.getTime() <= sunday.getTime();
+}
+
 async function requireTeacher() {
     const session = await getSession();
     if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
@@ -81,13 +103,34 @@ export async function resetStudentPassword(studentId: string) {
 export async function saveAttendanceBatch(
     courseId: string, 
     date: string, 
-    records: { studentId: string; status: AttendanceStatus; arrivalTime?: string; justification?: string }[]
+    records: { studentId: string; status: AttendanceStatus; arrivalTime?: string; departureTime?: string; justification?: string }[]
 ) {
     try {
         const teacher = await requireTeacher();
         await verifyCourseTeacher(courseId, teacher.id);
 
         const dateObj = new Date(date);
+        dateObj.setUTCHours(12, 0, 0, 0);
+
+        // Check week locking config
+        const settings = await prisma.systemSettings.findUnique({
+            where: { id: "settings" }
+        });
+        if (settings?.limitAttendanceToCurrentWeek) {
+            if (!isDateInCurrentWeek(dateObj)) {
+                const approvedRequest = await prisma.attendancePermissionRequest.findFirst({
+                    where: {
+                        courseId,
+                        teacherId: teacher.id,
+                        date: dateObj,
+                        status: "APPROVED"
+                    }
+                });
+                if (!approvedRequest) {
+                    throw new Error("WEEK_LOCKED");
+                }
+            }
+        }
 
         // Delete existing attendance for this course and date
         await prisma.attendance.deleteMany({
@@ -96,8 +139,6 @@ export async function saveAttendanceBatch(
                 date: dateObj
             }
         });
-
-        const filteredRecords = records.filter(r => r.status !== 'PRESENT' as any);
 
         const parseArrivalTime = (timeStr: string | undefined | null) => {
             if (!timeStr) return null;
@@ -118,14 +159,15 @@ export async function saveAttendanceBatch(
             return null;
         };
 
-        if (filteredRecords.length > 0) {
+        if (records.length > 0) {
             await prisma.attendance.createMany({
-                data: filteredRecords.map(r => ({
+                data: records.map(r => ({
                     courseId,
                     userId: r.studentId,
                     date: dateObj,
                     status: r.status,
                     arrivalTime: parseArrivalTime(r.arrivalTime),
+                    departureTime: parseArrivalTime(r.departureTime),
                     justification: r.justification
                 }))
             });
@@ -426,9 +468,10 @@ export async function saveSingleAttendanceAction(
     courseId: string,
     studentId: string,
     dateStr: string,
-    status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED",
+    status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED" | "UNMARKED" | "LEAVE_EARLY",
     justification?: string,
-    arrivalTime?: string | null
+    arrivalTime?: string | null,
+    departureTime?: string | null
 ) {
     try {
         const teacher = await requireTeacher();
@@ -438,26 +481,67 @@ export async function saveSingleAttendanceAction(
         // Avoid timezone shifting issues by setting hours in UTC
         dateObj.setUTCHours(12, 0, 0, 0);
 
-        if (status === "PRESENT") {
-            // Delete the attendance record for this student and date
-            await prisma.attendance.deleteMany({
-                where: {
-                    courseId,
-                    userId: studentId,
-                    date: dateObj
+        // Check week locking config
+        const settings = await prisma.systemSettings.findUnique({
+            where: { id: "settings" }
+        });
+        if (settings?.limitAttendanceToCurrentWeek) {
+            if (!isDateInCurrentWeek(dateObj)) {
+                const approvedRequest = await prisma.attendancePermissionRequest.findFirst({
+                    where: {
+                        courseId,
+                        teacherId: teacher.id,
+                        date: dateObj,
+                        status: "APPROVED"
+                    }
+                });
+                if (!approvedRequest) {
+                    throw new Error("WEEK_LOCKED");
                 }
-            });
-        } else {
-            // Find existing record
-            const existing = await prisma.attendance.findFirst({
-                where: {
-                    courseId,
-                    userId: studentId,
-                    date: dateObj
-                }
-            });
+            }
+        }
 
-            const dbStatus = (status === "EXCUSED" || status === "ABSENT") ? "ABSENT" : "LATE";
+        // Find existing record
+        const existing = await prisma.attendance.findFirst({
+            where: {
+                courseId,
+                userId: studentId,
+                date: dateObj
+            }
+        });
+
+        if (status === "UNMARKED" as any) {
+            if (existing) {
+                await prisma.attendance.delete({
+                    where: { id: existing.id }
+                });
+            }
+        } else if (status === "PRESENT") {
+            if (existing) {
+                await prisma.attendance.update({
+                    where: { id: existing.id },
+                    data: {
+                        status: "PRESENT",
+                        justification: null,
+                        arrivalTime: null,
+                        departureTime: null
+                    }
+                });
+            } else {
+                await prisma.attendance.create({
+                    data: {
+                        courseId,
+                        userId: studentId,
+                        date: dateObj,
+                        status: "PRESENT",
+                        justification: null,
+                        arrivalTime: null,
+                        departureTime: null
+                    }
+                });
+            }
+        } else {
+            const dbStatus = (status === "EXCUSED" || status === "ABSENT") ? "ABSENT" : (status as any);
             const dbJustification = status === "EXCUSED" ? (justification || "Justificado en planilla") : null;
 
             // Handle arrivalTime parse if late
@@ -483,13 +567,37 @@ export async function saveSingleAttendanceAction(
                 }
             }
 
+            // Handle departureTime parse if leave early
+            let dbDepartureTime: Date | null = null;
+            if (dbStatus === "LEAVE_EARLY") {
+                if (departureTime) {
+                    const dateParsed = new Date(departureTime);
+                    if (!isNaN(dateParsed.getTime())) {
+                        dbDepartureTime = dateParsed;
+                    } else if (/^\d{2}:\d{2}$/.test(departureTime)) {
+                        const yyyy = dateObj.getUTCFullYear();
+                        const mm = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+                        const dd = String(dateObj.getUTCDate()).padStart(2, "0");
+                        const fullDateTimeStr = `${yyyy}-${mm}-${dd}T${departureTime}:00`;
+                        const d = new Date(fullDateTimeStr);
+                        if (!isNaN(d.getTime())) {
+                            dbDepartureTime = d;
+                        }
+                    }
+                } else {
+                    // Default to current time or keep existing departureTime if updating
+                    dbDepartureTime = existing?.departureTime || new Date();
+                }
+            }
+
             if (existing) {
                 await prisma.attendance.update({
                     where: { id: existing.id },
                     data: {
                         status: dbStatus as any,
                         justification: dbJustification,
-                        arrivalTime: dbArrivalTime
+                        arrivalTime: dbArrivalTime,
+                        departureTime: dbDepartureTime
                     }
                 });
             } else {
@@ -500,7 +608,8 @@ export async function saveSingleAttendanceAction(
                         date: dateObj,
                         status: dbStatus as any,
                         justification: dbJustification,
-                        arrivalTime: dbArrivalTime
+                        arrivalTime: dbArrivalTime,
+                        departureTime: dbDepartureTime
                     }
                 });
             }
@@ -543,3 +652,133 @@ export async function deleteRemarkAction(remarkId: string) {
 }
 
 
+
+export async function requestAttendanceEditPermissionAction(courseId: string, dateStr: string, reason?: string) {
+    try {
+        const teacher = await requireTeacher();
+        await verifyCourseTeacher(courseId, teacher.id);
+
+        const dateObj = new Date(dateStr);
+        dateObj.setUTCHours(12, 0, 0, 0);
+
+        // Check if there is already a PENDING or APPROVED request
+        const existing = await prisma.attendancePermissionRequest.findFirst({
+            where: {
+                courseId,
+                teacherId: teacher.id,
+                date: dateObj,
+                status: { in: ["PENDING", "APPROVED"] }
+            }
+        });
+
+        if (existing) {
+            return { success: false, error: `Ya existe una solicitud ${existing.status === "PENDING" ? "pendiente" : "aprobada"} para esta fecha.` };
+        }
+
+        await prisma.attendancePermissionRequest.create({
+            data: {
+                courseId,
+                teacherId: teacher.id,
+                date: dateObj,
+                status: "PENDING",
+                reason
+            }
+        });
+
+        revalidatePath("/dashboard/teacher");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error requesting edit permission:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getAttendanceEditPermissionStatusAction(courseId: string, dateStr: string) {
+    try {
+        const teacher = await requireTeacher();
+        
+        const dateObj = new Date(dateStr);
+        dateObj.setUTCHours(12, 0, 0, 0);
+
+        const request = await prisma.attendancePermissionRequest.findFirst({
+            where: {
+                courseId,
+                teacherId: teacher.id,
+                date: dateObj
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        const settings = await prisma.systemSettings.findUnique({
+            where: { id: "settings" }
+        });
+
+        const isLocked = settings?.limitAttendanceToCurrentWeek ? !isDateInCurrentWeek(dateObj) : false;
+
+        return { 
+            success: true, 
+            isLocked,
+            hasPermission: isLocked ? (request?.status === "APPROVED") : true,
+            requestStatus: request?.status || null,
+            reason: request?.reason || null,
+            limitSettingsActive: settings?.limitAttendanceToCurrentWeek || false
+        };
+    } catch (error: any) {
+        console.error("Error fetching permission status:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getPendingAttendancePermissionRequestsAction() {
+    try {
+        // Require admin role
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session || session.user.role !== "admin") {
+            throw new Error("Unauthorized");
+        }
+
+        const requests = await prisma.attendancePermissionRequest.findMany({
+            orderBy: { createdAt: "desc" }
+        });
+
+        // Resolve teacher names and course names manually
+        const resolvedRequests = [];
+        for (const req of requests) {
+            const teacher = await prisma.user.findUnique({ where: { id: req.teacherId } });
+            const course = await prisma.course.findUnique({ where: { id: req.courseId }, include: { group: true } });
+            resolvedRequests.push({
+                ...req,
+                teacherName: teacher?.name || "Desconocido",
+                courseName: course?.title || "Desconocido",
+                groupName: course?.group?.name || "Sin Grupo"
+            });
+        }
+
+        return { success: true, requests: resolvedRequests };
+    } catch (error: any) {
+        console.error("Error fetching pending requests:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function respondToAttendancePermissionRequestAction(requestId: string, status: "APPROVED" | "REJECTED") {
+    try {
+        // Require admin role
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session || session.user.role !== "admin") {
+            throw new Error("Unauthorized");
+        }
+
+        await prisma.attendancePermissionRequest.update({
+            where: { id: requestId },
+            data: { status }
+        });
+
+        revalidatePath("/dashboard/admin/settings");
+        revalidatePath("/dashboard/teacher");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error responding to permission request:", error);
+        return { success: false, error: error.message };
+    }
+}

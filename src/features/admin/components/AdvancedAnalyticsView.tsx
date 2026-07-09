@@ -616,7 +616,7 @@ export function AdvancedAnalyticsView({ programs, environments }: AdvancedAnalyt
                                 <Card className="rounded-3xl border-border/50 shadow-sm relative overflow-hidden bg-card/40 backdrop-blur-sm">
                                     <div className="absolute top-0 left-0 w-1.5 h-full bg-red-500" />
                                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                        <CardTitle className="text-sm font-semibold text-muted-foreground">Alertas de Inasistencia</CardTitle>
+                                        <CardTitle className="text-sm font-semibold text-muted-foreground">Alertas de Inasistencia/Retiros</CardTitle>
                                         <CalendarCheck className="w-5 h-5 text-red-500" />
                                     </CardHeader>
                                     <CardContent>
@@ -735,9 +735,9 @@ export function AdvancedAnalyticsView({ programs, environments }: AdvancedAnalyt
                                     <CardHeader className="p-0 pb-4">
                                         <CardTitle className="text-base font-bold flex items-center gap-2">
                                             <CalendarCheck className="w-5 h-5 text-red-500" />
-                                            Riesgo de Deserción por Inasistencia
+                                            Alertas de Inasistencia, Tardanza y Retiro
                                         </CardTitle>
-                                        <CardDescription className="text-xs">Estudiantes que han faltado a más del 15% de sus clases programadas.</CardDescription>
+                                        <CardDescription className="text-xs">Estudiantes con novedades de asistencia (Faltas, Tardes o Retiros) en más del 15% de sus clases registradas.</CardDescription>
                                     </CardHeader>
                                     <CardContent className="p-0 overflow-y-auto max-h-[360px]">
                                         {studentStats.attendanceRiskStudents.length > 0 ? (
@@ -747,13 +747,19 @@ export function AdvancedAnalyticsView({ programs, environments }: AdvancedAnalyt
                                                         <div>
                                                             <div className="text-xs font-bold text-foreground">{s.name}</div>
                                                             <div className="text-[10px] text-muted-foreground">{s.groupName} • {s.identificacion}</div>
-                                                            <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">
-                                                                Faltó a {s.absentCount} clases de {s.totalAttendances} sesiones registradas.
+                                                            <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-1.5 flex gap-2 flex-wrap font-semibold">
+                                                                <span className="text-red-500">Faltas: {s.absentCount}</span>
+                                                                <span className="text-muted-foreground/30">|</span>
+                                                                <span className="text-amber-500">Tardes: {s.lateCount}</span>
+                                                                <span className="text-muted-foreground/30">|</span>
+                                                                <span className="text-blue-500">Retiros: {s.leaveEarlyCount || 0}</span>
+                                                                <span className="text-muted-foreground/30">|</span>
+                                                                <span className="text-muted-foreground">de {s.totalAttendances} sesiones</span>
                                                             </div>
                                                         </div>
                                                         <div className="text-right shrink-0">
-                                                            <div className="text-sm font-black text-red-500">{s.absenceRate}%</div>
-                                                            <div className="text-[8px] text-muted-foreground uppercase">Tasa de Faltas</div>
+                                                            <div className="text-sm font-black text-red-500">{s.anomalyRate || s.absenceRate}%</div>
+                                                            <div className="text-[8px] text-muted-foreground uppercase">Tasa Alertas</div>
                                                         </div>
                                                     </div>
                                                 ))}

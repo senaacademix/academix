@@ -422,7 +422,8 @@ export const CourseReportPDFDocument = ({
     // Calculate Attendance Stats (Deductive)
     const absentCount = attendances.filter(a => a.status === "ABSENT").length;
     const lateCount = attendances.filter(a => a.status === "LATE").length;
-    const justifiedCount = attendances.filter(a => (a.status === "ABSENT" || a.status === "LATE") && a.justification).length;
+    const leaveEarlyCount = attendances.filter(a => a.status === "LEAVE_EARLY").length;
+    const justifiedCount = attendances.filter(a => (a.status === "ABSENT" || a.status === "LATE" || a.status === "LEAVE_EARLY") && a.justification).length;
     
     // Present = total classes taught - absences
     const presentCount = totalCourseClasses - absentCount;
@@ -487,6 +488,7 @@ export const CourseReportPDFDocument = ({
                         <View style={styles.summarySideInfoEmerald}>
                             <Text style={styles.summarySideLabelEmerald}>Presente: {presentCount}</Text>
                             <Text style={styles.summarySideLabelEmerald}>Tarde: {lateCount}</Text>
+                            <Text style={styles.summarySideLabelEmerald}>Retiro: {leaveEarlyCount}</Text>
                             <Text style={styles.summarySideLabelEmerald}>Ausente: {absentCount}</Text>
                             <Text style={styles.summarySideLabelEmerald}>Justificados: {justifiedCount}</Text>
                         </View>
@@ -594,11 +596,24 @@ export const CourseReportPDFDocument = ({
                                     statusText = "Tarde";
                                     statusBg = COLORS.yellow100;
                                     statusColor = COLORS.yellow800;
+                                } else if (record.status === "LEAVE_EARLY") {
+                                    statusText = "Retiro";
+                                    statusBg = COLORS.blue100;
+                                    statusColor = COLORS.blue900;
                                 }
 
                                 return (
                                     <View key={record.id} style={styles.tableRow} wrap={false}>
-                                        <Text style={styles.tdDate}>{format(new Date(record.date), "PPP", { locale: es })}</Text>
+                                        <View style={{ width: '30%' }}>
+                                            <Text style={{ fontSize: 9, color: '#111827' }}>
+                                                {format(new Date(record.date), "PPP", { locale: es })}
+                                            </Text>
+                                            {record.departureTime && (
+                                                <Text style={{ fontSize: 7, color: COLORS.gray500, marginTop: 1 }}>
+                                                    Retiro: {format(new Date(record.departureTime), "HH:mm")}
+                                                </Text>
+                                            )}
+                                        </View>
                                         <View style={styles.tdAttStatusContainer}>
                                             <Text style={[styles.badgeCommon, { backgroundColor: statusBg, color: statusColor }]}>
                                                 {statusText}

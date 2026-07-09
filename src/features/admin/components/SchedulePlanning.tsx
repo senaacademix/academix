@@ -719,7 +719,8 @@ export function SchedulePlanning({
                 </div>
 
                 {/* Row 2: Actions */}
-                <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-border/20">
+                {!isScheduleBlocked && (
+                    <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-border/20">
                     {activeGroup && (
                         <div className="flex items-center gap-2 pr-1 shrink-0">
                             <span className="text-xs font-black truncate max-w-[120px]">{activeGroup.name}</span>
@@ -795,11 +796,27 @@ export function SchedulePlanning({
                         handleExportExcel={handleExportExcel}
                         isExportingExcel={isExportingExcel}
                     />
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* ── BODY ── */}
             <div className="flex flex-1 min-h-0 overflow-hidden">
+                {isScheduleBlocked ? (
+                    <div className="flex-1 flex flex-col items-center justify-center bg-muted/5 border border-dashed rounded-2xl m-4 text-center p-8 animate-in fade-in duration-300">
+                        <div className="p-4 bg-destructive/5 rounded-full border border-destructive/10 text-destructive mb-3">
+                            <AlertCircle className="w-8 h-8" />
+                        </div>
+                        <h3 className="text-base font-black text-foreground">Acceso Restringido - Programación Bloqueada</h3>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                            El programador de horarios está bloqueado temporalmente para este programa porque hay profesores que aún no han publicado su disponibilidad o materias.
+                        </p>
+                        <Button variant="default" size="sm" className="mt-4 font-bold shadow-sm cursor-pointer" onClick={() => setTeacherOverviewOpen(true)}>
+                            Ver Disponibilidad de Docentes
+                        </Button>
+                    </div>
+                ) : (
+                    <>
                 <LeftGroupsSidebar
                     showLeftSidebar={showLeftSidebar}
                     filtered={filtered}
@@ -985,6 +1002,8 @@ export function SchedulePlanning({
                     setTeachers={setTeachers}
                     setDlgOpen={setDlgOpen}
                 />
+                    </>
+                )}
             </div>
 
             {/* ── TEACHER OVERVIEW DIALOG ── */}
@@ -1225,7 +1244,11 @@ export function SchedulePlanning({
                                                                     <Button 
                                                                         variant="outline" 
                                                                         size="sm" 
-                                                                        className="h-6 text-[8px] font-black rounded-md px-1.5 py-0 border-primary/20 text-primary bg-primary/5 hover:bg-primary hover:text-white"
+                                                                        className={`h-6 text-[8.5px] font-extrabold rounded-md px-2 py-0 cursor-pointer transition-colors ${
+                                                                            teacher.availabilityLocked
+                                                                                ? "border-emerald-500/20 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-600 hover:text-white dark:text-emerald-400"
+                                                                                : "border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive hover:text-white dark:border-destructive/30"
+                                                                        }`}
                                                                         onClick={() => setEditingTeacherAvailabilityId(teacher.id)}
                                                                     >
                                                                         Disponibilidad
@@ -1233,7 +1256,11 @@ export function SchedulePlanning({
                                                                     <Button 
                                                                         variant="outline" 
                                                                         size="sm" 
-                                                                        className="h-6 text-[8px] font-black rounded-md px-1.5 py-0 border-primary/20 text-primary bg-primary/5 hover:bg-primary hover:text-white"
+                                                                        className={`h-6 text-[8.5px] font-extrabold rounded-md px-2 py-0 cursor-pointer transition-colors ${
+                                                                            teacher.qualifiedCoursesLocked
+                                                                                ? "border-emerald-500/20 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-600 hover:text-white dark:text-emerald-400"
+                                                                                : "border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive hover:text-white dark:border-destructive/30"
+                                                                        }`}
                                                                         onClick={() => setEditingTeacherQualificationsId(teacher.id)}
                                                                     >
                                                                         Materias

@@ -109,12 +109,33 @@ export function AdminAttendanceView({ group }: Props) {
             const recs = history.filter((r: any) => r.userId === s.id);
             if (recs.length === 0) continue;
             for (const rec of recs) {
+                let tipo = "Ausencia";
+                let hora = "—";
+                if (rec.status === "ABSENT") {
+                    tipo = "Falta";
+                } else if (rec.status === "LATE") {
+                    tipo = "Llegada Tarde";
+                    try {
+                        const dateObj = new Date(rec.arrivalTime);
+                        hora = !isNaN(dateObj.getTime()) ? dateObj.toISOString().substring(11, 16) : (typeof rec.arrivalTime === "string" ? rec.arrivalTime : "—");
+                    } catch {
+                        hora = typeof rec.arrivalTime === "string" ? rec.arrivalTime : "—";
+                    }
+                } else if (rec.status === "LEAVE_EARLY") {
+                    tipo = "Retiro Temprano";
+                    try {
+                        const dateObj = new Date(rec.departureTime);
+                        hora = !isNaN(dateObj.getTime()) ? dateObj.toISOString().substring(11, 16) : (typeof rec.departureTime === "string" ? rec.departureTime : "—");
+                    } catch {
+                        hora = typeof rec.departureTime === "string" ? rec.departureTime : "—";
+                    }
+                }
                 rows.push({
                     Estudiante: formatName(s.name, s.profile),
                     Identificación: s.profile?.identificacion || "—",
-                    Fecha: rec.date ?? "",
-                    Tipo: rec.status === "ABSENT" ? "Falta" : "Llegada Tarde",
-                    Hora: rec.arrivalTime ?? "—",
+                    Fecha: rec.date ? format(new Date(rec.date), "yyyy-MM-dd") : "",
+                    Tipo: tipo,
+                    Hora: hora,
                     Justificación: rec.justification ?? "Sin justificación",
                 });
             }
@@ -141,7 +162,7 @@ export function AdminAttendanceView({ group }: Props) {
         doc.setFontSize(14);
         doc.text(`Planilla de Asistencia – ${group.name}`, 14, 15);
         doc.setFontSize(9);
-        doc.text("F=Falta  T=Tarde  P=Presente", 14, 21);
+        doc.text("F=Falta  T=Tarde  R=Retiro  P=Presente  —=Sin Asistencia", 14, 21);
 
         autoTable(doc, {
             head: [["Estudiante", "ID", ...data.allDates]],
@@ -313,7 +334,7 @@ export function AdminAttendanceView({ group }: Props) {
                                                 {s.profile?.identificacion || "—"}
                                             </TableCell>
                                             {matrixData.allDates.map((d) => {
-                                                const val = row?.[d] ?? "P";
+                                                const val = row?.[d] ?? "—";
                                                 return (
                                                     <TableCell key={d} className="text-center py-2.5">
                                                         <span
@@ -322,6 +343,10 @@ export function AdminAttendanceView({ group }: Props) {
                                                                     ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
                                                                     : val === "T"
                                                                     ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                                                                    : val === "R"
+                                                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                                                                    : val === "—"
+                                                                    ? "bg-muted text-muted-foreground"
                                                                     : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
                                                             }`}
                                                         >
@@ -359,6 +384,7 @@ export function AdminAttendanceView({ group }: Props) {
                             return sorted.map(({ student, records }) => {
                                 const absentes = records.filter((r) => r["Tipo"] === "Falta").length;
                                 const tardanzas = records.filter((r) => r["Tipo"] === "Llegada Tarde").length;
+                                const retiros = records.filter((r) => r["Tipo"] === "Retiro Temprano").length;
                                 return (
                                     <div key={student.id} className="rounded-xl border bg-card shadow-sm overflow-hidden">
                                         {/* Student header */}
@@ -386,6 +412,11 @@ export function AdminAttendanceView({ group }: Props) {
                                                 {tardanzas > 0 && (
                                                     <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20 font-bold text-xs">
                                                         {tardanzas} {tardanzas === 1 ? "Tardanza" : "Tardanzas"}
+                                                    </Badge>
+                                                )}
+                                                {retiros > 0 && (
+                                                    <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/20 font-bold text-xs">
+                                                        {retiros} {retiros === 1 ? "Retiro" : "Retiros"}
                                                     </Badge>
                                                 )}
                                             </div>

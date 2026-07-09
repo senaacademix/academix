@@ -24,7 +24,7 @@ export async function getStudentRecords(targetStudentId?: string) {
 
     // Fetch Attendance
     const attendances = await prisma.attendance.findMany({
-        where: { userId: studentId },
+        where: { userId: studentId, status: { not: "PRESENT" } },
         include: {
             course: {
                 select: {

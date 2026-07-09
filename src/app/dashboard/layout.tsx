@@ -113,12 +113,12 @@ export default async function DashboardLayout({
               {showLicenseModal && <LicenseModal />}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/dashboard/help">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
+                  <Button variant="ghost" size="icon" asChild className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
+                    <Link href="/dashboard/help">
                       <HelpCircle className="h-4 w-4" />
                       <span className="sr-only">Ayuda</span>
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Centro de Ayuda</p>
@@ -126,12 +126,12 @@ export default async function DashboardLayout({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <a href="mailto:senaacademix@gmail.com?subject=Reporte%20de%20Problema%20-%20SigaTic">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
+                  <Button variant="ghost" size="icon" asChild className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
+                    <a href="mailto:senaacademix@gmail.com?subject=Reporte%20de%20Problema%20-%20SigaTic">
                       <Bug className="h-4 w-4" />
                       <span className="sr-only">Reportar un problema</span>
-                    </Button>
-                  </a>
+                    </a>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Reportar un problema</p>

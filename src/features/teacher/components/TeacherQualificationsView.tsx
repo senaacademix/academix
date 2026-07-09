@@ -183,8 +183,8 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                     )}
                 </div>
             ) : (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-300">
-                    <div className="flex items-start gap-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full p-4 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                    <div className="flex items-start gap-3 flex-1">
                         <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-sm">Materias en Modo Borrador</p>
@@ -200,7 +200,7 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                 </p>
                             )}
                         </div>
-                               <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-auto">
+                               <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-auto md:ml-auto">
                         {!isAdminMode && (
                             <Button 
                                 variant="outline" 

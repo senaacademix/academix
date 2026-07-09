@@ -12,10 +12,13 @@ export default async function SettingsPage() {
     }
 
     const settings = await getSystemSettingsAction();
+    const { getPendingAttendancePermissionRequestsAction } = await import("@/features/teacher/actions/groupActions");
+    const requestsRes = await getPendingAttendancePermissionRequestsAction();
+    const requests = requestsRes.success ? requestsRes.requests : [];
 
     return (
         <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
-            <AdminSettings initialSettings={settings as any} />
+            <AdminSettings initialSettings={settings as any} initialRequests={requests || []} />
         </div>
     );
 }
