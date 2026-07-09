@@ -44,6 +44,67 @@ export async function getAllUsersAction(filters?: {
     return await adminService.getAllUsers(filters);
 }
 
+export async function getAllFilteredUserIdsAction(filters?: {
+    role?: "teacher" | "student" | "admin";
+    search?: string;
+    courseId?: string;
+    groupId?: string;
+    programId?: string;
+}) {
+    await requireAdmin();
+    const where: any = {};
+    const andConditions: any[] = [];
+
+    if (filters?.role) {
+        where.role = filters.role;
+    }
+
+    if (filters?.groupId && filters.groupId !== 'all') {
+        where.groupId = filters.groupId;
+    } else if (filters?.programId && filters.programId !== 'all') {
+        where.group = { programId: filters.programId };
+    }
+
+    if (filters?.courseId && filters.courseId !== 'all') {
+        andConditions.push({
+            OR: [
+                { enrollments: { some: { courseId: filters.courseId } } },
+                { coursesCreated: { some: { id: filters.courseId } } }
+            ]
+        });
+    }
+
+    if (filters?.search) {
+        andConditions.push({
+            OR: [
+                { name: { contains: filters.search, mode: 'insensitive' as const } },
+                { email: { contains: filters.search, mode: 'insensitive' as const } }
+            ]
+        });
+    }
+
+    if (andConditions.length > 0) {
+        where.AND = andConditions;
+    }
+
+    const users = await prisma.user.findMany({
+        where,
+        select: { id: true }
+    });
+    return users.map(u => u.id);
+}
+
+export async function getUserEmailsAction(userIds: string[]) {
+    await requireAdmin();
+    const users = await prisma.user.findMany({
+        where: {
+            id: { in: userIds }
+        },
+        select: { email: true }
+    });
+    return users.map(u => u.email).filter(Boolean) as string[];
+}
+
 export async function getAllCoursesForFilterAction() {
     await requireAdmin();
     return await adminService.getAllCoursesSimple();

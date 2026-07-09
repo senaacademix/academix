@@ -52,7 +52,7 @@ import {
     Key
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction } from "@/app/admin-actions";
+import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction } from "@/app/admin-actions";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -462,12 +462,17 @@ export function UserManagement({
                         <Button 
                             variant="secondary" 
                             className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                            onClick={() => {
-                                const selectedEmails = users
-                                    .filter(u => selectedUserIds.includes(u.id) && u.email)
-                                    .map(u => u.email)
-                                    .join(',');
-                                if (selectedEmails) window.location.href = `mailto:${selectedEmails}`;
+                            onClick={async () => {
+                                try {
+                                    const emails = await getUserEmailsAction(selectedUserIds);
+                                    if (emails.length > 0) {
+                                        window.location.href = `mailto:${emails.join(',')}`;
+                                    } else {
+                                        toast.error("Ninguno de los estudiantes seleccionados tiene un correo registrado");
+                                    }
+                                } catch (error) {
+                                    toast.error("Error al obtener los correos de los estudiantes");
+                                }
                             }}
                         >
                             <Mail className="mr-2 h-4 w-4" />
@@ -560,10 +565,23 @@ export function UserManagement({
                                     
                                     <TableHead className="w-[40px]">
                                         <Checkbox 
-                                            checked={users.length > 0 && selectedUserIds.length === users.length}
-                                            onCheckedChange={(checked) => {
+                                            checked={currentTotal > 0 && selectedUserIds.length === currentTotal}
+                                            onCheckedChange={async (checked) => {
                                                 if (checked) {
-                                                    setSelectedUserIds(users.map(u => u.id));
+                                                    setIsLoadingPage(true);
+                                                    try {
+                                                        const ids = await getAllFilteredUserIdsAction({
+                                                            role: roleFilter !== "all" ? roleFilter as any : undefined,
+                                                            groupId: groupFilter !== "all" ? groupFilter : undefined,
+                                                            programId: programFilter !== "all" ? programFilter : undefined,
+                                                            search: searchQuery || undefined
+                                                        });
+                                                        setSelectedUserIds(ids);
+                                                    } catch (e) {
+                                                        toast.error("Error al seleccionar todos los estudiantes");
+                                                    } finally {
+                                                        setIsLoadingPage(false);
+                                                    }
                                                 } else {
                                                     setSelectedUserIds([]);
                                                 }

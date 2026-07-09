@@ -749,6 +749,7 @@ const handleOpenAnalytics = async () => {
             return newRecords;
         });
 
+        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 attCourseId,
@@ -768,6 +769,8 @@ const handleOpenAnalytics = async () => {
         } catch (e) {
             toast.error("Error de red al guardar asistencia");
             loadHistory(selectedGroup!.id);
+        } finally {
+            setIsSavingAtt(false);
         }
     };
 
@@ -785,6 +788,7 @@ const handleOpenAnalytics = async () => {
             };
         });
 
+        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 attCourseId,
@@ -803,6 +807,8 @@ const handleOpenAnalytics = async () => {
         } catch (e) {
             toast.error("Error de red al actualizar la hora");
             loadHistory(selectedGroup!.id);
+        } finally {
+            setIsSavingAtt(false);
         }
     };
 
@@ -820,6 +826,7 @@ const handleOpenAnalytics = async () => {
             };
         });
 
+        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 attCourseId,
@@ -839,6 +846,8 @@ const handleOpenAnalytics = async () => {
         } catch (e) {
             toast.error("Error de red al actualizar la hora");
             loadHistory(selectedGroup!.id);
+        } finally {
+            setIsSavingAtt(false);
         }
     };
 
@@ -1222,6 +1231,7 @@ const handleOpenAnalytics = async () => {
         }
 
         const toastId = toast.loading("Actualizando asistencia...");
+        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(attCourseId, studentId, dateStr, status, justification);
             if (res.success) {
@@ -1232,6 +1242,8 @@ const handleOpenAnalytics = async () => {
             }
         } catch (error: any) {
             toast.error("Error al actualizar la asistencia", { id: toastId });
+        } finally {
+            setIsSavingAtt(false);
         }
     };
 
@@ -1282,6 +1294,7 @@ const handleOpenAnalytics = async () => {
 
         const dateStr = new Date(att.date).toISOString().split('T')[0];
         const toastId = toast.loading("Retirando falta/retraso...");
+        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 att.courseId,
@@ -1297,6 +1310,8 @@ const handleOpenAnalytics = async () => {
             }
         } catch (error: any) {
             toast.error("Error de conexión al retirar la falta/retraso", { id: toastId });
+        } finally {
+            setIsSavingAtt(false);
         }
     };
 
@@ -1720,7 +1735,15 @@ const handleOpenAnalytics = async () => {
                             </TabsContent>
 
                             {/* TAB 2: ATTENDANCE */}
-                            <TabsContent value="attendance" className="m-0 space-y-4 outline-none">
+                            <TabsContent value="attendance" className="m-0 space-y-4 outline-none relative">
+                                {isSavingAtt && (
+                                    <div className="absolute inset-0 bg-background/50 backdrop-blur-[0.5px] z-50 flex items-center justify-center rounded-2xl cursor-wait" style={{ minHeight: '400px' }}>
+                                        <div className="bg-card border shadow-xl px-5 py-4 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in-95 duration-150">
+                                            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                                            <span className="text-sm font-bold text-foreground">Guardando cambios...</span>
+                                        </div>
+                                    </div>
+                                )}
                                 {isDateLocked && (
                                     <div className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300 ${
                                         hasEditPermission 
@@ -4141,15 +4164,16 @@ const handleOpenAnalytics = async () => {
                                              <Button 
                                                  size="lg" 
                                                  variant="outline" 
+                                                 disabled={isSavingAtt}
                                                  className={`flex-1 h-20 rounded-2xl font-black text-lg transition-all border-2 ${
                                                      isAbsent 
                                                          ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md' 
                                                          : 'border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
                                                  }`}
-                                                 onClick={() => { 
-                                                     setStudentAttendance(currentStudent.id, isAbsent ? "UNMARKED" : "ABSENT"); 
+                                                 onClick={async () => { 
+                                                     await setStudentAttendance(currentStudent.id, isAbsent ? "UNMARKED" : "ABSENT"); 
                                                      if (!isAbsent) {
-                                                         setTimeout(nextSeqStudent, 300); 
+                                                         nextSeqStudent(); 
                                                      }
                                                  }}
                                              >
@@ -4158,14 +4182,17 @@ const handleOpenAnalytics = async () => {
 
                                              <Button 
                                                  size="lg" 
+                                                 disabled={isSavingAtt}
                                                  className={`flex-1 h-20 rounded-2xl font-black text-lg text-white shadow-md flex items-center justify-center gap-2 transition-all ${
                                                      isPresent 
                                                          ? 'bg-emerald-700 hover:bg-emerald-800' 
                                                          : 'bg-emerald-600 hover:bg-emerald-700'
                                                  }`}
-                                                 onClick={() => { 
-                                                     setStudentAttendance(currentStudent.id, isPresent ? "UNMARKED" : "PRESENT"); 
-                                                     nextSeqStudent(); 
+                                                 onClick={async () => { 
+                                                     await setStudentAttendance(currentStudent.id, isPresent ? "UNMARKED" : "PRESENT"); 
+                                                     if (!isPresent) {
+                                                         nextSeqStudent(); 
+                                                     }
                                                  }}
                                              >
                                                  <UserCheck className="w-6 h-6" /> Presente
@@ -4176,7 +4203,7 @@ const handleOpenAnalytics = async () => {
                                         <div className="flex justify-between items-center pt-2 text-muted-foreground">
                                             <Button 
                                                 variant="ghost" 
-                                                disabled={seqIndex === 0} 
+                                                disabled={seqIndex === 0 || isSavingAtt} 
                                                 onClick={prevSeqStudent} 
                                                 className="font-bold text-xs"
                                             >
@@ -4184,7 +4211,7 @@ const handleOpenAnalytics = async () => {
                                             </Button>
                                             <Button 
                                                 variant="ghost" 
-                                                disabled={seqIndex === filteredStudents.length - 1} 
+                                                disabled={seqIndex === filteredStudents.length - 1 || isSavingAtt} 
                                                 onClick={nextSeqStudent} 
                                                 className="font-bold text-xs"
                                             >
@@ -4289,6 +4316,7 @@ const handleOpenAnalytics = async () => {
                                 setAttendanceToDelete(null);
                                 
                                 const toastId = toast.loading("Eliminando novedad...");
+                                setIsSavingAtt(true);
                                 try {
                                     const res = await saveSingleAttendanceAction(
                                         attCourseId,
@@ -4304,6 +4332,8 @@ const handleOpenAnalytics = async () => {
                                     }
                                 } catch (e) {
                                     toast.error("Error de conexión", { id: toastId });
+                                } finally {
+                                    setIsSavingAtt(false);
                                 }
                             }}
                             className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg font-bold cursor-pointer"
