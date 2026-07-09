@@ -54,7 +54,7 @@ export function TeacherDashboard({ courses, groups, currentDate, teacherName, fo
     const archivedCoursesCount = courses.filter(course => course.group?.endDate && new Date(course.group.endDate) < now).length;
 
     return (
-        <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 pt-6 overflow-x-hidden w-full max-w-full min-w-0">
+        <div className="flex-1 space-y-6 sm:space-y-8 px-2 py-4 sm:p-6 md:p-8 overflow-x-hidden w-full max-w-full min-w-0">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex flex-col gap-1">
                     <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">

@@ -1518,7 +1518,7 @@ const handleOpenAnalytics = async () => {
                             </TabsList>
                         </div>
 
-                        <div className="flex-1 p-6 overflow-y-auto overflow-x-hidden w-full min-w-0">
+                        <div className="flex-1 p-2 sm:p-6 overflow-y-auto overflow-x-hidden w-full min-w-0">
                             {/* TAB 1: STUDENTS */}
                             <TabsContent value="students" className="m-0 space-y-4 outline-none">
                                 <div className="flex flex-col md:flex-row md:items-center gap-4">
@@ -1826,7 +1826,7 @@ const handleOpenAnalytics = async () => {
                                                             disabled={isFuture}
                                                             type="button"
                                                             onClick={() => handleDateChangeAttempt(ds)}
-                                                            className={`h-7 px-2.5 text-xs font-bold transition-all rounded-lg shrink-0 cursor-pointer ${
+                                                            className={`h-7 px-2 sm:px-2.5 text-[10px] sm:text-xs font-bold transition-all rounded-lg shrink-0 cursor-pointer ${
                                                                 isSelected 
                                                                     ? "shadow-sm font-extrabold" 
                                                                     : isToday
@@ -1844,13 +1844,13 @@ const handleOpenAnalytics = async () => {
                                     </div>
                                 )}
                                 {/* Header Controls for Attendance — single compact row */}
-                                <div className="flex flex-wrap items-center gap-2 bg-muted/20 px-4 py-3 rounded-2xl border">
+                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-muted/20 px-4 py-3 rounded-2xl border">
 
                                     {/* Course */}
-                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 w-full lg:w-auto min-w-0">
                                         <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Materia</Label>
                                         <Select value={attCourseId} onValueChange={handleCourseChangeAttempt}>
-                                            <SelectTrigger className="h-9 rounded-lg border-muted-foreground/20 font-semibold bg-background text-sm min-w-[180px] max-w-[280px]">
+                                            <SelectTrigger className="h-9 rounded-lg border-muted-foreground/20 font-semibold bg-background text-sm w-full lg:min-w-[180px] lg:max-w-[280px]">
                                                 <SelectValue placeholder="Seleccionar Materia" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -1861,76 +1861,82 @@ const handleOpenAnalytics = async () => {
                                         </Select>
                                     </div>
 
-                                    {/* View mode pill - Group 1: Listado / Resumen */}
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5">
-                                            {([
-                                                { mode: "list",    icon: <ListTodo className="w-3.5 h-3.5" />, label: "Listado" },
-                                                { mode: "summary", icon: <ClipboardList className="w-3.5 h-3.5" />, label: "Resumen" },
-                                            ] as const).map(({ mode, icon, label }) => (
-                                                <button
-                                                    key={mode}
-                                                    onClick={() => setAttMode(mode)}
-                                                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
-                                                        attMode === mode
-                                                            ? "bg-background shadow-sm text-foreground"
-                                                            : "text-muted-foreground hover:text-foreground"
-                                                    }`}
-                                                >
-                                                    {icon}
-                                                    <span className="hidden sm:inline">{label}</span>
-                                                </button>
-                                            ))}
+                                    {/* Navigation and Actions Wrapper */}
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto min-w-0">
+                                        {/* View mode pills */}
+                                        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto justify-start sm:justify-center">
+                                            <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5 shrink-0">
+                                                {([
+                                                    { mode: "list",    icon: <ListTodo className="w-3.5 h-3.5" />, label: "Listado" },
+                                                    { mode: "summary", icon: <ClipboardList className="w-3.5 h-3.5" />, label: "Resumen" },
+                                                ] as const).map(({ mode, icon, label }) => (
+                                                    <button
+                                                        key={mode}
+                                                        onClick={() => setAttMode(mode)}
+                                                        className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
+                                                            attMode === mode
+                                                                ? "bg-background shadow-sm text-foreground"
+                                                                : "text-muted-foreground hover:text-foreground"
+                                                        }`}
+                                                    >
+                                                        {icon}
+                                                        <span>{label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Divider */}
+                                            <div className="w-px h-6 bg-border/60 mx-1 shrink-0" />
+
+                                            {/* Group 2: Planilla / Historial / Métricas */}
+                                            <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5 shrink-0">
+                                                {([
+                                                    { mode: "matrix",  icon: <LayoutList className="w-3.5 h-3.5" />, label: "Planilla" },
+                                                    { mode: "history", icon: <History className="w-3.5 h-3.5" />, label: "Historial" },
+                                                    { mode: "metrics", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Métricas" },
+                                                ] as const).map(({ mode, icon, label }) => (
+                                                    <button
+                                                        key={mode}
+                                                        onClick={() => setAttMode(mode)}
+                                                        className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
+                                                            attMode === mode
+                                                                ? "bg-background shadow-sm text-foreground"
+                                                                : "text-muted-foreground hover:text-foreground"
+                                                        }`}
+                                                    >
+                                                        {icon}
+                                                        <span>{label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
 
-                                        {/* Divider */}
-                                        <div className="w-px h-6 bg-border/60 mx-1 shrink-0" />
+                                        {/* Action buttons */}
+                                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                                            {/* Play Sequential button */}
+                                            <Button
+                                                onClick={startSequentialFullscreen}
+                                                variant="outline"
+                                                disabled={!attCourseId}
+                                                className="flex-1 sm:flex-initial h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-primary/20 hover:bg-primary/5 text-primary"
+                                            >
+                                                <Play className="w-3.5 h-3.5" />
+                                                <span className="hidden xs:inline">Llamar por Secuencia</span>
+                                                <span className="xs:hidden">Secuencia</span>
+                                            </Button>
 
-                                        {/* Group 2: Planilla / Historial / Métricas */}
-                                        <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5">
-                                            {([
-                                                { mode: "matrix",  icon: <LayoutList className="w-3.5 h-3.5" />, label: "Planilla" },
-                                                { mode: "history", icon: <History className="w-3.5 h-3.5" />, label: "Historial" },
-                                                { mode: "metrics", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Métricas" },
-                                            ] as const).map(({ mode, icon, label }) => (
-                                                <button
-                                                    key={mode}
-                                                    onClick={() => setAttMode(mode)}
-                                                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
-                                                        attMode === mode
-                                                            ? "bg-background shadow-sm text-foreground"
-                                                            : "text-muted-foreground hover:text-foreground"
-                                                    }`}
-                                                >
-                                                    {icon}
-                                                    <span className="hidden sm:inline">{label}</span>
-                                                </button>
-                                            ))}
+                                            <Button
+                                                onClick={handleMarkAllPresent}
+                                                disabled={!attCourseId || isSavingAtt}
+                                                variant="outline"
+                                                className="flex-1 sm:flex-initial h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-emerald-500/20 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 font-extrabold"
+                                            >
+                                                <UserCheck className="w-3.5 h-3.5" />
+                                                <span className="hidden xs:inline">Marcar todos como Presentes</span>
+                                                <span className="xs:hidden">Todos Presentes</span>
+                                            </Button>
                                         </div>
                                     </div>
-
-
-
-                                    {/* Play Sequential button */}
-                                    <Button
-                                        onClick={startSequentialFullscreen}
-                                        variant="outline"
-                                        disabled={!attCourseId}
-                                        className="h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-primary/20 hover:bg-primary/5 text-primary"
-                                    >
-                                        <Play className="w-3.5 h-3.5" />
-                                        Llamar por Secuencia
-                                    </Button>
-
-                                    <Button
-                                        onClick={handleMarkAllPresent}
-                                        disabled={!attCourseId || isSavingAtt}
-                                        variant="outline"
-                                        className="h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-emerald-500/20 hover:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 font-extrabold"
-                                    >
-                                        <UserCheck className="w-3.5 h-3.5" />
-                                        Marcar todos como Presentes
-                                    </Button>
                                 </div>
 
                                 {!isCurrentDateValid && (attMode === "list" || attMode === "summary") ? (
@@ -2018,7 +2024,7 @@ const handleOpenAnalytics = async () => {
                                                  return (
                                                     <div 
                                                         key={s.id} 
-                                                        className={`p-3.5 rounded-xl border transition-all duration-200 shadow-sm ${
+                                                        className={`p-2.5 sm:p-3.5 rounded-xl border transition-all duration-200 shadow-sm ${
                                                             isAbsent 
                                                                 ? 'bg-red-50/70 border-red-300 dark:bg-red-950/20 dark:border-red-900/60' 
                                                                 : isLate 
@@ -2031,7 +2037,7 @@ const handleOpenAnalytics = async () => {
                                                         }`}
                                                     >
                                                         {/* Header: Name, ID, Historial */}
-                                                        <div className="flex items-start justify-between gap-2 mb-2.5">
+                                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2.5">
                                                             <div className="min-w-0">
                                                                 <div 
                                                                     className={`font-semibold text-sm break-words ${
@@ -2055,7 +2061,7 @@ const handleOpenAnalytics = async () => {
                                                             </div>
 
                                                             {/* History button / indicator */}
-                                                            <div className="flex flex-col items-end gap-1 shrink-0">
+                                                            <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 mt-1.5 sm:mt-0">
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"
