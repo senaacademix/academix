@@ -5,6 +5,32 @@ import { formatName } from "@/lib/utils";
 // Persistent cache for resilience
 const courseStudentsCache = new Map<string, any>();
 
+async function populateCoursesFallbackDescriptions(courses: any[]) {
+    const coursesToLookup = courses.filter(c => c && !c.description && c.periodId && c.groupId);
+    if (coursesToLookup.length === 0) return courses;
+
+    const templates = await prisma.course.findMany({
+        where: {
+            groupId: null,
+            title: { in: coursesToLookup.map(c => c.title) },
+            periodId: { in: coursesToLookup.map(c => c.periodId).filter(Boolean) as string[] }
+        },
+        select: { title: true, periodId: true, description: true }
+    });
+
+    courses.forEach(c => {
+        if (c && !c.description && c.periodId && c.groupId) {
+            const match = templates.find(t => t.title.toLowerCase().trim() === c.title.toLowerCase().trim() && t.periodId === c.periodId);
+            if (match?.description) {
+                c.description = match.description;
+            }
+        }
+    });
+
+    return courses;
+}
+
+
 
 export const courseService = {
     async createCourse(data: {
@@ -282,7 +308,7 @@ export const courseService = {
             }
         });
 
-        return combined;
+        return await populateCoursesFallbackDescriptions(combined);
     },
 
     async getAllCourses() {
@@ -426,6 +452,9 @@ export const courseService = {
                 attendances
             };
         });
+
+        const courses = enrichedEnrollments.map(e => e.course);
+        await populateCoursesFallbackDescriptions(courses);
 
         return enrichedEnrollments;
     },

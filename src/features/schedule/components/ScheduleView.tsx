@@ -884,15 +884,22 @@ export function ScheduleView() {
                     ) : (
                         <>
                             <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                    <BookOpen className="w-5 h-5" />
+                                <DialogTitle className="flex items-center gap-2 font-black">
+                                    <BookOpen className="w-5 h-5 text-primary" />
                                     {selectedCourse?.title}
                                 </DialogTitle>
-                                <DialogDescription>
-                                    {selectedCourse?.description || "Sin descripción"}
+                                <DialogDescription className="text-xs uppercase tracking-wider font-bold">
+                                    Detalles de la Materia Académica
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4 pt-2">
+                                {/* Description / Competencies / RAP */}
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Descripción, Competencias y RAP</p>
+                                    <div className="text-xs text-foreground/80 bg-muted/40 p-3 rounded-xl border border-border/50 break-words whitespace-pre-wrap max-h-[140px] overflow-y-auto scrollbar-thin">
+                                        {selectedCourse?.description || "Esta materia no tiene descripción, competencias o resultados de aprendizaje registrados todavía."}
+                                    </div>
+                                </div>
                                 {/* Docente & Grupo */}
                                 <div className="grid grid-cols-2 gap-4">
 

@@ -1,6 +1,8 @@
 "use client";
 
-import { MessageSquare, Users, Clock, BookOpen, GraduationCap, ArrowRight, ArrowLeft, Calendar } from "lucide-react";
+import { useState } from "react";
+import { MessageSquare, Users, Clock, BookOpen, GraduationCap, ArrowRight, ArrowLeft, Calendar, Info } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -35,6 +37,7 @@ export function MyEnrollments({
     onTabChange?: (tab: string) => void,
     themes?: any[]
 }) {
+    const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
     const filteredEnrollments = selectedCourse
         ? enrollments.filter(e => e.course.id === selectedCourse)
         : enrollments;
@@ -156,8 +159,15 @@ export function MyEnrollments({
                                             
                                             <div className="h-6 w-[1px] bg-foreground/10 mx-1 hidden sm:block" />
                                                 <div className="flex flex-col min-w-0">
-                                                    <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
-                                                        {enrollment.course.title}
+                                                    <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity flex items-center gap-2">
+                                                        <span>{enrollment.course.title}</span>
+                                                        <button
+                                                            onClick={() => setIsInfoDialogOpen(true)}
+                                                            className="hover:text-primary p-0.5 rounded transition-colors cursor-pointer text-muted-foreground/60 hover:text-primary shrink-0"
+                                                            title="Ver información de la materia"
+                                                        >
+                                                            <Info className="w-4 h-4" />
+                                                        </button>
                                                     </h2>
                                                 </div>
                                         </div>
@@ -229,6 +239,62 @@ export function MyEnrollments({
                                 </TabsContent>
                             </div>
                         </Tabs>
+
+                        {/* Course Description Dialog */}
+                        <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
+                            <DialogContent className="sm:max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2 font-black text-lg text-primary">
+                                        <BookOpen className="w-5 h-5" />
+                                        {enrollment.course.title}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs uppercase tracking-wider font-bold">
+                                        Información de la Materia
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="mt-4 space-y-4 text-sm leading-relaxed text-foreground">
+                                    <div>
+                                        <h4 className="font-bold text-xs uppercase tracking-widest text-muted-foreground mb-1">Descripción, Competencias y RAP</h4>
+                                        <div className="bg-muted/30 p-4 rounded-xl border border-border/50 max-h-[300px] overflow-y-auto whitespace-pre-wrap">
+                                            {enrollment.course.description || "Esta materia no tiene descripción, competencias o resultados de aprendizaje registrados todavía."}
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button onClick={() => setIsInfoDialogOpen(false)} className="rounded-xl font-bold">
+                                        Cerrar
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+
+                        {/* Course Description Dialog */}
+                        <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
+                            <DialogContent className="sm:max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2 font-black text-lg text-primary">
+                                        <BookOpen className="w-5 h-5" />
+                                        {enrollment.course.title}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs uppercase tracking-wider font-bold">
+                                        Información de la Materia
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="mt-4 space-y-4 text-sm leading-relaxed text-foreground">
+                                    <div>
+                                        <h4 className="font-bold text-xs uppercase tracking-widest text-muted-foreground mb-1">Descripción, Competencias y RAP</h4>
+                                        <div className="bg-muted/30 p-4 rounded-xl border border-border/50 max-h-[300px] overflow-y-auto whitespace-pre-wrap">
+                                            {enrollment.course.description || "Esta materia no tiene descripción, competencias o resultados de aprendizaje registrados todavía."}
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button onClick={() => setIsInfoDialogOpen(false)} className="rounded-xl font-bold">
+                                        Cerrar
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </div>
                 );
             })}

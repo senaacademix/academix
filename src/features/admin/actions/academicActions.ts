@@ -46,6 +46,7 @@ export async function getProgramsAction() {
                 orderBy: { order: "asc" },
                 include: {
                     courses: {
+                        where: { groupId: null },
                         orderBy: { order: "asc" },
                         include: {
                             group: true,
@@ -87,7 +88,9 @@ export async function getProgramsAction() {
                     },
                     period: {
                         include: {
-                            courses: true
+                            courses: {
+                                where: { groupId: null }
+                            }
                         }
                     },
                     courses: {
@@ -1853,10 +1856,22 @@ export async function saveScheduleBatchAction(pendingChanges: any[]) {
                 if (ch.type === "DELETE") {
                     await tx.course.delete({ where: { id: ch.courseId } });
                 } else if (ch.type === "CREATE") {
+                    let description = ch.description;
+                    if (!description && ch.periodId) {
+                        const template = await tx.course.findFirst({
+                            where: {
+                                title: ch.title,
+                                periodId: ch.periodId,
+                                groupId: null
+                            },
+                            select: { description: true }
+                        });
+                        description = template?.description || "";
+                    }
                     await tx.course.create({
                         data: {
                             title: ch.title,
-                            description: "",
+                            description: description || "",
                             groupId: ch.groupId,
                             periodId: ch.periodId,
                             teacherId: ch.teacherId || null,
@@ -1874,7 +1889,6 @@ export async function saveScheduleBatchAction(pendingChanges: any[]) {
                         where: { id: ch.courseId },
                         data: {
                             title: ch.title,
-                            description: "",
                             teacherId: ch.teacherId || null,
                         }
                     });

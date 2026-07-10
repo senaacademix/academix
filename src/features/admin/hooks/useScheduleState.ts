@@ -84,15 +84,15 @@ export interface Program {
         availabilities?: { id: string; dayOfWeek: DayOfWeek; startTime: string; endTime: string }[];
         qualifiedCourses?: { id: string; title: string }[];
     }[];
-    periods: {id:string;name:string;courses:{id:string;title:string;groupId:string|null;periodId:string|null;weeklyHours?:number}[]}[];
+    periods: {id:string;name:string;courses:{id:string;title:string;description?:string|null;groupId:string|null;periodId:string|null;weeklyHours?:number}[]}[];
     groups: {
         id:string; name:string; description:string|null;
         environmentId?: string | null;
         environment?: TrainingEnvironment | null;
         startTime:string; endTime:string; periodId:string|null;
-        period:{id:string;name:string;courses:{id:string;title:string;groupId:string|null;weeklyHours?:number}[]}|null;
+        period:{id:string;name:string;courses:{id:string;title:string;description?:string|null;groupId:string|null;weeklyHours?:number}[]}|null;
         courses:{
-            id:string; title:string; teacherId:string|null; weeklyHours?:number;
+            id:string; title:string; description?:string|null; teacherId:string|null; weeklyHours?:number;
             teacher:{id:string;name:string|null;email:string}|null;
             schedules:{id:string;dayOfWeek:DayOfWeek;startTime:string;endTime:string}[];
         }[];
@@ -101,7 +101,7 @@ export interface Program {
 }
 
 export type PendingChange =
-    | { type: "CREATE"; tempId: string; groupId: string; periodId: string; title: string; teacherId?: string; schedules: Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }> }
+    | { type: "CREATE"; tempId: string; groupId: string; periodId: string; title: string; description: string; teacherId?: string; schedules: Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }> }
     | { type: "UPDATE"; courseId: string; title: string; teacherId?: string; schedules: Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }> }
     | { type: "DELETE"; courseId: string }
     | { type: "ASSIGN_ENV"; groupId: string; envId: string | null }
@@ -496,9 +496,11 @@ export function useScheduleState({
                 }],
             }))
         })));
-        setPendingChanges(prev => [...prev, { type: "CREATE" as const, tempId, groupId, periodId, title, teacherId, schedules: [{ dayOfWeek: day, startTime, endTime }] }]);
+        const catalogCourse = activeGroup?.period?.courses.find((c: any) => c.title.toLowerCase().trim() === title.toLowerCase().trim());
+        const description = catalogCourse?.description || "";
+        setPendingChanges(prev => [...prev, { type: "CREATE" as const, tempId, groupId, periodId, title, description, teacherId, schedules: [{ dayOfWeek: day, startTime, endTime }] }]);
         return true;
-    }, [isScheduleBlocked, checkTeacherAvailability, checkTeacherConflict, checkTeacherWeeklyHours, checkGroupConflict, localPrograms, applyLocalCourseUpdate, allTeachers]);
+    }, [isScheduleBlocked, checkTeacherAvailability, checkTeacherConflict, checkTeacherWeeklyHours, checkGroupConflict, localPrograms, applyLocalCourseUpdate, allTeachers, activeGroup]);
 
     const localUpdate = useCallback((courseId: string, scheduleId: string, title: string, teacherId: string | undefined, day: DayOfWeek, startTime: string, endTime: string) => {
         // Resolve group ID from course ID

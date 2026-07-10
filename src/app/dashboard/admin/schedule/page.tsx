@@ -48,6 +48,7 @@ export default async function AdminSchedulePage() {
                 .map((c: any) => ({
                     id: c.id,
                     title: c.title,
+                    description: c.description,
                     groupId: c.groupId,
                     periodId: c.periodId,
                     weeklyHours: c.weeklyHours
@@ -76,6 +77,7 @@ export default async function AdminSchedulePage() {
                     .map((c: any) => ({
                         id: c.id,
                         title: c.title,
+                        description: c.description,
                         groupId: c.groupId,
                         weeklyHours: c.weeklyHours
                     }))
@@ -83,6 +85,7 @@ export default async function AdminSchedulePage() {
             courses: group.courses.map((c: any) => ({
                 id: c.id,
                 title: c.title,
+                description: c.description,
                 teacherId: c.teacherId,
                 weeklyHours: c.weeklyHours,
                 teacher: c.teacher ? {

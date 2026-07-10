@@ -3210,11 +3210,14 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 <Label htmlFor="cDesc">Descripción</Label>
                                 <Textarea
                                     id="cDesc"
-                                    placeholder="Temario u objetivos..."
+                                    placeholder="Temario, objetivos generales, competencias y resultados de aprendizaje (RAP) asociados a la materia..."
                                     value={courseDescription}
                                     onChange={(e) => setCourseDescription(e.target.value)}
-                                    rows={2}
+                                    rows={3}
                                 />
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                    Aquí puedes registrar el temario, objetivos, competencias y resultados de aprendizaje (RAP) asociados a la materia.
+                                </p>
                             </div>
                             <div className="space-y-2 col-span-2 md:col-span-1">
                                 <Label htmlFor="cWeeklyHours">Horas Semanales</Label>
