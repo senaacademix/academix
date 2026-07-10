@@ -381,6 +381,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [remarkCourseId, setRemarkCourseId] = useState("");
     const [isSavingRemark, setIsSavingRemark] = useState(false);
     const [remarkStudentSearch, setRemarkStudentSearch] = useState("");
+    const [sendEmailOnSave, setSendEmailOnSave] = useState(false);
 
     // History State
     const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
@@ -474,6 +475,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     };
 
     const handleDateChangeAttempt = (newVal: string) => {
+        if (isSavingAtt) return;
         if (hasPendingChanges()) {
             setPendingAction({ type: "DATE", value: newVal });
         } else {
@@ -482,6 +484,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     };
 
     const handleCourseChangeAttempt = (newVal: string) => {
+        if (isSavingAtt) return;
         if (hasPendingChanges()) {
             setPendingAction({ type: "COURSE", value: newVal });
         } else {
@@ -490,6 +493,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     };
 
     const handleTabChangeAttempt = (newVal: string) => {
+        if (isSavingAtt) return;
         if (hasPendingChanges()) {
             setPendingAction({ type: "TAB", value: newVal });
         } else {
@@ -498,6 +502,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     };
 
     const handleGroupChangeAttempt = (newVal: string) => {
+        if (isSavingAtt) return;
         if (hasPendingChanges()) {
             setPendingAction({ type: "GROUP", value: newVal });
         } else {
@@ -545,6 +550,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
             setRemarkTitle("");
             setRemarkDesc("");
             setRemarkCourseId(firstCourseId);
+            setSendEmailOnSave(false);
 
             // History & analytics
             setAttendanceHistory([]);
@@ -705,6 +711,7 @@ const handleOpenAnalytics = async () => {
     };
 
     const setStudentAttendance = async (studentId: string, status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "UNMARKED") => {
+        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -777,6 +784,7 @@ const handleOpenAnalytics = async () => {
     };
 
     const updateLateTime = async (studentId: string, time: string) => {
+        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -815,6 +823,7 @@ const handleOpenAnalytics = async () => {
     };
 
     const updateLeaveTime = async (studentId: string, time: string) => {
+        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -1145,6 +1154,7 @@ const handleOpenAnalytics = async () => {
     // ── END EXPORT FUNCTIONS ─────────────────────────────────────────────────────
 
     const executeMarkAllPresent = async () => {
+        if (isSavingAtt) return;
         setIsSavingAtt(true);
         const toastId = toast.loading("Registrando asistencia para todos los estudiantes...");
 
@@ -1181,6 +1191,7 @@ const handleOpenAnalytics = async () => {
     };
 
     const handleMarkAllPresent = async () => {
+        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -1192,33 +1203,41 @@ const handleOpenAnalytics = async () => {
     };
 
     const handleSaveAttendance = async () => {
+        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
         }
         if (!attCourseId) return toast.error("Selecciona una materia");
         
-        // Send ONLY ABSENT or LATE records. PRESENT is implicit.
-        const records = Object.entries(attRecords).map(([studentId, rec]) => ({
-            studentId,
-            status: rec.status,
-            arrivalTime: rec.arrivalTime ? `${attDate}T${rec.arrivalTime}:00Z` : undefined,
-            departureTime: rec.departureTime ? `${attDate}T${rec.departureTime}:00Z` : undefined,
-            justification: rec.justification
-        }));
+        setIsSavingAtt(true);
+        try {
+            // Send ONLY ABSENT or LATE records. PRESENT is implicit.
+            const records = Object.entries(attRecords).map(([studentId, rec]) => ({
+                studentId,
+                status: rec.status,
+                arrivalTime: rec.arrivalTime ? `${attDate}T${rec.arrivalTime}:00Z` : undefined,
+                departureTime: rec.departureTime ? `${attDate}T${rec.departureTime}:00Z` : undefined,
+                justification: rec.justification
+            }));
 
-        const res = await saveAttendanceBatch(attCourseId, attDate, records as any);
-        if (res.success) {
-            toast.success("Asistencia guardada correctamente");
-            loadHistory(selectedGroup!.id);
-            setAttMode("list"); // return to list mode
-        } else {
-            toast.error("Error al guardar asistencia: " + res.error);
+            const res = await saveAttendanceBatch(attCourseId, attDate, records as any);
+            if (res.success) {
+                toast.success("Asistencia guardada correctamente");
+                loadHistory(selectedGroup!.id);
+                setAttMode("list"); // return to list mode
+            } else {
+                toast.error("Error al guardar asistencia: " + res.error);
+            }
+        } catch (error) {
+            toast.error("Error al guardar asistencia");
+        } finally {
+            setIsSavingAtt(false);
         }
-        setIsSavingAtt(false);
     };
 
     const handleUpdateSingleAttendance = async (studentId: string, dateStr: string, status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "EXCUSED") => {
+        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -1258,9 +1277,25 @@ const handleOpenAnalytics = async () => {
         const res = await saveRemarkBatch(teacherId!, remarkCourseId, selectedStudents, remarkType, remarkTitle, remarkDesc);
         if (res.success) {
             toast.success("Observación guardada correctamente");
+            
+            if (sendEmailOnSave) {
+                const selectedEmails = (selectedGroup.students || [])
+                    .filter((s: any) => selectedStudents.includes(s.id) && s.email)
+                    .map((s: any) => s.email)
+                    .join(',');
+                if (selectedEmails) {
+                    const subject = encodeURIComponent(remarkTitle);
+                    const body = encodeURIComponent(remarkDesc);
+                    window.location.href = `mailto:${selectedEmails}?subject=${subject}&body=${body}`;
+                } else {
+                    toast.warning("No hay correos registrados para los estudiantes seleccionados.");
+                }
+            }
+
             setRemarkTitle("");
             setRemarkDesc("");
             setSelectedStudents([]);
+            setSendEmailOnSave(false);
             loadHistory(selectedGroup!.id);
         } else {
             toast.error("Error al guardar observación: " + res.error);
@@ -1288,6 +1323,7 @@ const handleOpenAnalytics = async () => {
     };
 
     const handleDeleteAttendance = async (att: any) => {
+        if (isSavingAtt) return;
         const studentName = formatName(att.user.name, att.user.profile);
         const formattedDate = format(new Date(att.date), "dd/MM/yyyy");
         if (!window.confirm(`¿Estás seguro de que deseas retirar el registro de inasistencia/retraso de ${studentName} para el día ${formattedDate}?`)) {
@@ -1809,6 +1845,7 @@ const handleOpenAnalytics = async () => {
                                                 <div className="flex items-center gap-2 bg-background px-3 py-1 rounded-xl border border-muted-foreground/15 shadow-sm">
                                                     <Switch
                                                         id="hide-other-dates"
+                                                        disabled={isSavingAtt}
                                                         checked={hideOtherDates}
                                                         onCheckedChange={setHideOtherDates}
                                                         className="scale-75"
@@ -1857,7 +1894,7 @@ const handleOpenAnalytics = async () => {
                                                             key={ds}
                                                             size="sm"
                                                             variant={isSelected ? "default" : "outline"}
-                                                            disabled={isFuture}
+                                                            disabled={isFuture || isSavingAtt}
                                                             type="button"
                                                             onClick={() => handleDateChangeAttempt(ds)}
                                                             className={`h-7 px-2 sm:px-2.5 text-[10px] sm:text-xs font-bold transition-all rounded-lg shrink-0 cursor-pointer ${
@@ -1883,7 +1920,7 @@ const handleOpenAnalytics = async () => {
                                     {/* Course */}
                                     <div className="flex items-center gap-2 w-full lg:w-auto min-w-0">
                                         <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap shrink-0">Materia</Label>
-                                        <Select value={attCourseId} onValueChange={handleCourseChangeAttempt}>
+                                        <Select disabled={isSavingAtt} value={attCourseId} onValueChange={handleCourseChangeAttempt}>
                                             <SelectTrigger className="h-9 rounded-lg border-muted-foreground/20 font-semibold bg-background text-sm w-full lg:min-w-[180px] lg:max-w-[280px]">
                                                 <SelectValue placeholder="Seleccionar Materia" />
                                             </SelectTrigger>
@@ -1906,8 +1943,9 @@ const handleOpenAnalytics = async () => {
                                                 ] as const).map(({ mode, icon, label }) => (
                                                     <button
                                                         key={mode}
+                                                        disabled={isSavingAtt}
                                                         onClick={() => setAttMode(mode)}
-                                                        className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
+                                                        className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                                             attMode === mode
                                                                 ? "bg-background shadow-sm text-foreground"
                                                                 : "text-muted-foreground hover:text-foreground"
@@ -1931,8 +1969,9 @@ const handleOpenAnalytics = async () => {
                                                 ] as const).map(({ mode, icon, label }) => (
                                                     <button
                                                         key={mode}
+                                                        disabled={isSavingAtt}
                                                         onClick={() => setAttMode(mode)}
-                                                        className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all ${
+                                                        className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                                             attMode === mode
                                                                 ? "bg-background shadow-sm text-foreground"
                                                                 : "text-muted-foreground hover:text-foreground"
@@ -1951,7 +1990,7 @@ const handleOpenAnalytics = async () => {
                                             <Button
                                                 onClick={startSequentialFullscreen}
                                                 variant="outline"
-                                                disabled={!attCourseId}
+                                                disabled={!attCourseId || isSavingAtt}
                                                 className="flex-1 sm:flex-initial h-9 px-3 rounded-lg font-bold text-sm gap-1.5 shrink-0 border-primary/20 hover:bg-primary/5 text-primary"
                                             >
                                                 <Play className="w-3.5 h-3.5" />
@@ -2127,7 +2166,8 @@ const handleOpenAnalytics = async () => {
                                                         {/* Quick Actions Row */}
                                                         <div className="flex flex-wrap items-center gap-1.5 w-full">
                                                             <Button 
-                                                                size="sm" 
+                                                                size="sm"
+                                                                disabled={isSavingAtt}
                                                                 variant={isPresent ? "default" : "outline"}
                                                                 className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
                                                                     isPresent 
@@ -2140,7 +2180,8 @@ const handleOpenAnalytics = async () => {
                                                                 Presente
                                                             </Button>
                                                             <Button 
-                                                                size="sm" 
+                                                                size="sm"
+                                                                disabled={isSavingAtt}
                                                                 variant={isAbsent ? "default" : "outline"}
                                                                 className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
                                                                     isAbsent 
@@ -2153,7 +2194,8 @@ const handleOpenAnalytics = async () => {
                                                                 Falta
                                                             </Button>
                                                             <Button 
-                                                                size="sm" 
+                                                                size="sm"
+                                                                disabled={isSavingAtt}
                                                                 variant={isLate ? "default" : "outline"}
                                                                 className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
                                                                     isLate 
@@ -2166,7 +2208,8 @@ const handleOpenAnalytics = async () => {
                                                                 Tarde
                                                             </Button>
                                                             <Button 
-                                                                size="sm" 
+                                                                size="sm"
+                                                                disabled={isSavingAtt}
                                                                 variant={isLeaveEarly ? "default" : "outline"}
                                                                 className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
                                                                     isLeaveEarly 
@@ -2200,7 +2243,8 @@ const handleOpenAnalytics = async () => {
                                                                             <div className="flex items-center justify-between gap-2">
                                                                                 <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 pl-1">Hora Ingreso:</span>
                                                                                 <select
-                                                                                    className="h-6 w-[115px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                                                    disabled={isSavingAtt}
+                                                                                    className="h-6 w-[115px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                                                                     value={rec?.arrivalTime || ""}
                                                                                     onChange={e => updateLateTime(s.id, e.target.value)}
                                                                                 >
@@ -2242,7 +2286,8 @@ const handleOpenAnalytics = async () => {
                                                                             <div className="flex items-center justify-between gap-2">
                                                                                 <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 pl-1">Hora Retiro:</span>
                                                                                 <select
-                                                                                    className="h-6 w-[115px] rounded-md border border-blue-300 dark:border-blue-900/60 bg-white dark:bg-black text-[10px] font-bold text-blue-900 dark:text-blue-200 px-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                                                    disabled={isSavingAtt}
+                                                                                    className="h-6 w-[115px] rounded-md border border-blue-300 dark:border-blue-900/60 bg-white dark:bg-black text-[10px] font-bold text-blue-900 dark:text-blue-200 px-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                                                                     value={rec?.departureTime || ""}
                                                                                     onChange={e => updateLeaveTime(s.id, e.target.value)}
                                                                                 >
@@ -2352,7 +2397,8 @@ const handleOpenAnalytics = async () => {
                                                                                     <div className="flex items-center gap-2">
                                                                                         <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">Ingreso:</span>
                                                                                         <select
-                                                                                            className="h-6 w-[105px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                                                                            disabled={isSavingAtt}
+                                                                                            className="h-6 w-[105px] rounded-md border border-amber-300 dark:border-amber-900/60 bg-white dark:bg-black text-[10px] font-bold text-amber-900 dark:text-amber-200 px-1 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                                                                             value={rec.arrivalTime || ""}
                                                                                             onChange={e => updateLateTime(s.id, e.target.value)}
                                                                                         >
@@ -2383,7 +2429,8 @@ const handleOpenAnalytics = async () => {
                                                                                     <div className="flex items-center gap-2">
                                                                                         <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300">Retiro:</span>
                                                                                         <select
-                                                                                            className="h-6 w-[105px] rounded-md border border-blue-300 dark:border-blue-900/60 bg-white dark:bg-black text-[10px] font-bold text-blue-900 dark:text-blue-200 px-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                                                            disabled={isSavingAtt}
+                                                                                            className="h-6 w-[105px] rounded-md border border-blue-300 dark:border-blue-900/60 bg-white dark:bg-black text-[10px] font-bold text-blue-900 dark:text-blue-200 px-1 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                                                                             value={rec.departureTime || ""}
                                                                                             onChange={e => updateLeaveTime(s.id, e.target.value)}
                                                                                         >
@@ -2417,6 +2464,7 @@ const handleOpenAnalytics = async () => {
                                                                             <Button 
                                                                                 size="sm" 
                                                                                 variant="ghost" 
+                                                                                disabled={isSavingAtt}
                                                                                 onClick={() => setStudentAttendance(s.id, "PRESENT")}
                                                                                 className="h-7 px-2.5 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 font-bold"
                                                                             >
@@ -3185,6 +3233,7 @@ const handleOpenAnalytics = async () => {
                                                                                             <Button 
                                                                                                 size="sm" 
                                                                                                 variant="ghost" 
+                                                                                                disabled={isSavingAtt}
                                                                                                 onClick={() => {
                                                                                                     setAttendanceToDelete({
                                                                                                         studentId: student.id,
@@ -3279,14 +3328,22 @@ const handleOpenAnalytics = async () => {
                                             .sort()
                                             .map(ds => new Date(ds + "T12:00:00Z"));
 
-                                    // Build a lookup: userId → date string → { status, justification }
-                                    const lookup: Record<string, Record<string, { status: string; justification?: string }>> = {};
+                                    // Build a lookup: userId → date string → { status, justification, arrivalTime, departureTime }
+                                    const lookup: Record<string, Record<string, { status: string; justification?: string; arrivalTime?: string; departureTime?: string }>> = {};
                                     attendanceHistory.filter((a: any) => a.courseId === attCourseId).forEach((a: any) => {
                                         if (!lookup[a.userId]) lookup[a.userId] = {};
                                         const ds = toUTCDateStr(new Date(a.date));
+                                        const arrTime = a.arrivalTime 
+                                            ? (typeof a.arrivalTime === 'string' ? a.arrivalTime : new Date(a.arrivalTime).toISOString().substring(11, 16)) 
+                                            : undefined;
+                                        const depTime = a.departureTime 
+                                            ? (typeof a.departureTime === 'string' ? a.departureTime : new Date(a.departureTime).toISOString().substring(11, 16)) 
+                                            : undefined;
                                         lookup[a.userId][ds] = {
                                             status: a.status,
-                                            justification: a.justification || undefined
+                                            justification: a.justification || undefined,
+                                            arrivalTime: arrTime,
+                                            departureTime: depTime
                                         };
                                     });
 
@@ -3435,85 +3492,39 @@ const handleOpenAnalytics = async () => {
                                                                             {displayedDays.map(d => {
                                                                                 const ds = toUTCDateStr(d);
                                                                                 const record = uLookup[ds];
-                                                                                const triggerButton = (
-                                                                                    <button className="outline-none focus:ring-2 focus:ring-primary/40 rounded-md transition-all cursor-pointer">
-                                                                                        {statusCell(record)}
-                                                                                    </button>
-                                                                                );
-
                                                                                 return (
                                                                                     <td key={ds} className="px-1.5 py-2 text-center border-border/20 border-b">
-                                                                                        {record?.justification ? (
-                                                                                            <Tooltip delayDuration={200}>
-                                                                                                <TooltipTrigger asChild>
-                                                                                                    <div>
-                                                                                                        <DropdownMenu>
-                                                                                                            <DropdownMenuTrigger asChild>
-                                                                                                                {triggerButton}
-                                                                                                            </DropdownMenuTrigger>
-                                                                                                            <DropdownMenuContent align="center" className="font-semibold text-xs min-w-[120px]">
-                                                                                                                <DropdownMenuItem 
-                                                                                                                    className="text-emerald-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                                    onClick={() => handleUpdateSingleAttendance(s.id, ds, "PRESENT")}
-                                                                                                                >
-                                                                                                                    <span className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center text-[10px] font-black">P</span>
-                                                                                                                    Presente
-                                                                                                                </DropdownMenuItem>
-                                                                                                                <DropdownMenuItem 
-                                                                                                                    className="text-red-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                                    onClick={() => handleUpdateSingleAttendance(s.id, ds, "ABSENT")}
-                                                                                                                >
-                                                                                                                    <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[10px] font-black">F</span>
-                                                                                                                    Falta
-                                                                                                                </DropdownMenuItem>
-                                                                                                                <DropdownMenuItem 
-                                                                                                                    className="text-amber-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                                    onClick={() => handleUpdateSingleAttendance(s.id, ds, "LATE")}
-                                                                                                                >
-                                                                                                                    <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-[10px] font-black">T</span>
-                                                                                                                    Tarde
-                                                                                                                </DropdownMenuItem>
-                                                                                                            </DropdownMenuContent>
-                                                                                                        </DropdownMenu>
-                                                                                                    </div>
-                                                                                                </TooltipTrigger>
-                                                                                                <TooltipContent side="top">
-                                                                                                    <p className="max-w-[220px] font-bold text-xs p-1 break-words bg-primary-foreground text-foreground">
-                                                                                                        Excusa: {record.justification}
-                                                                                                    </p>
-                                                                                                </TooltipContent>
-                                                                                            </Tooltip>
-                                                                                        ) : (
-                                                                                            <DropdownMenu>
-                                                                                                <DropdownMenuTrigger asChild>
-                                                                                                    {triggerButton}
-                                                                                                </DropdownMenuTrigger>
-                                                                                                <DropdownMenuContent align="center" className="font-semibold text-xs min-w-[120px]">
-                                                                                                    <DropdownMenuItem 
-                                                                                                        className="text-emerald-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                        onClick={() => handleUpdateSingleAttendance(s.id, ds, "PRESENT")}
-                                                                                                    >
-                                                                                                        <span className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center text-[10px] font-black">P</span>
-                                                                                                        Presente
-                                                                                                    </DropdownMenuItem>
-                                                                                                    <DropdownMenuItem 
-                                                                                                        className="text-red-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                        onClick={() => handleUpdateSingleAttendance(s.id, ds, "ABSENT")}
-                                                                                                    >
-                                                                                                        <span className="w-5 h-5 rounded bg-red-100 flex items-center justify-center text-[10px] font-black">F</span>
-                                                                                                        Falta
-                                                                                                    </DropdownMenuItem>
-                                                                                                    <DropdownMenuItem 
-                                                                                                        className="text-amber-600 font-bold flex items-center gap-1.5 cursor-pointer"
-                                                                                                        onClick={() => handleUpdateSingleAttendance(s.id, ds, "LATE")}
-                                                                                                    >
-                                                                                                        <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-[10px] font-black">T</span>
-                                                                                                        Tarde
-                                                                                                    </DropdownMenuItem>
-                                                                                                    <DropdownMenuItem className="text-blue-600 font-bold flex items-center gap-1.5 cursor-pointer" onClick={() => handleUpdateSingleAttendance(s.id, ds, "LEAVE_EARLY")}><span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-[10px] font-black">R</span>Retiro</DropdownMenuItem>
-                                                                                                </DropdownMenuContent>
-                                                                                            </DropdownMenu>
-                                                                                        )}
+                                                                                        {(() => {
+                                                                                            const cellRecord = record || { status: "PRESENT" };
+                                                                                            return (
+                                                                                                <Tooltip delayDuration={200}>
+                                                                                                    <TooltipTrigger asChild>
+                                                                                                        <div className="inline-flex items-center justify-center cursor-help">
+                                                                                                            {statusCell(record)}
+                                                                                                        </div>
+                                                                                                    </TooltipTrigger>
+                                                                                                    <TooltipContent side="top" className="p-2 font-semibold text-xs bg-popover text-popover-foreground border shadow-md rounded-lg max-w-[240px] break-words">
+                                                                                                        <div className="space-y-1">
+                                                                                                            <div className="font-bold border-b pb-0.5 mb-1">
+                                                                                                                {cellRecord.status === "PRESENT" ? "Presente" :
+                                                                                                                 cellRecord.status === "ABSENT" ? "Inasistencia" :
+                                                                                                                 cellRecord.status === "LATE" ? "Llegada Tarde" :
+                                                                                                                 cellRecord.status === "LEAVE_EARLY" ? "Retiro Temprano" : "Sin Registro"}
+                                                                                                            </div>
+                                                                                                            {cellRecord.arrivalTime && (
+                                                                                                                <div><span className="opacity-70 font-medium">Ingreso:</span> {formatTime12h(cellRecord.arrivalTime)}</div>
+                                                                                                            )}
+                                                                                                            {cellRecord.departureTime && (
+                                                                                                                <div><span className="opacity-70 font-medium">Salida:</span> {formatTime12h(cellRecord.departureTime)}</div>
+                                                                                                            )}
+                                                                                                            {cellRecord.justification && (
+                                                                                                                <div className="mt-1 pt-1 border-t border-dashed"><span className="font-bold text-primary">Excusa:</span> {cellRecord.justification}</div>
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                    </TooltipContent>
+                                                                                                </Tooltip>
+                                                                                            );
+                                                                                        })()}
                                                                                     </td>
                                                                                 );
                                                                             })}
@@ -3545,10 +3556,10 @@ const handleOpenAnalytics = async () => {
                             <TabsContent value="remarks" className="m-0 space-y-8 outline-none">
                                 {/* Omitted for brevity, kept exactly as before but optimized classes */}
                                 {/* Create Remark Section */}
-                                <div className="bg-primary/5 border border-primary/20 rounded-3xl p-8 space-y-4 relative overflow-hidden">
+                                <div className="bg-primary/5 border border-primary/20 rounded-2xl sm:rounded-3xl p-4 sm:p-8 space-y-4 relative overflow-hidden">
                                     <ShieldAlert className="absolute right-0 top-0 w-64 h-64 text-primary/5 -translate-y-1/4 translate-x-1/4 pointer-events-none" />
                                     <div className="relative z-10">
-                                        <h3 className="text-2xl font-black text-foreground mb-6">Registrar Observación Disciplinaria / Académica</h3>
+                                        <h3 className="text-xl sm:text-2xl font-black text-foreground mb-6">Registrar Observación Disciplinaria / Académica</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                             <div className="space-y-2">
                                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Tipo de Observación</Label>
@@ -3695,14 +3706,51 @@ const handleOpenAnalytics = async () => {
                                             <Textarea className="min-h-[120px] rounded-xl bg-background border-primary/20 p-4" value={remarkDesc} onChange={e => setRemarkDesc(e.target.value)} placeholder="Describe el suceso o justificación de la observación..." />
                                         </div>
 
-                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 bg-background/50 p-4 rounded-xl border border-primary/10">
-                                            <div className="text-sm font-semibold flex items-center gap-2">
-                                                <Users className="w-5 h-5 text-primary" />
-                                                Aplicará a <Badge className="text-sm px-3">{selectedStudents.length}</Badge> estudiantes seleccionados.
+                                        <div className="flex items-start sm:items-center gap-3 bg-background/50 p-3 sm:p-4 rounded-xl border border-primary/10 mb-4 mt-6">
+                                            <Switch 
+                                                id="send-email-remark"
+                                                checked={sendEmailOnSave}
+                                                onCheckedChange={setSendEmailOnSave}
+                                                className="shrink-0 mt-0.5 sm:mt-0"
+                                            />
+                                            <Label htmlFor="send-email-remark" className="text-xs sm:text-sm font-bold text-foreground cursor-pointer select-none flex items-start sm:items-center gap-2 leading-relaxed sm:leading-normal">
+                                                <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary shrink-0 mt-0.5 sm:mt-0" />
+                                                <span>Enviar correo a estudiantes seleccionados (usando cliente de correo del sistema operativo)</span>
+                                            </Label>
+                                        </div>
+
+                                        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-8 bg-background/50 p-4 rounded-xl border border-primary/10">
+                                            <div className="text-sm font-semibold flex items-center justify-center md:justify-start gap-2 w-full md:w-auto">
+                                                <Users className="w-5 h-5 text-primary shrink-0" />
+                                                <span>Aplicará a <Badge className="text-sm px-3">{selectedStudents.length}</Badge> estudiantes seleccionados.</span>
                                             </div>
-                                            <Button onClick={handleSaveRemarks} disabled={isSavingRemark || selectedStudents.length === 0} size="lg" className="rounded-xl px-10 h-12 font-bold w-full sm:w-auto">
-                                                Registrar Observación
-                                            </Button>
+                                            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                                                <Button 
+                                                    type="button"
+                                                    variant="outline"
+                                                    disabled={selectedStudents.length === 0}
+                                                    onClick={() => {
+                                                        const selectedEmails = (selectedGroup.students || [])
+                                                            .filter((s: any) => selectedStudents.includes(s.id) && s.email)
+                                                            .map((s: any) => s.email)
+                                                            .join(',');
+                                                        if (selectedEmails) {
+                                                            const subject = encodeURIComponent(remarkTitle || "Observación Académica/Disciplinaria");
+                                                            const body = encodeURIComponent(remarkDesc || "");
+                                                            window.location.href = `mailto:${selectedEmails}?subject=${subject}&body=${body}`;
+                                                        } else {
+                                                            toast.warning("No hay correos registrados para los estudiantes seleccionados.");
+                                                        }
+                                                    }}
+                                                    size="lg" 
+                                                    className="rounded-xl px-6 h-12 font-bold w-full sm:w-auto border-primary/20 text-primary hover:bg-primary/5 gap-2 flex items-center justify-center"
+                                                >
+                                                    <Mail className="w-4 h-4" /> Enviar Correo
+                                                </Button>
+                                                <Button onClick={handleSaveRemarks} disabled={isSavingRemark || selectedStudents.length === 0} size="lg" className="rounded-xl px-10 h-12 font-bold w-full sm:w-auto">
+                                                    Registrar Observación
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3710,7 +3758,7 @@ const handleOpenAnalytics = async () => {
                                 <div className="mt-8 border-t pt-8">
                                     <h3 className="font-bold text-2xl mb-6">Historial Reciente del Grupo</h3>
                                     {/* Remarks history - Single column, full width */}
-                                    <div className="border border-border/50 rounded-2xl bg-card p-6 shadow-sm space-y-4 w-full">
+                                    <div className="border border-border/50 rounded-xl sm:rounded-2xl bg-card p-4 sm:p-6 shadow-sm space-y-4 w-full">
                                         <h4 className="font-bold text-lg flex items-center gap-2 border-b pb-4">
                                             <MessageSquare className="w-5 h-5 text-primary" /> Últimas Observaciones
                                         </h4>
@@ -3719,7 +3767,7 @@ const handleOpenAnalytics = async () => {
                                                 <p className="text-sm text-muted-foreground text-center py-8">No hay observaciones registradas</p>
                                             ) : (
                                                 remarksByStudent.map(({ student, remarks }) => (
-                                                    <div key={student.id} className="border border-border/40 rounded-2xl bg-muted/5 p-5 space-y-4 text-left">
+                                                    <div key={student.id} className="border border-border/40 rounded-xl sm:rounded-2xl bg-muted/5 p-3.5 sm:p-5 space-y-4 text-left">
                                                         {/* Student Header */}
                                                         <div className="flex items-center gap-3 pb-3 border-b border-border/40">
                                                              <Avatar className="h-9 w-9 border bg-background shrink-0">
@@ -4112,6 +4160,7 @@ const handleOpenAnalytics = async () => {
                                                     <Label className="text-xs font-bold text-amber-700 dark:text-amber-400">AJUSTAR HORA DE INGRESO</Label>
                                                     <Input 
                                                         type="time" 
+                                                        disabled={isSavingAtt}
                                                         className="h-10 w-36 text-center text-base font-bold bg-background border-amber-300 dark:border-amber-900"
                                                         value={rec?.arrivalTime || ""}
                                                         onChange={e => updateLateTime(currentStudent.id, e.target.value)} 
@@ -4142,6 +4191,7 @@ const handleOpenAnalytics = async () => {
                                                     <Label className="text-xs font-bold text-blue-700 dark:text-blue-400">HORA DE RETIRO</Label>
                                                     <Input 
                                                         type="time" 
+                                                        disabled={isSavingAtt}
                                                         className="h-10 w-36 text-center text-base font-bold bg-background border-blue-300 dark:border-blue-900"
                                                         value={rec?.departureTime || ""}
                                                         onChange={e => updateLeaveTime(currentStudent.id, e.target.value)} 
@@ -4171,6 +4221,7 @@ const handleOpenAnalytics = async () => {
                                              <Button 
                                                  size="lg" 
                                                  variant="outline" 
+                                                 disabled={isSavingAtt}
                                                  className={`flex-1 h-20 rounded-2xl font-black text-lg transition-all border-2 ${
                                                      isAbsent 
                                                          ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md' 
@@ -4188,6 +4239,7 @@ const handleOpenAnalytics = async () => {
 
                                              <Button 
                                                  size="lg" 
+                                                 disabled={isSavingAtt}
                                                  className={`flex-1 h-20 rounded-2xl font-black text-lg text-white shadow-md flex items-center justify-center gap-2 transition-all ${
                                                      isPresent 
                                                          ? 'bg-emerald-700 hover:bg-emerald-800' 
@@ -4206,7 +4258,7 @@ const handleOpenAnalytics = async () => {
                                         <div className="flex justify-between items-center pt-2 text-muted-foreground">
                                             <Button 
                                                 variant="ghost" 
-                                                disabled={seqIndex === 0} 
+                                                disabled={seqIndex === 0 || isSavingAtt} 
                                                 onClick={prevSeqStudent} 
                                                 className="font-bold text-xs"
                                             >
@@ -4214,7 +4266,7 @@ const handleOpenAnalytics = async () => {
                                             </Button>
                                             <Button 
                                                 variant="ghost" 
-                                                disabled={seqIndex === filteredStudents.length - 1} 
+                                                disabled={seqIndex === filteredStudents.length - 1 || isSavingAtt} 
                                                 onClick={nextSeqStudent} 
                                                 className="font-bold text-xs"
                                             >
