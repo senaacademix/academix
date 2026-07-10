@@ -124,17 +124,17 @@ export function CourseDocLinks({
     return (
         <div className="space-y-5">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-lg font-bold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/20">
+                <div className="text-left">
+                    <h3 className="text-base sm:text-lg font-black flex items-center gap-2">
                         <BookOpen className="w-5 h-5 text-primary" />
                         Material de Documentación
                     </h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                         Los estudiantes ven estos enlaces en la pestaña <strong>Documentación</strong>
                     </p>
                 </div>
-                <Button onClick={openCreate} className="gap-2 rounded-xl h-10 px-5 font-bold">
+                <Button onClick={openCreate} className="gap-2 rounded-xl h-10 px-5 font-bold w-full sm:w-auto shrink-0 flex items-center justify-center">
                     <Plus className="w-4 h-4" />
                     Nuevo Enlace
                 </Button>
@@ -161,13 +161,13 @@ export function CourseDocLinks({
                             key={link.id}
                             className="flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/20 transition-colors group"
                         >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                                     <Link2 className="w-4 h-4 text-primary" />
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="font-semibold text-sm leading-tight">{link.title}</p>
-                                    <p className="text-xs text-muted-foreground truncate max-w-xs mt-0.5">
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-sm leading-tight truncate">{link.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
                                         {link.url}
                                     </p>
                                     <p className="text-[10px] text-muted-foreground/60 mt-0.5">
@@ -175,7 +175,7 @@ export function CourseDocLinks({
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0 ml-4">
+                            <div className="flex items-center gap-1 shrink-0 ml-3">
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -190,7 +190,7 @@ export function CourseDocLinks({
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-9 w-9 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-9 w-9 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 sm:opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={() => setDeleteTarget(link)}
                                     title="Eliminar enlace"
                                 >

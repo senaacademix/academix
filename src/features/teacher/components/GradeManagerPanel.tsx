@@ -336,9 +336,9 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
   return (
     <div className="space-y-6 w-full min-w-0 max-w-full">
       <Card>
-        <CardContent className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 bg-muted/20 border-b">
-          <div className="flex-1 w-full max-w-2xl flex items-center gap-4">
-            <div className="flex-1 max-w-[200px]">
+        <CardContent className="flex flex-col lg:flex-row gap-4 items-center justify-between p-4 bg-muted/20 border-b">
+          <div className="flex-1 w-full max-w-2xl flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="w-full sm:max-w-[200px]">
               <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
                 <SelectTrigger className="bg-background shadow-sm h-9 border-border/60 transition-colors hover:border-border">
                   <SelectValue placeholder="Materia" />
@@ -350,18 +350,18 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
                 </SelectContent>
               </Select>
             </div>
-            <div className="relative flex-1 max-w-[300px]">
+            <div className="relative w-full sm:max-w-[300px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar estudiante..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 bg-background shadow-sm border-border/60"
+                className="pl-9 h-9 bg-background shadow-sm border-border/60 w-full"
               />
             </div>
           </div>
-          <div className="flex gap-3 items-center flex-wrap justify-end">
-            <div className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-md border border-border/60 shadow-sm mr-2">
+          <div className="flex gap-2 items-center flex-wrap justify-center lg:justify-end w-full lg:w-auto">
+            <div className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-md border border-border/60 shadow-sm w-full sm:w-auto justify-center sm:justify-start">
                <Switch checked={usePercentageWeights} onCheckedChange={handleToggleWeightMode} id="weight-mode" className="scale-90 data-[state=checked]:bg-primary" />
                <Label htmlFor="weight-mode" className="text-xs font-semibold cursor-pointer whitespace-nowrap">Porcentajes</Label>
                {usePercentageWeights && (
@@ -370,18 +370,18 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
                    </Badge>
                )}
             </div>
-            <Button size="sm" variant="outline" className="h-9 gap-2 shadow-sm" onClick={() => setIsWorkGroupDialogOpen(true)}>
+            <Button size="sm" variant="outline" className="h-9 gap-2 shadow-sm w-full sm:w-auto justify-center" onClick={() => setIsWorkGroupDialogOpen(true)}>
               <UsersRound className="w-3.5 h-3.5" />
               Equipos
             </Button>
-            <Button size="sm" variant="outline" className="h-9 gap-2 shadow-sm" onClick={() => {
+            <Button size="sm" variant="outline" className="h-9 gap-2 shadow-sm w-full sm:w-auto justify-center" onClick={() => {
               setActivityForm({ id: "", title: "", description: "", weight: 20, allowSubmissionLink: false });
               setIsActivityDialogOpen(true);
             }}>
               <Plus className="w-3.5 h-3.5" />
               Nueva Actividad
             </Button>
-            <Button size="sm" onClick={handleSaveAllActivities} disabled={isPending} className="h-9 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4">
+            <Button size="sm" onClick={handleSaveAllActivities} disabled={isPending} className="h-9 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4 w-full sm:w-auto justify-center">
               <Save className="w-4 h-4" />
               Guardar Todo
             </Button>
@@ -405,7 +405,7 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
                 {activities.map((act, index) => (
                   <TableHead key={act.id} className="w-[100px] min-w-[100px] max-w-[100px] px-1 py-2 align-top border-l border-muted/50 text-center">
                     <div className="flex flex-col h-full items-center justify-between group px-1">
-                      <div className="w-full flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 mb-1">
+                      <div className="w-full flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity h-6 mb-1">
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => handleOpenBulkGrade(act)} title="Asignación Masiva">
                           <Users className="w-3 h-3" />
                         </Button>
