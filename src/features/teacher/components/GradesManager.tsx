@@ -49,7 +49,7 @@ import {
     addGradeGroupItemAction,
     removeGradeGroupItemAction,
     updateGradeGroupItemAction
-} from "@/app/actions/grade-actions";
+} from "../actions/gradeActions";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

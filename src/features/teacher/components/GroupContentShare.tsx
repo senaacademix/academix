@@ -49,7 +49,7 @@ import {
 } from "lucide-react";
 import { Editor } from "@monaco-editor/react";
 import { useTheme } from "next-themes";
-import { createSharedContent, updateSharedContent, deleteSharedContent, getSharedContentByCourse } from "../sharedContentActions";
+import { createSharedContent, updateSharedContent, deleteSharedContent, getSharedContentByCourse } from "../actions/sharedContentActions";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

@@ -22,7 +22,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { createSharedContent, deleteSharedContent } from "../sharedContentActions";
+import { createSharedContent, deleteSharedContent } from "../actions/sharedContentActions";
 import { toast } from "sonner";
 import { Plus, Link2, Trash2, ExternalLink, BookOpen } from "lucide-react";
 import { format } from "date-fns";
