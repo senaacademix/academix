@@ -123,3 +123,102 @@ export async function deleteRemarkAction(remarkId: string, courseId: string) {
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
 }
+
+export async function getRemarkTemplatesAction() {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    return await prisma.remarkTemplate.findMany({
+        orderBy: { createdAt: "desc" },
+    });
+}
+
+export async function createRemarkTemplateAction(title: string, description: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    if (!title || !description) {
+        throw new Error("El título y la descripción son obligatorios.");
+    }
+
+    const template = await prisma.remarkTemplate.create({
+        data: { title, description },
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("../../admin/services/auditLogger");
+    await auditLogger.log({
+        action: "CREATE",
+        entity: "REMARK_TEMPLATE",
+        entityId: template.id,
+        userId: session.user.id,
+        userName: session.user.name || "Profesor",
+        userRole: session.user.role,
+        description: `Plantilla de observación creada: ${title}`,
+        success: true,
+    });
+
+    return template;
+}
+
+export async function updateRemarkTemplateAction(id: string, title: string, description: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    if (!title || !description) {
+        throw new Error("El título y la descripción son obligatorios.");
+    }
+
+    const template = await prisma.remarkTemplate.update({
+        where: { id },
+        data: { title, description },
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("../../admin/services/auditLogger");
+    await auditLogger.log({
+        action: "UPDATE",
+        entity: "REMARK_TEMPLATE",
+        entityId: template.id,
+        userId: session.user.id,
+        userName: session.user.name || "Profesor",
+        userRole: session.user.role,
+        description: `Plantilla de observación actualizada: ${title}`,
+        success: true,
+    });
+
+    return template;
+}
+
+export async function deleteRemarkTemplateAction(id: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    const template = await prisma.remarkTemplate.delete({
+        where: { id },
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("../../admin/services/auditLogger");
+    await auditLogger.log({
+        action: "DELETE",
+        entity: "REMARK_TEMPLATE",
+        entityId: template.id,
+        userId: session.user.id,
+        userName: session.user.name || "Profesor",
+        userRole: session.user.role,
+        description: `Plantilla de observación eliminada: ${template.title}`,
+        success: true,
+    });
+
+    return template;
+}
+

@@ -76,6 +76,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { formatCalendarDate } from "@/lib/dateUtils";
 import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction, deleteRemarkAction } from "../actions/groupActions";
+import { getRemarkTemplatesAction, createRemarkTemplateAction, updateRemarkTemplateAction, deleteRemarkTemplateAction } from "../actions/remarkActions";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -382,6 +383,90 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [isSavingRemark, setIsSavingRemark] = useState(false);
     const [remarkStudentSearch, setRemarkStudentSearch] = useState("");
     const [sendEmailOnSave, setSendEmailOnSave] = useState(false);
+
+    // Remarks Message Templates State
+    const [remarkTemplates, setRemarkTemplates] = useState<any[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState("");
+    const [includeStudentName, setIncludeStudentName] = useState(false);
+    const [manageTemplatesOpen, setManageTemplatesOpen] = useState(false);
+    
+    // Modal states for creating/editing templates
+    const [templateEditId, setTemplateEditId] = useState<string | null>(null);
+    const [templateTitle, setTemplateTitle] = useState("");
+    const [templateDesc, setTemplateDesc] = useState("");
+    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+    const [confirmConfig, setConfirmConfig] = useState<{
+        open: boolean;
+        title: string;
+        description: string;
+        onConfirm: () => void | Promise<void>;
+    } | null>(null);
+
+    const requestConfirm = (title: string, description: string, onConfirm: () => void | Promise<void>) => {
+        setConfirmConfig({
+            open: true,
+            title,
+            description,
+            onConfirm,
+        });
+    };
+
+
+    const fetchTemplates = async () => {
+        try {
+            const res = await getRemarkTemplatesAction();
+            setRemarkTemplates(res);
+        } catch (err) {
+            console.error("Error al cargar plantillas:", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchTemplates();
+    }, []);
+
+    const getParsedDescription = () => {
+        if (!remarkDesc) return "";
+
+        let names = "";
+        if (includeStudentName) {
+            if (selectedStudents.length === 0) {
+                names = "Estudiante: [Nombre del estudiante]\n\n";
+            } else if (selectedStudents.length === 1) {
+                const student = selectedGroup?.students?.find((s: any) => s.id === selectedStudents[0]);
+                names = student ? `Estudiante: ${formatName(student.name, student.profile)}\n\n` : "Estudiante: [Nombre del estudiante]\n\n";
+            } else {
+                const selectedList = (selectedGroup?.students || []).filter((s: any) => selectedStudents.includes(s.id));
+                const formattedNames = selectedList.map((s: any) => formatName(s.name, s.profile));
+                names = `Estudiantes: ${formattedNames.join(", ")}\n\n`;
+            }
+        }
+        
+        let desc = remarkDesc;
+        const singleName = selectedStudents.length === 1 
+            ? (selectedGroup?.students?.find((s: any) => s.id === selectedStudents[0]) ? formatName(selectedGroup.students.find((s: any) => s.id === selectedStudents[0]).name, selectedGroup.students.find((s: any) => s.id === selectedStudents[0]).profile) : "[Nombre]")
+            : "[Nombre]";
+        desc = desc.replaceAll("{{nombre}}", singleName).replaceAll("{{estudiante}}", singleName);
+        
+        return `${names}${desc}`;
+    };
+
+    const handleCopyToClipboard = async () => {
+        const textToCopy = getParsedDescription();
+        if (!textToCopy.trim()) {
+            toast.error("La descripción está vacía.");
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            toast.success("Texto copiado al portapapeles. ¡Listo para pegar en tu correo!");
+        } catch (err) {
+            console.error("Error al copiar al portapapeles:", err);
+            toast.error("No se pudo copiar el texto. Inténtalo de nuevo.");
+        }
+    };
+
 
     // History State
     const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
@@ -863,7 +948,12 @@ const handleOpenAnalytics = async () => {
     };
 
     const nextSeqStudent = () => {
-        if (seqIndex < filteredStudents.length - 1) setSeqIndex(i => i + 1);
+        if (seqIndex < filteredStudents.length - 1) {
+            setSeqIndex(i => i + 1);
+        } else {
+            exitSequentialFullscreen();
+            toast.success("Llamado de asistencia finalizado.");
+        }
     };
 
     const prevSeqStudent = () => {
@@ -1274,7 +1364,7 @@ const handleOpenAnalytics = async () => {
         if (!remarkTitle.trim() || !remarkDesc.trim()) return toast.error("Completa el título y la descripción");
 
         setIsSavingRemark(true);
-        const res = await saveRemarkBatch(teacherId!, remarkCourseId, selectedStudents, remarkType, remarkTitle, remarkDesc);
+        const res = await saveRemarkBatch(teacherId!, remarkCourseId, selectedStudents, remarkType, remarkTitle, remarkDesc, includeStudentName);
         if (res.success) {
             toast.success("Observación guardada correctamente");
             
@@ -1285,7 +1375,7 @@ const handleOpenAnalytics = async () => {
                     .join(',');
                 if (selectedEmails) {
                     const subject = encodeURIComponent(remarkTitle);
-                    const body = encodeURIComponent(remarkDesc);
+                    const body = encodeURIComponent(getParsedDescription());
                     window.location.href = `mailto:${selectedEmails}?subject=${subject}&body=${body}`;
                 } else {
                     toast.warning("No hay correos registrados para los estudiantes seleccionados.");
@@ -1303,55 +1393,61 @@ const handleOpenAnalytics = async () => {
         setIsSavingRemark(false);
     };
 
-    const handleDeleteRemark = async (remarkId: string) => {
-        if (!window.confirm("¿Estás seguro de que deseas retirar esta observación? Esta acción no se puede deshacer.")) {
-            return;
-        }
-
-        const toastId = toast.loading("Retirando observación...");
-        try {
-            const res = await deleteRemarkAction(remarkId);
-            if (res.success) {
-                toast.success("Observación retirada correctamente", { id: toastId });
-                await loadHistory(selectedGroup!.id);
-            } else {
-                toast.error("Error al retirar la observación: " + res.error, { id: toastId });
+    const handleDeleteRemark = (remarkId: string) => {
+        requestConfirm(
+            "¿Retirar observación?",
+            "¿Estás seguro de que deseas retirar esta observación? Esta acción no se puede deshacer.",
+            async () => {
+                const toastId = toast.loading("Retirando observación...");
+                try {
+                    const res = await deleteRemarkAction(remarkId);
+                    if (res.success) {
+                        toast.success("Observación retirada correctamente", { id: toastId });
+                        await loadHistory(selectedGroup!.id);
+                    } else {
+                        toast.error("Error al retirar la observación: " + res.error, { id: toastId });
+                    }
+                } catch (error: any) {
+                    toast.error("Error de conexión al retirar la observación", { id: toastId });
+                }
             }
-        } catch (error: any) {
-            toast.error("Error de conexión al retirar la observación", { id: toastId });
-        }
+        );
     };
 
-    const handleDeleteAttendance = async (att: any) => {
+    const handleDeleteAttendance = (att: any) => {
         if (isSavingAtt) return;
         const studentName = formatName(att.user.name, att.user.profile);
         const formattedDate = format(new Date(att.date), "dd/MM/yyyy");
-        if (!window.confirm(`¿Estás seguro de que deseas retirar el registro de inasistencia/retraso de ${studentName} para el día ${formattedDate}?`)) {
-            return;
-        }
-
-        const dateStr = new Date(att.date).toISOString().split('T')[0];
-        const toastId = toast.loading("Retirando falta/retraso...");
-        setIsSavingAtt(true);
-        try {
-            const res = await saveSingleAttendanceAction(
-                att.courseId,
-                att.userId,
-                dateStr,
-                "PRESENT"
-            );
-            if (res.success) {
-                toast.success("Asistencia actualizada a 'Presente'", { id: toastId });
-                await loadHistory(selectedGroup!.id);
-            } else {
-                toast.error("Error al retirar la falta/retraso: " + res.error, { id: toastId });
+        
+        requestConfirm(
+            "¿Retirar registro de asistencia?",
+            `¿Estás seguro de que deseas retirar el registro de inasistencia/retraso de ${studentName} para el día ${formattedDate}?`,
+            async () => {
+                const dateStr = new Date(att.date).toISOString().split('T')[0];
+                const toastId = toast.loading("Retirando falta/retraso...");
+                setIsSavingAtt(true);
+                try {
+                    const res = await saveSingleAttendanceAction(
+                        att.courseId,
+                        att.userId,
+                        dateStr,
+                        "PRESENT"
+                    );
+                    if (res.success) {
+                        toast.success("Asistencia actualizada a 'Presente'", { id: toastId });
+                        await loadHistory(selectedGroup!.id);
+                    } else {
+                        toast.error("Error al retirar la falta/retraso: " + res.error, { id: toastId });
+                    }
+                } catch (error: any) {
+                    toast.error("Error de conexión al retirar la falta/retraso", { id: toastId });
+                } finally {
+                    setIsSavingAtt(false);
+                }
             }
-        } catch (error: any) {
-            toast.error("Error de conexión al retirar la falta/retraso", { id: toastId });
-        } finally {
-            setIsSavingAtt(false);
-        }
+        );
     };
+
 
     if (!groups || groups.length === 0) {
         return (
@@ -3560,6 +3656,43 @@ const handleOpenAnalytics = async () => {
                                     <ShieldAlert className="absolute right-0 top-0 w-64 h-64 text-primary/5 -translate-y-1/4 translate-x-1/4 pointer-events-none" />
                                     <div className="relative z-10">
                                         <h3 className="text-xl sm:text-2xl font-black text-foreground mb-6">Registrar Observación Disciplinaria / Académica</h3>
+                                        
+                                        {/* Template Selector Row */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 items-end">
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Plantilla de Mensaje</Label>
+                                                <Select value={selectedTemplateId} onValueChange={(val) => {
+                                                    setSelectedTemplateId(val);
+                                                    const template = remarkTemplates.find(t => t.id === val);
+                                                    if (template) {
+                                                        setRemarkTitle(template.title);
+                                                        setRemarkDesc(template.description);
+                                                    }
+                                                }}>
+                                                    <SelectTrigger className="h-12 rounded-xl bg-background border-primary/20">
+                                                        <SelectValue placeholder="Seleccionar plantilla predefinida..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {remarkTemplates.map((t) => (
+                                                            <SelectItem key={t.id} value={t.id} className="font-semibold">
+                                                                {t.title}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    onClick={() => setManageTemplatesOpen(true)}
+                                                    className="w-full h-12 rounded-xl border-primary/20 hover:bg-primary/5 text-primary font-bold flex items-center justify-center gap-2 cursor-pointer"
+                                                >
+                                                    <ClipboardList className="w-4 h-4" /> Gestionar Plantillas
+                                                </Button>
+                                            </div>
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                             <div className="space-y-2">
                                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Tipo de Observación</Label>
@@ -3697,34 +3830,73 @@ const handleOpenAnalytics = async () => {
                                                 })}
                                             </div>
                                         )}
+                                        
                                         <div className="space-y-2 mb-6">
                                             <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Título</Label>
                                             <Input className="h-12 rounded-xl bg-background border-primary/20" value={remarkTitle} onChange={e => setRemarkTitle(e.target.value)} placeholder="Ej. Excelente participación, Retraso constante..." />
                                         </div>
-                                        <div className="space-y-2 mb-6">
+                                        
+                                        <div className="space-y-2 mb-4">
                                             <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Descripción Detallada</Label>
                                             <Textarea className="min-h-[120px] rounded-xl bg-background border-primary/20 p-4" value={remarkDesc} onChange={e => setRemarkDesc(e.target.value)} placeholder="Describe el suceso o justificación de la observación..." />
                                         </div>
 
-                                        <div className="flex items-start sm:items-center gap-3 bg-background/50 p-3 sm:p-4 rounded-xl border border-primary/10 mb-4 mt-6">
-                                            <Switch 
-                                                id="send-email-remark"
-                                                checked={sendEmailOnSave}
-                                                onCheckedChange={setSendEmailOnSave}
-                                                className="shrink-0 mt-0.5 sm:mt-0"
-                                            />
-                                            <Label htmlFor="send-email-remark" className="text-xs sm:text-sm font-bold text-foreground cursor-pointer select-none flex items-start sm:items-center gap-2 leading-relaxed sm:leading-normal">
-                                                <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary shrink-0 mt-0.5 sm:mt-0" />
-                                                <span>Enviar correo a estudiantes seleccionados (usando cliente de correo del sistema operativo)</span>
-                                            </Label>
+                                        {/* Dynamic Replaced Description Live Preview */}
+                                        {includeStudentName && remarkDesc.trim() && (
+                                            <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-xl transition-all duration-300">
+                                                <p className="text-[10px] uppercase font-bold text-primary tracking-wider mb-1.5 flex items-center gap-1">
+                                                    <Users className="w-3.5 h-3.5" /> Vista previa del mensaje personalizado
+                                                </p>
+                                                <p className="text-xs text-foreground italic whitespace-pre-wrap leading-relaxed">{getParsedDescription()}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Settings Row: Switches Grid */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 mt-6">
+                                            <div className="flex items-center gap-3 bg-background/50 p-4 rounded-xl border border-primary/10 transition-colors hover:bg-background/80">
+                                                <Switch 
+                                                    id="include-student-name"
+                                                    checked={includeStudentName}
+                                                    onCheckedChange={setIncludeStudentName}
+                                                    className="shrink-0 cursor-pointer"
+                                                />
+                                                <Label htmlFor="include-student-name" className="text-xs sm:text-sm font-bold text-foreground cursor-pointer select-none flex items-center gap-2">
+                                                    <Users className="w-4 h-4 text-primary shrink-0" />
+                                                    <span>Incluir nombre de estudiantes (reemplaza {"{{nombre}}"})</span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 bg-background/50 p-4 rounded-xl border border-primary/10 transition-colors hover:bg-background/80">
+                                                <Switch 
+                                                    id="send-email-remark"
+                                                    checked={sendEmailOnSave}
+                                                    onCheckedChange={setSendEmailOnSave}
+                                                    className="shrink-0 cursor-pointer"
+                                                />
+                                                <Label htmlFor="send-email-remark" className="text-xs sm:text-sm font-bold text-foreground cursor-pointer select-none flex items-center gap-2">
+                                                    <Mail className="w-4 h-4 text-primary shrink-0" />
+                                                    <span>Enviar correo (abre cliente del sistema operativo al guardar)</span>
+                                                </Label>
+                                            </div>
                                         </div>
 
-                                        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-8 bg-background/50 p-4 rounded-xl border border-primary/10">
-                                            <div className="text-sm font-semibold flex items-center justify-center md:justify-start gap-2 w-full md:w-auto">
+                                        {/* Action Buttons Row */}
+                                        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 mt-8 bg-background/50 p-4 rounded-xl border border-primary/10">
+                                            <div className="text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 w-full lg:w-auto">
                                                 <Users className="w-5 h-5 text-primary shrink-0" />
                                                 <span>Aplicará a <Badge className="text-sm px-3">{selectedStudents.length}</Badge> estudiantes seleccionados.</span>
                                             </div>
-                                            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                                            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                                                <Button 
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={handleCopyToClipboard}
+                                                    size="lg" 
+                                                    className="rounded-xl px-5 h-12 font-bold w-full sm:w-auto border-primary/20 text-primary hover:bg-primary/5 gap-2 flex items-center justify-center cursor-pointer"
+                                                >
+                                                    <FileText className="w-4 h-4" /> Copiar Mensaje
+                                                </Button>
+                                                
                                                 <Button 
                                                     type="button"
                                                     variant="outline"
@@ -3736,22 +3908,29 @@ const handleOpenAnalytics = async () => {
                                                             .join(',');
                                                         if (selectedEmails) {
                                                             const subject = encodeURIComponent(remarkTitle || "Observación Académica/Disciplinaria");
-                                                            const body = encodeURIComponent(remarkDesc || "");
+                                                            const body = encodeURIComponent(getParsedDescription() || "");
                                                             window.location.href = `mailto:${selectedEmails}?subject=${subject}&body=${body}`;
                                                         } else {
                                                             toast.warning("No hay correos registrados para los estudiantes seleccionados.");
                                                         }
                                                     }}
                                                     size="lg" 
-                                                    className="rounded-xl px-6 h-12 font-bold w-full sm:w-auto border-primary/20 text-primary hover:bg-primary/5 gap-2 flex items-center justify-center"
+                                                    className="rounded-xl px-5 h-12 font-bold w-full sm:w-auto border-primary/20 text-primary hover:bg-primary/5 gap-2 flex items-center justify-center cursor-pointer"
                                                 >
                                                     <Mail className="w-4 h-4" /> Enviar Correo
                                                 </Button>
-                                                <Button onClick={handleSaveRemarks} disabled={isSavingRemark || selectedStudents.length === 0} size="lg" className="rounded-xl px-10 h-12 font-bold w-full sm:w-auto">
+                                                
+                                                <Button 
+                                                    onClick={handleSaveRemarks} 
+                                                    disabled={isSavingRemark || selectedStudents.length === 0} 
+                                                    size="lg" 
+                                                    className="rounded-xl px-8 h-12 font-bold w-full sm:w-auto cursor-pointer"
+                                                >
                                                     Registrar Observación
                                                 </Button>
                                             </div>
                                         </div>
+
                                     </div>
                                 </div>
                                 {/* History Section */}
@@ -3846,6 +4025,159 @@ const handleOpenAnalytics = async () => {
             </Card>
 
             
+
+            {/* Template Management Dialog */}
+            <Dialog open={manageTemplatesOpen} onOpenChange={setManageTemplatesOpen}>
+                <DialogContent className="max-w-[95vw] w-full md:max-w-6xl h-[90vh] md:h-[85vh] flex flex-col rounded-2xl sm:rounded-3xl p-6 sm:p-8 overflow-hidden">
+                    <DialogHeader className="shrink-0">
+                        <DialogTitle className="text-xl sm:text-2xl font-black text-foreground flex items-center gap-2">
+                            <ClipboardList className="w-6 h-6 text-primary" />
+                            Gestionar Plantillas de Observaciones
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-muted-foreground">
+                            Crea y edita plantillas de observaciones que pueden usar todos los profesores. Activa la opción "Incluir nombre de estudiantes" en el formulario para agregar automáticamente los nombres al copiar, enviar o guardar.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-8 mt-6 overflow-hidden">
+                        {/* List of Templates */}
+                        <div className="flex flex-col h-full overflow-hidden min-h-0">
+                            <h4 className="font-bold text-sm text-muted-foreground uppercase tracking-wider mb-3 shrink-0">Plantillas Activas</h4>
+                            <div className="flex-grow overflow-y-auto pr-2 space-y-2.5 max-h-[30vh] md:max-h-none">
+                                {remarkTemplates.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground text-center py-8 bg-muted/20 rounded-xl border border-dashed">
+                                        No hay plantillas creadas. Usa el formulario para crear la primera.
+                                    </p>
+                                ) : (
+                                    remarkTemplates.map((template) => (
+                                        <div key={template.id} className="p-3.5 bg-muted/30 hover:bg-muted/50 rounded-xl border border-border/40 transition-colors flex flex-col gap-2 relative group/item">
+                                            <div className="flex justify-between items-start">
+                                                <h5 className="font-bold text-xs text-foreground truncate max-w-[200px]">{template.title}</h5>
+                                                <div className="flex gap-1 shrink-0">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="w-7 h-7 hover:bg-primary/10 text-primary rounded-md cursor-pointer"
+                                                        onClick={() => {
+                                                            setTemplateEditId(template.id);
+                                                            setTemplateTitle(template.title);
+                                                            setTemplateDesc(template.description);
+                                                        }}
+                                                        title="Editar"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="w-7 h-7 hover:bg-red-50 text-red-600 rounded-md cursor-pointer"
+                                                        onClick={() => {
+                                                            requestConfirm(
+                                                                "¿Eliminar plantilla?",
+                                                                `¿Seguro de que deseas eliminar la plantilla "${template.title}"? Esta acción no se puede deshacer.`,
+                                                                async () => {
+                                                                    try {
+                                                                        await deleteRemarkTemplateAction(template.id);
+                                                                        toast.success("Plantilla eliminada correctamente");
+                                                                        if (selectedTemplateId === template.id) {
+                                                                            setSelectedTemplateId("");
+                                                                        }
+                                                                        fetchTemplates();
+                                                                    } catch (err: any) {
+                                                                        toast.error("Error al eliminar plantilla: " + err.message);
+                                                                    }
+                                                                }
+                                                            );
+                                                        }}
+                                                        title="Eliminar"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground line-clamp-4 whitespace-pre-wrap leading-relaxed">{template.description}</p>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Create/Edit Form */}
+                        <div className="flex flex-col h-full overflow-hidden min-h-0 border-t md:border-t-0 md:border-l md:pl-8 pt-4 md:pt-0">
+                            <h4 className="font-bold text-sm text-muted-foreground uppercase tracking-wider mb-3 shrink-0">
+                                {templateEditId ? "Editar Plantilla" : "Nueva Plantilla"}
+                            </h4>
+                            <div className="flex-grow flex flex-col gap-4 min-h-0 overflow-y-auto md:overflow-visible">
+                                <div className="space-y-1.5 shrink-0">
+                                    <Label className="text-xs font-bold text-muted-foreground">Título de la plantilla</Label>
+                                    <Input 
+                                        placeholder="Ej. Tareas Pendientes" 
+                                        value={templateTitle}
+                                        onChange={(e) => setTemplateTitle(e.target.value)}
+                                        className="h-11 rounded-lg bg-background"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex-grow flex flex-col min-h-0">
+                                    <Label className="text-xs font-bold text-muted-foreground shrink-0">Descripción detallada</Label>
+                                    <Textarea 
+                                        placeholder="Ej. No ha presentado las últimas actividades del módulo ni asistió a la retroalimentación programada..." 
+                                        value={templateDesc}
+                                        onChange={(e) => setTemplateDesc(e.target.value)}
+                                        className="flex-grow min-h-[120px] md:min-h-0 rounded-lg bg-background p-3 text-xs leading-relaxed resize-none"
+                                    />
+                                </div>
+                                <div className="flex gap-2 justify-end pt-2 shrink-0">
+                                    {templateEditId && (
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            onClick={() => {
+                                                setTemplateEditId(null);
+                                                setTemplateTitle("");
+                                                setTemplateDesc("");
+                                            }}
+                                            className="text-xs rounded-lg h-9 cursor-pointer"
+                                        >
+                                            Cancelar
+                                        </Button>
+                                    )}
+                                    <Button 
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!templateTitle.trim() || !templateDesc.trim()) {
+                                                toast.error("Por favor completa todos los campos");
+                                                return;
+                                            }
+                                            setIsSavingTemplate(true);
+                                            try {
+                                                if (templateEditId) {
+                                                    await updateRemarkTemplateAction(templateEditId, templateTitle, templateDesc);
+                                                    toast.success("Plantilla actualizada correctamente");
+                                                } else {
+                                                    await createRemarkTemplateAction(templateTitle, templateDesc);
+                                                    toast.success("Plantilla creada correctamente");
+                                                }
+                                                setTemplateEditId(null);
+                                                setTemplateTitle("");
+                                                setTemplateDesc("");
+                                                fetchTemplates();
+                                            } catch (err: any) {
+                                                toast.error("Error al guardar la plantilla: " + err.message);
+                                            } finally {
+                                                setIsSavingTemplate(false);
+                                            }
+                                        }}
+                                        disabled={isSavingTemplate}
+                                        className="text-xs font-bold rounded-lg h-9 px-4 cursor-pointer"
+                                    >
+                                        {isSavingTemplate ? "Guardando..." : templateEditId ? "Actualizar" : "Crear"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Student Attendance Details Dialog */}
             <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -3982,6 +4314,32 @@ const handleOpenAnalytics = async () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Generic Confirmation Dialog */}
+            <AlertDialog open={!!confirmConfig} onOpenChange={(open) => !open && setConfirmConfig(null)}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{confirmConfig?.title || "¿Estás seguro?"}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {confirmConfig?.description || "Esta acción no se puede deshacer."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setConfirmConfig(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={async () => {
+                                if (confirmConfig?.onConfirm) {
+                                    await confirmConfig.onConfirm();
+                                }
+                                setConfirmConfig(null);
+                            }}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground cursor-pointer"
+                        >
+                            Confirmar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Unsaved Changes Warning Dialog */}
             <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
@@ -4246,7 +4604,7 @@ const handleOpenAnalytics = async () => {
                                                          : 'bg-emerald-600 hover:bg-emerald-700'
                                                  }`}
                                                  onClick={() => { 
-                                                     setStudentAttendance(currentStudent.id, isPresent ? "UNMARKED" : "PRESENT"); 
+                                                     setStudentAttendance(currentStudent.id, "PRESENT"); 
                                                      nextSeqStudent(); 
                                                  }}
                                              >
