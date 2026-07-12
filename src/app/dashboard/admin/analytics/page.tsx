@@ -15,7 +15,7 @@ export const metadata = {
 export default async function AdminAnalyticsPage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
-    if (!session || session.user.role !== "admin") {
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
         redirect("/dashboard/student");
     }
 
@@ -92,6 +92,7 @@ export default async function AdminAnalyticsPage() {
             <AdvancedAnalyticsView 
                 programs={mappedPrograms} 
                 environments={environments} 
+                isObserver={session.user.role === "observer"}
             />
         </div>
     );

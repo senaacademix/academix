@@ -8,7 +8,7 @@ import { getGroupsAction, getProgramsAction } from "@/features/admin/actions/aca
 export default async function AdminUsersPage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
-    if (!session || session.user.role !== "admin") {
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
         redirect("/dashboard/student");
     }
 
@@ -26,6 +26,7 @@ export default async function AdminUsersPage() {
                 initialGroupId={defaultGroupId} 
                 initialGroups={groups.map(g => ({id: g.id, name: g.name, programId: g.programId}))} 
                 initialPrograms={programs.map(p => ({id: p.id, name: p.name}))}
+                isObserver={session.user.role === "observer"}
             />
         </div>
     );

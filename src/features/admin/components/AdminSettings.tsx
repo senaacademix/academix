@@ -19,9 +19,10 @@ interface AdminSettingsProps {
         limitAttendanceToCurrentWeek: boolean;
     };
     initialRequests: any[];
+    isObserver?: boolean;
 }
 
-export function AdminSettings({ initialSettings, initialRequests }: AdminSettingsProps) {
+export function AdminSettings({ initialSettings, initialRequests, isObserver = false }: AdminSettingsProps) {
     const [limitWeek, setLimitWeek] = useState(initialSettings.limitAttendanceToCurrentWeek || false);
     const [requests, setRequests] = useState<any[]>(initialRequests);
     return (
@@ -54,6 +55,7 @@ export function AdminSettings({ initialSettings, initialRequests }: AdminSetting
                                     name="institutionName"
                                     defaultValue={initialSettings.institutionName || ""}
                                     placeholder="Ej: Universidad AcademiX"
+                                    disabled={isObserver}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -63,6 +65,7 @@ export function AdminSettings({ initialSettings, initialRequests }: AdminSetting
                                     name="footerText"
                                     defaultValue={initialSettings.footerText || ""}
                                     placeholder="Ej: © 2026 AcademiX - Todos los derechos reservados"
+                                    disabled={isObserver}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -74,6 +77,7 @@ export function AdminSettings({ initialSettings, initialRequests }: AdminSetting
                                     min={1}
                                     defaultValue={initialSettings.studentDailyLimit ?? 2}
                                     placeholder="Ej: 2"
+                                    disabled={isObserver}
                                 />
                                 <p className="text-[11px] text-muted-foreground">
                                     Controla el número máximo de veces que un estudiante puede acceder a la plataforma por día para optimizar la base de datos.
@@ -91,6 +95,7 @@ export function AdminSettings({ initialSettings, initialRequests }: AdminSetting
                                         id="limitAttendanceToCurrentWeek"
                                         checked={limitWeek}
                                         onCheckedChange={setLimitWeek}
+                                        disabled={isObserver}
                                     />
                                     <input 
                                         type="hidden" 
@@ -99,9 +104,11 @@ export function AdminSettings({ initialSettings, initialRequests }: AdminSetting
                                     />
                                 </div>
                             </div>
-                            <div className="flex justify-end pt-2">
-                                <Button type="submit">Guardar Personalización</Button>
-                            </div>
+                            {!isObserver && (
+                                <div className="flex justify-end pt-2">
+                                    <Button type="submit">Guardar Personalización</Button>
+                                </div>
+                            )}
                         </form>
                     </CardContent>
                 </Card>
@@ -149,7 +156,7 @@ export function AdminSettings({ initialSettings, initialRequests }: AdminSetting
                                                 )}
                                             </div>
                                             
-                                            {req.status === "PENDING" && (
+                                            {!isObserver && req.status === "PENDING" && (
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <Button
                                                         size="sm"

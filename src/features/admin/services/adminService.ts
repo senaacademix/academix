@@ -69,6 +69,7 @@ export const adminService = {
         programId?: string;
         limit?: number;
         offset?: number;
+        observerUserId?: string;
     }) {
         const where: any = {};
         const andConditions: any[] = [];
@@ -101,6 +102,30 @@ export const adminService = {
                     { email: { contains: filters.search, mode: 'insensitive' as const } }
                 ]
             });
+        }
+
+        if (filters?.observerUserId) {
+            if (filters.role === "student") {
+                andConditions.push({
+                    group: {
+                        program: {
+                            teachers: {
+                                some: { id: filters.observerUserId }
+                            }
+                        }
+                    }
+                });
+            } else if (filters.role === "teacher") {
+                andConditions.push({
+                    programs: {
+                        some: {
+                            teachers: {
+                                some: { id: filters.observerUserId }
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         if (andConditions.length > 0) {
@@ -320,6 +345,7 @@ export const adminService = {
         search?: string;
         limit?: number;
         offset?: number;
+        observerUserId?: string;
     }) {
         const where: any = {};
         const andConditions: any[] = [];
@@ -349,6 +375,31 @@ export const adminService = {
                 OR: [
                     { title: { contains: filters.search, mode: 'insensitive' as const } },
                     { description: { contains: filters.search, mode: 'insensitive' as const } }
+                ]
+            });
+        }
+
+        if (filters?.observerUserId) {
+            andConditions.push({
+                OR: [
+                    {
+                        group: {
+                            program: {
+                                teachers: {
+                                    some: { id: filters.observerUserId }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        period: {
+                            program: {
+                                teachers: {
+                                    some: { id: filters.observerUserId }
+                                }
+                            }
+                        }
+                    }
                 ]
             });
         }

@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, startOfDay, isBefore, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
 
-export function ScheduleEventManagement() {
+export function ScheduleEventManagement({ isObserver = false }: { isObserver?: boolean }) {
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -199,15 +199,17 @@ export function ScheduleEventManagement() {
                     </div>
                 </div>
                 {/* Bulk delete button in header */}
-                <Button
-                    variant="destructive"
-                    size="sm"
-                    className="gap-2 rounded-xl shrink-0"
-                    onClick={() => setBulkDeleteOpen(true)}
-                >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar desde fecha
-                </Button>
+                {!isObserver && (
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        className="gap-2 rounded-xl shrink-0"
+                        onClick={() => setBulkDeleteOpen(true)}
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar desde fecha
+                    </Button>
+                )}
             </div>
 
             {/* Main Content Scroll Area */}
@@ -215,155 +217,149 @@ export function ScheduleEventManagement() {
                 <div className="max-w-[1600px] mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-1 gap-6 h-full flex-1">
 
                     {/* Left Column: Form */}
-                    <div className="lg:col-span-4 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent min-h-0">
-                        <div className="bg-card border border-border rounded-3xl p-7 shadow-sm transition-all shrink-0">
-                            <h3 className="text-xl font-bold flex items-center gap-2.5 mb-6 text-foreground/90">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                    <Plus className="w-4 h-4 text-primary" />
-                                </div>
-                                Registrar Nuevo
-                            </h3>
+                    {!isObserver && (
+                        <div className="lg:col-span-4 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent min-h-0">
+                            <div className="bg-card border border-border rounded-3xl p-7 shadow-sm transition-all shrink-0">
+                                <h3 className="text-xl font-bold flex items-center gap-2.5 mb-6 text-foreground/90">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <Plus className="w-4 h-4 text-primary" />
+                                    </div>
+                                    Registrar Evento / Festivo
+                                </h3>
 
-                            <div className="space-y-5">
-                                <div className="space-y-2.5">
-                                    <Label className="text-sm font-semibold text-muted-foreground">Tipo de Registro</Label>
-                                    <Select value={type} onValueChange={(v: "HOLIDAY" | "EVENT") => {
-                                        setType(v);
-                                        if (v === "HOLIDAY") {
-                                            setTitle("");
-                                            setExternalUrl("");
-                                        }
-                                    }}>
-                                        <SelectTrigger className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors hover:border-primary/50">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="rounded-xl">
-                                            <SelectItem value="HOLIDAY" className="py-3 cursor-pointer">
-                                                <div className="flex items-center gap-3 font-semibold">
-                                                    <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.6)]" />
-                                                    Día Festivo (Bloqueo Total)
-                                                </div>
-                                            </SelectItem>
-                                            <SelectItem value="EVENT" className="py-3 cursor-pointer">
-                                                <div className="flex items-center gap-3 font-semibold">
-                                                    <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
-                                                    Evento Institucional
-                                                </div>
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                <div className="space-y-5">
+                                    <div className="space-y-2.5">
+                                        <Label className="text-sm font-semibold text-muted-foreground">Tipo de Registro</Label>
+                                        <Select
+                                            value={type}
+                                            onValueChange={(val: any) => setType(val)}
+                                        >
+                                            <SelectTrigger className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="HOLIDAY">
+                                                    <div className="flex items-center gap-2">
+                                                        <CalendarIcon className="w-4 h-4 text-orange-500" />
+                                                        Día Festivo / No Lectivo
+                                                    </div>
+                                                </SelectItem>
+                                                <SelectItem value="EVENT">
+                                                    <div className="flex items-center gap-2">
+                                                        <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
+                                                        Evento Institucional
+                                                    </div>
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
 
-                                {type === "EVENT" && (
-                                    <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <div className="space-y-2.5">
-                                            <Label className="text-sm font-semibold text-muted-foreground">Título del Evento</Label>
-                                            <Input
-                                                value={title}
-                                                onChange={e => setTitle(e.target.value)}
-                                                placeholder="Ej: Ceremonia de Grado, Open House..."
-                                                className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
-                                            />
-                                        </div>
-                                        <div className="space-y-2.5">
-                                            <Label className="text-sm font-semibold text-muted-foreground">Descripción Adicional (Opcional)</Label>
-                                            <Textarea
-                                                value={description}
-                                                onChange={e => setDescription(e.target.value)}
-                                                className="min-h-[100px] resize-none rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
-                                                placeholder="Detalles sobre el evento..."
-                                            />
-                                        </div>
-                                        <div className="space-y-2.5">
-                                            <Label className="text-sm font-semibold text-muted-foreground">Enlace de Información Externa (Opcional)</Label>
-                                            <Input
-                                                value={externalUrl}
-                                                onChange={e => setExternalUrl(e.target.value)}
-                                                placeholder="Ej: https://sena.edu.co/evento"
-                                                className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
+                                    {type === "EVENT" && (
+                                        <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
                                             <div className="space-y-2.5">
-                                                <Label className="text-sm font-semibold text-muted-foreground">Hora de Inicio</Label>
-                                                <div className="relative">
+                                                <Label className="text-sm font-semibold text-muted-foreground">Título del Evento</Label>
+                                                <Input
+                                                    value={title}
+                                                    onChange={e => setTitle(e.target.value)}
+                                                    placeholder="Ej: Ceremonia de Grado, Open House..."
+                                                    className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
+                                                />
+                                            </div>
+                                            <div className="space-y-2.5">
+                                                <Label className="text-sm font-semibold text-muted-foreground">Descripción Adicional (Opcional)</Label>
+                                                <Textarea
+                                                    value={description}
+                                                    onChange={e => setDescription(e.target.value)}
+                                                    className="min-h-[100px] resize-none rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
+                                                    placeholder="Detalles sobre el evento..."
+                                                />
+                                            </div>
+                                            <div className="space-y-2.5">
+                                                <Label className="text-sm font-semibold text-muted-foreground">Enlace de Información Externa (Opcional)</Label>
+                                                <Input
+                                                    value={externalUrl}
+                                                    onChange={e => setExternalUrl(e.target.value)}
+                                                    placeholder="Ej: https://sena.edu.co/evento"
+                                                    className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2.5">
+                                                    <Label className="text-sm font-semibold text-muted-foreground">Hora de Inicio</Label>
                                                     <Input
                                                         type="time"
                                                         value={startTime}
                                                         onChange={e => setStartTime(e.target.value)}
-                                                        className="h-12 pl-10 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
+                                                        className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
                                                     />
-                                                    <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                                 </div>
-                                            </div>
-                                            <div className="space-y-2.5">
-                                                <Label className="text-sm font-semibold text-muted-foreground">Hora de Fin</Label>
-                                                <div className="relative">
+                                                <div className="space-y-2.5">
+                                                    <Label className="text-sm font-semibold text-muted-foreground">Hora de Fin</Label>
                                                     <Input
                                                         type="time"
                                                         value={endTime}
                                                         onChange={e => setEndTime(e.target.value)}
-                                                        className="h-12 pl-10 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
+                                                        className="h-12 rounded-xl bg-background/50 border-border/50 transition-colors focus:border-primary"
                                                     />
-                                                    <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                <div className="space-y-2.5">
-                                    <Label className="text-sm font-semibold text-muted-foreground">Fecha Seleccionada</Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                className={cn(
-                                                    "w-full h-12 justify-start text-left font-normal rounded-xl bg-background/50 border-border/50 transition-colors hover:border-primary/50 hover:bg-transparent",
-                                                    !eventDate && "text-muted-foreground"
-                                                )}
-                                            >
-                                                <CalendarDays className="mr-2 h-4 w-4" />
-                                                {eventDate ? format(new Date(eventDate + "T12:00:00"), "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
-                                            <Calendar
-                                                mode="single"
-                                                selected={eventDate ? new Date(eventDate + "T12:00:00") : undefined}
-                                                onSelect={(date) => {
-                                                    if (date) {
-                                                        setEventDate(format(date, "yyyy-MM-dd"));
-                                                        // Jump the big calendar to that month
-                                                        setCurrentMonth(date);
-                                                    } else {
-                                                        setEventDate("");
-                                                    }
-                                                }}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-
-                                <Button
-                                    onClick={handleCreate}
-                                    disabled={saving}
-                                    className="w-full h-12 mt-6 rounded-xl text-base font-bold text-white shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/90 transition-all active:scale-[0.98] disabled:opacity-70"
-                                >
-                                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                                        <>
-                                            <AlignLeft className="w-4 h-4 mr-2" />
-                                            Guardar Registro
-                                        </>
                                     )}
-                                </Button>
+
+                                    <div className="space-y-2.5">
+                                        <Label className="text-sm font-semibold text-muted-foreground">Fecha Seleccionada</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant={"outline"}
+                                                    className={cn(
+                                                        "w-full h-12 justify-start text-left font-normal rounded-xl bg-background/50 border-border/50 hover:bg-background/80 transition-colors",
+                                                        !eventDate && "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                    {eventDate ? format(new Date(eventDate + "T12:00:00"), "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0 rounded-2xl border border-border shadow-xl">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={eventDate ? new Date(eventDate + "T12:00:00") : undefined}
+                                                    onSelect={(date) => {
+                                                        if (date) {
+                                                            const year = date.getFullYear();
+                                                            const month = String(date.getMonth() + 1).padStart(2, "0");
+                                                            const day = String(date.getDate()).padStart(2, "0");
+                                                            setEventDate(`${year}-${month}-${day}`);
+                                                        } else {
+                                                            setEventDate("");
+                                                        }
+                                                    }}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+
+                                    <Button
+                                        onClick={handleCreate}
+                                        disabled={saving}
+                                        className="w-full h-12 mt-6 rounded-xl text-base font-bold text-white shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/90 transition-all active:scale-[0.98] disabled:opacity-70"
+                                    >
+                                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                                            <>
+                                                <AlignLeft className="w-4 h-4 mr-2" />
+                                                Guardar Registro
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Right Column: Month Calendar */}
-                    <div className="lg:col-span-8 flex flex-col min-w-0 min-h-0">
+                    <div className={cn("flex flex-col min-w-0 min-h-0", isObserver ? "lg:col-span-12" : "lg:col-span-8")}>
                         <div className="bg-card border border-border rounded-3xl shadow-sm overflow-hidden flex flex-col h-full transition-all">
 
                             {/* ── Calendar navigation header ── */}
@@ -538,14 +534,16 @@ export function ScheduleEventManagement() {
                                                                                     </div>
                                                                                 )}
                                                                             </div>
-                                                                            <Button
-                                                                                variant="destructive"
-                                                                                size="icon"
-                                                                                onClick={(e) => { e.stopPropagation(); setItemToDelete(evt.id); }}
-                                                                                className="shrink-0 h-9 w-9 shadow-md rounded-full"
-                                                                            >
-                                                                                <Trash2 className="w-4 h-4" />
-                                                                            </Button>
+                                                                            {!isObserver && (
+                                                                                <Button
+                                                                                    variant="destructive"
+                                                                                    size="icon"
+                                                                                    onClick={(e) => { e.stopPropagation(); setItemToDelete(evt.id); }}
+                                                                                    className="shrink-0 h-9 w-9 shadow-md rounded-full"
+                                                                                >
+                                                                                    <Trash2 className="w-4 h-4" />
+                                                                                </Button>
+                                                                            )}
                                                                         </div>
                                                                     </PopoverContent>
                                                                 </Popover>

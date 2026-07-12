@@ -1,9 +1,9 @@
-﻿# 📚 Guía Completa de Ayuda - Profesor
+# 📚 Guía Completa de Ayuda - Profesor
 
-Bienvenido al Centro de Ayuda para **Docentes** de SigaTic. Esta guía te orientará en el uso de todas las herramientas disponibles para gestionar tus grupos, asistencia, calificaciones y disponibilidad horaria.
+Bienvenido al Centro de Ayuda para **Docentes** de AcademiX. Esta guía te orientará en el uso de todas las herramientas disponibles para gestionar tus grupos, asistencia, calificaciones y disponibilidad horaria.
 
 > [!NOTE]
-> En SigaTic, la creación de programas, grupos (fichas), materias (cursos) y la matriculación de estudiantes son tareas del **Administrador**. Como docente, tu rol se enfoca en la planeación de disponibilidad, el registro de asistencia, calificaciones y el seguimiento de tus aprendices.
+> En AcademiX, la creación de programas, grupos (fichas), materias (cursos) y la matriculación de estudiantes son tareas del **Administrador**. Como docente, tu rol se enfoca en la planeación de disponibilidad, el registro de asistencia, calificaciones y el seguimiento de tus aprendices.
 
 ---
 

@@ -7,7 +7,7 @@ import { getAdminDashboardStatsAction, getRecentActivityAction } from "@/app/adm
 export default async function AdminDashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });
 
-  if (!session || session.user.role !== "admin") {
+  if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
     redirect("/dashboard/student");
   }
 
@@ -18,7 +18,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <AdminDashboard stats={stats} recentActivity={recentActivity} />
+      <AdminDashboard stats={stats} recentActivity={recentActivity} isObserver={session.user.role === "observer"} />
     </div>
   );
 }

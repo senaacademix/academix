@@ -5,8 +5,8 @@ const ASSETS_TO_CACHE = [
   "/",
   "/dashboard",
   "/dashboard/help",
-  "/logo.svg",
-  "/icon.svg",
+  "/logo.png",
+  "/icon.png",
   "/manifest.json"
 ];
 

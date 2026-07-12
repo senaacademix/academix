@@ -127,7 +127,7 @@ export default async function DashboardLayout({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" asChild className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
-                    <a href="mailto:senaacademix@gmail.com?subject=Reporte%20de%20Problema%20-%20SigaTic">
+                    <a href="mailto:senaacademix@gmail.com?subject=Reporte%20de%20Problema%20-%20AcademiX">
                       <Bug className="h-4 w-4" />
                       <span className="sr-only">Reportar un problema</span>
                     </a>

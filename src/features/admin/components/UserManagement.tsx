@@ -91,6 +91,7 @@ interface UserManagementProps {
     initialGroupId?: string;
     initialGroups?: { id: string, name: string, programId?: string }[];
     initialPrograms?: { id: string, name: string }[];
+    isObserver?: boolean;
 }
 
 export function UserManagement({ 
@@ -98,7 +99,8 @@ export function UserManagement({
     totalCount, 
     initialGroupId = "all", 
     initialGroups = [],
-    initialPrograms = []
+    initialPrograms = [],
+    isObserver = false
 }: UserManagementProps) {
     const [users, setUsers] = useState<User[]>(initialUsers);
     const [searchQuery, setSearchQuery] = useState("");
@@ -479,10 +481,12 @@ export function UserManagement({
                             Enviar a Seleccionados ({selectedUserIds.length})
                         </Button>
                     )}
-                    <Button onClick={() => setCreateDialogOpen(true)}>
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Crear Estudiante
-                    </Button>
+                    {!isObserver && (
+                        <Button onClick={() => setCreateDialogOpen(true)}>
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Crear Estudiante
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -643,7 +647,7 @@ export function UserManagement({
                                                     <Switch
                                                         checked={!user.banned}
                                                         onCheckedChange={() => handleToggleBan(user.id, user.banned || false)}
-                                                        disabled={isPending}
+                                                        disabled={isPending || isObserver}
                                                     />
                                                     <span className="text-sm text-muted-foreground">
                                                         {user.banned ? "Baneado" : "Activo"}
@@ -681,23 +685,25 @@ export function UserManagement({
                                                                                                                 setUserToResetPassword(user);
                                                                                                                 setResetPasswordDialogOpen(true);
                                                                                                             }}
-                                                                                                            disabled={isPending || (!user.profile?.identificacion)}
+                                                                                                            disabled={isPending || (!user.profile?.identificacion) || isObserver}
                                                                                                             className="text-amber-600 hover:text-amber-700"
                                                                                                         >
                                                                                                             <Key className="h-4 w-4" />
                                                                                                         </Button></TooltipTrigger><TooltipContent><p>{user.profile?.identificacion ? "Restablecer contraseña al número de documento" : "Usuario sin documento registrado"}</p></TooltipContent></Tooltip>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => {
-                                                            setUserToDelete(user);
-                                                            setDeleteDialogOpen(true);
-                                                        }}
-                                                        disabled={isPending}
-                                                        className="text-destructive hover:text-destructive"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    {!isObserver && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => {
+                                                                setUserToDelete(user);
+                                                                setDeleteDialogOpen(true);
+                                                            }}
+                                                            disabled={isPending}
+                                                            className="text-destructive hover:text-destructive"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>

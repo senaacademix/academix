@@ -7,7 +7,18 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
+    DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -25,13 +36,17 @@ import {
     LineChart,
     Line
 } from "recharts";
-import { Users, GraduationCap, UserX, UserCheck, BookOpen, AlertTriangle, CheckCircle2, Clock, Calendar, AlertCircle, Settings, Info } from "lucide-react";
+import { Users, GraduationCap, UserX, UserCheck, BookOpen, AlertTriangle, CheckCircle2, Clock, Calendar, AlertCircle, Settings, Info, Eye, EyeOff, Trash2, ExternalLink, FileText, Mail, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatName } from "@/lib/utils";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { toast } from "sonner";
+import { getGroupImprovementPlans, deleteImprovementPlan } from "@/features/student/actions/improvementPlanActions";
 
 interface GroupAnalyticsPanelProps {
     open?: boolean;
@@ -39,6 +54,7 @@ interface GroupAnalyticsPanelProps {
     inline?: boolean;
     isLoading: boolean;
     analyticsData: {
+        groupId?: string;
         groupName: string;
         groupDescription?: string | null;
         program?: string;
@@ -103,6 +119,51 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
     const [disciplineWeight, setDisciplineWeight] = useState<number>(10);
     const [showWeightsConfig, setShowWeightsConfig] = useState<boolean>(false);
     const [showSourcesInfo, setShowSourcesInfo] = useState<boolean>(false);
+
+    const [improvementPlans, setImprovementPlans] = useState<any[]>([]);
+    const [plansLoading, setPlansLoading] = useState(false);
+    const [viewPlanDetail, setViewPlanDetail] = useState<any | null>(null);
+    const [planToDelete, setPlanToDelete] = useState<string | null>(null);
+
+    const loadGroupPlans = async () => {
+        if (!analyticsData?.groupId) return;
+        setPlansLoading(true);
+        try {
+            const res = await getGroupImprovementPlans(analyticsData.groupId);
+            if (res.success && res.data) {
+                setImprovementPlans(res.data);
+            } else {
+                toast.error(res.error || "No se pudieron cargar los planes de mejoramiento");
+            }
+        } catch (error) {
+            console.error("Error al cargar planes:", error);
+        } finally {
+            setPlansLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (open && analyticsData?.groupId) {
+            loadGroupPlans();
+        }
+    }, [open, analyticsData?.groupId]);
+
+    const handleConfirmDelete = async () => {
+        if (!planToDelete) return;
+        const toastId = toast.loading("Eliminando plan de mejoramiento...");
+        try {
+            const res = await deleteImprovementPlan(planToDelete);
+            if (res.success) {
+                toast.success("Plan eliminado correctamente", { id: toastId });
+                setPlanToDelete(null);
+                loadGroupPlans();
+            } else {
+                toast.error(res.error || "Error al eliminar el plan", { id: toastId });
+            }
+        } catch (error: any) {
+            toast.error(error.message || "Error al eliminar el plan", { id: toastId });
+        }
+    };
 
     const handleWeightChange = (type: "academic" | "attendance" | "discipline", value: number) => {
         if (type === "academic") {
@@ -666,10 +727,11 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                             </Card>
 
                              <Tabs defaultValue="rendimiento" className="w-full mt-6">
-                                <TabsList className="grid w-full sm:w-[400px] grid-cols-3 mb-6 mx-auto">
+                                <TabsList className="grid w-full sm:w-[750px] grid-cols-4 mb-6 mx-auto">
                                     <TabsTrigger value="rendimiento">Rendimiento</TabsTrigger>
                                     <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
                                     <TabsTrigger value="disciplina">Disciplina</TabsTrigger>
+                                    <TabsTrigger value="mejoramiento">Planes de Mejoramiento</TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="rendimiento" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
@@ -1296,6 +1358,140 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                             </CardContent>
                                         </Card>
                                     </div>
+                                 </TabsContent>
+
+                                <TabsContent value="mejoramiento" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                    {plansLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                                            <p className="text-xs text-muted-foreground">Cargando planes de mejoramiento del grupo...</p>
+                                        </div>
+                                    ) : improvementPlans.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
+                                            <FileText className="w-12 h-12 mb-4 opacity-50 text-muted-foreground" />
+                                            <p className="font-semibold text-base">Sin Planes de Mejoramiento</p>
+                                            <p className="text-xs text-center mt-1">No se registran planes de mejoramiento asignados para los estudiantes en este grupo.</p>
+                                        </div>
+                                    ) : (() => {
+                                        // Group plans by student
+                                        const byStudent: Record<string, { student: any; plans: any[] }> = {};
+                                        for (const plan of improvementPlans) {
+                                            const sid = plan.student?.id || plan.studentId;
+                                            if (!byStudent[sid]) byStudent[sid] = { student: plan.student, plans: [] };
+                                            byStudent[sid].plans.push(plan);
+                                        }
+                                        return (
+                                            <div className="space-y-6 text-left">
+                                                {Object.values(byStudent).map(({ student, plans: sPlans }) => (
+                                                    <div key={student?.id} className="border border-border/60 rounded-xl overflow-hidden bg-background">
+                                                        {/* Student Header */}
+                                                        <div className="flex items-center gap-3 bg-muted/30 px-4 py-2.5 border-b border-border/60">
+                                                            <GraduationCap className="w-4 h-4 text-primary shrink-0" />
+                                                            <div>
+                                                                <p className="font-semibold text-xs text-foreground">{formatName(student?.name, student?.profile)}</p>
+                                                                <p className="text-[10px] text-muted-foreground">{sPlans.length} plan{sPlans.length !== 1 ? "es" : ""}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="divide-y divide-border/40">
+                                                            {sPlans.map((plan: any) => {
+                                                                const step1Done = !!plan.teacherDocUrl;
+                                                                const step2Done = !!plan.signedDocUrl;
+                                                                const step3Done = !!plan.teacherSignedDocUrl;
+                                                                const isPastEnd = new Date() > new Date(plan.endDate);
+                                                                const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
+
+                                                                const nowMs = Date.now();
+                                                                const startMs = new Date(plan.startDate).getTime();
+                                                                const endMs = new Date(plan.endDate).getTime();
+                                                                const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
+                                                                const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
+                                                                const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
+
+                                                                const steps = [
+                                                                    { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
+                                                                    { label: "Est. firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
+                                                                    { label: "Doc. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
+                                                                    { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
+                                                                ];
+
+                                                                return (
+                                                                    <div key={plan.id} className="p-4 hover:bg-muted/10 transition-colors space-y-3">
+                                                                        <div className="flex items-start justify-between gap-3">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                                    <span className="font-bold text-xs">Plan N° {plan.planNumber}</span>
+                                                                                    {plan.viewedAt ? (
+                                                                                        <Badge variant="outline" className="text-[9px] py-0 px-1 bg-emerald-500/10 text-emerald-600 border-emerald-300 gap-0.5"><Eye className="w-2.5 h-2.5" />Visto</Badge>
+                                                                                    ) : (
+                                                                                        <Badge variant="outline" className="text-[9px] py-0 px-1 bg-amber-500/10 text-amber-600 border-amber-300 gap-0.5"><EyeOff className="w-2.5 h-2.5" />No visto</Badge>
+                                                                                    )}
+                                                                                    {plan.finalGrade !== null && plan.finalGrade !== undefined && (
+                                                                                        <Badge className="text-[9px] py-0 px-1 bg-primary text-primary-foreground">Nota: {plan.finalGrade}</Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                                                                    {format(new Date(plan.startDate), "dd/MM/yyyy")} → {format(new Date(plan.endDate), "dd/MM/yyyy")} · Docente: {formatName(plan.teacher?.name, plan.teacher?.profile)}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewPlanDetail(plan)}><Eye className="w-3 h-3" />Ver Detalle</Button>
+                                                                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => setPlanToDelete(plan.id)}><Trash2 className="w-3 h-3" />Eliminar</Button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Progress bar */}
+                                                                        <div className="space-y-0.5">
+                                                                            <div className="flex items-center justify-between text-[9px] text-muted-foreground font-medium">
+                                                                                <span>Progreso temporal</span>
+                                                                                <span className={datePct >= 100 ? "text-red-500 font-bold" : "text-primary font-semibold"}>
+                                                                                    {datePct}% · {Math.min(daysPassed, daysTotal)}/{daysTotal} días
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    className={`h-full rounded-full transition-all duration-500 ${datePct >= 100 ? "bg-red-500" : datePct >= 75 ? "bg-amber-500" : "bg-primary"}`}
+                                                                                    style={{ width: `${datePct}%` }}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Stepper */}
+                                                                        <div className="relative grid grid-cols-4 gap-2 pt-1">
+                                                                            <div className="absolute top-3 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
+                                                                            {steps.map((step, idx) => (
+                                                                                <div key={idx} className="flex flex-col items-center gap-1 relative z-10">
+                                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${
+                                                                                        step.done
+                                                                                            ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                                            : step.locked
+                                                                                                ? "bg-muted border-border text-muted-foreground"
+                                                                                                : step.active
+                                                                                                    ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
+                                                                                                    : "bg-background border-muted text-muted-foreground"
+                                                                                    }`}>
+                                                                                        {step.done ? (
+                                                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                                                        ) : step.locked ? (
+                                                                                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                                                        ) : (
+                                                                                            <span>{idx + 1}</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="text-center">
+                                                                                        <p className={`text-[9px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </TabsContent>
                             </Tabs>
                         </div>
@@ -1309,10 +1505,106 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="fixed inset-0 z-50 w-screen h-screen max-w-none sm:max-w-none md:max-w-none lg:max-w-none xl:max-w-none m-0 rounded-none p-0 flex flex-col bg-slate-50 dark:bg-slate-950 border-0 !translate-x-0 !translate-y-0 !left-0 !top-0">
-                {content}
-            </DialogContent>
-        </Dialog>
+        <>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="fixed inset-0 z-50 w-screen h-screen max-w-none sm:max-w-none md:max-w-none lg:max-w-none xl:max-w-none m-0 rounded-none p-0 flex flex-col bg-slate-50 dark:bg-slate-950 border-0 !translate-x-0 !translate-y-0 !left-0 !top-0">
+                    {content}
+                </DialogContent>
+            </Dialog>
+
+            {/* Read-only Plan Detail Dialog */}
+            <Dialog open={!!viewPlanDetail} onOpenChange={(o) => { if (!o) setViewPlanDetail(null); }}>
+                <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Detalle — Plan N° {viewPlanDetail?.planNumber}</DialogTitle>
+                    </DialogHeader>
+                    {viewPlanDetail && (
+                        <div className="space-y-4 text-xs text-left">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Aprendiz</p>
+                                    <p className="font-semibold text-sm">{formatName(viewPlanDetail.student?.name, viewPlanDetail.student?.profile)}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Docente</p>
+                                    <p className="font-semibold text-sm">{formatName(viewPlanDetail.teacher?.name, viewPlanDetail.teacher?.profile)}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Fecha Inicio</p>
+                                    <p className="font-medium text-sm">{format(new Date(viewPlanDetail.startDate), "dd/MM/yyyy")}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Fecha Fin</p>
+                                    <p className="font-medium text-sm">{format(new Date(viewPlanDetail.endDate), "dd/MM/yyyy")}</p>
+                                </div>
+                            </div>
+                            {viewPlanDetail.observations && (
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Observaciones</p>
+                                    <p className="bg-muted/40 rounded-lg p-3 whitespace-pre-wrap">{viewPlanDetail.observations}</p>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-3 border-t pt-3">
+                                {viewPlanDetail.teacherDocUrl && (
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Paso 1 — Plan Docente</p>
+                                        <a href={viewPlanDetail.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-bold flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Ver Documento</a>
+                                    </div>
+                                )}
+                                {viewPlanDetail.signedDocUrl && (
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Paso 2 — Firma Aprendiz</p>
+                                        <a href={viewPlanDetail.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline font-bold flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Ver Firmado</a>
+                                    </div>
+                                )}
+                                {viewPlanDetail.teacherSignedDocUrl && (
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Paso 3 — Firma Docente</p>
+                                        <a href={viewPlanDetail.teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Ver Contrafirma</a>
+                                    </div>
+                                )}
+                                {viewPlanDetail.evidenceUrl && (
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Paso 4 — Evidencias de Evaluación</p>
+                                        <a href={viewPlanDetail.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-bold flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Ver Evidencia</a>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 border-t pt-3">
+                                {viewPlanDetail.planScore !== null && viewPlanDetail.planScore !== undefined && (
+                                    <div className="space-y-1 bg-primary/5 p-3 rounded-lg border border-primary/20">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Calificación Plan</p>
+                                        <p className="text-base font-black text-primary">{viewPlanDetail.planScore}</p>
+                                    </div>
+                                )}
+                                {viewPlanDetail.finalGrade !== null && viewPlanDetail.finalGrade !== undefined && (
+                                    <div className="space-y-1 bg-blue-50/50 p-3 rounded-lg border border-blue-200">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Nota Final</p>
+                                        <p className="text-base font-black text-blue-700">{viewPlanDetail.finalGrade}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setViewPlanDetail(null)}>Cerrar</Button>
+                            </DialogFooter>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Confirm Delete Dialog */}
+            <AlertDialog open={!!planToDelete} onOpenChange={(o) => { if (!o) setPlanToDelete(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar Plan de Mejoramiento?</AlertDialogTitle>
+                        <AlertDialogDescription>Esta acción no se puede deshacer. Se eliminarán todos los documentos y notas asociados.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setPlanToDelete(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Eliminar</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }

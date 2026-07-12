@@ -19,6 +19,10 @@ export {
     deleteCourseAction,
     resetUserPasswordToDocAction,
     getComprehensiveGroupAnalyticsAction,
-    getStudentBehaviorAnalyticsAction
+    getStudentBehaviorAnalyticsAction,
+    getAdminsAndObserversAction,
+    createAdminOrObserverAction,
+    updateAdminOrObserverAction,
+    deleteAdminOrObserverAction
 } from "@/features/admin/actions/adminActions";
 

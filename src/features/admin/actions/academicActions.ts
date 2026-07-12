@@ -18,11 +18,29 @@ async function requireAdmin() {
     return session;
 }
 
+async function requireAdminOrObserver() {
+    const session = await getSession();
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
+        throw new Error("Unauthorized: Admin or Observer access required");
+    }
+    return session;
+}
+
 // ============ PROGRAM CRUD ============
 
 export async function getProgramsAction() {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    const whereClause = isObserver ? {
+        teachers: {
+            some: {
+                id: session.user.id
+            }
+        }
+    } : {};
+
     return await prisma.program.findMany({
+        where: whereClause,
         orderBy: { createdAt: "desc" },
         include: {
             teachers: {
@@ -313,8 +331,20 @@ export async function deletePeriodAction(id: string) {
 // ============ GROUP CRUD ============
 
 export async function getGroupsAction() {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    const whereClause = isObserver ? {
+        program: {
+            teachers: {
+                some: {
+                    id: session.user.id
+                }
+            }
+        }
+    } : {};
+
     return await prisma.group.findMany({
+        where: whereClause,
         orderBy: { createdAt: "desc" },
         include: {
             program: true,
@@ -1302,7 +1332,7 @@ export async function assignGroupsToTeacherAction(teacherId: string, groupIds: s
 }
 
 export async function getTeacherGroupsAction(teacherId: string) {
-    await requireAdmin();
+    await requireAdminOrObserver();
     const teacher = await prisma.user.findUnique({
         where: { id: teacherId },
         select: {
@@ -1513,7 +1543,7 @@ export async function checkScheduleConflictsAction(data: {
         endTime: string;
     }>;
 }) {
-    await requireAdmin();
+    await requireAdminOrObserver();
 
     const groupConflicts: string[] = [];
     const DAYS_SPANISH: Record<DayOfWeek, string> = {
@@ -1741,7 +1771,7 @@ export async function assignTeacherToCourseAction(courseId: string, teacherId: s
 }
 
 export async function getQualifiedTeachersAction(programId: string, courseTitle: string) {
-    await requireAdmin();
+    await requireAdminOrObserver();
     const program = await prisma.program.findUnique({
         where: { id: programId },
         select: {

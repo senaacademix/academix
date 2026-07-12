@@ -16,7 +16,7 @@ export const metadata = {
 export default async function AdminSchedulePage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
-    if (!session || session.user.role !== "admin") {
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
         redirect("/dashboard/student");
     }
 
@@ -123,6 +123,7 @@ export default async function AdminSchedulePage() {
                 initialScheduleStartDate={settings?.scheduleStartDate ?? null}
                 initialScheduleEndDate={settings?.scheduleEndDate ?? null}
                 initialMaxTeacherHours={settings?.maxTeacherHours ?? 40}
+                isObserver={session.user.role === "observer"}
             />
         </div>
     );

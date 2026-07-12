@@ -77,6 +77,7 @@ import { authClient } from "@/lib/auth-client";
 import { formatCalendarDate } from "@/lib/dateUtils";
 import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction, deleteRemarkAction } from "../actions/groupActions";
 import { getRemarkTemplatesAction, createRemarkTemplateAction, updateRemarkTemplateAction, deleteRemarkTemplateAction } from "../actions/remarkActions";
+import { getGroupImprovementPlans, upsertImprovementPlan, deleteImprovementPlan, deleteSignedDocument, deleteTeacherSignedDoc, submitTeacherSignedDoc, markPlanViewed } from "@/features/student/actions/improvementPlanActions";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -251,7 +252,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     };
     
     const [selectedGroupId, setSelectedGroupId] = useState<string>(groups[0]?.id || "");
-    const [activeTab, setActiveTab] = useState<"students" | "attendance" | "remarks" | "analytics" | "grades" | "documentation">("students");
+    const [activeTab, setActiveTab] = useState<"students" | "attendance" | "remarks" | "analytics" | "grades" | "documentation" | "improvement">("students");
 
     const selectedGroup = groups.find(g => g.id === selectedGroupId);
 
@@ -326,6 +327,143 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
     const [selectedStudentForAnalytics, setSelectedStudentForAnalytics] = useState<any>(null);
 
+    // ── Improvement Plan State ──
+    const [groupPlans, setGroupPlans] = useState<any[]>([]);
+    const [groupPlansLoading, setGroupPlansLoading] = useState(false);
+    const [impPlanFormDialog, setImpPlanFormDialog] = useState<{
+        open: boolean;
+        id?: string;
+        studentId: string;
+        planNumber: string;
+        teacherDocUrl: string;
+        startDate: string;
+        endDate: string;
+        observations: string;
+        planScore: number | "";
+        finalGrade: number | "";
+        evidenceUrl: string;
+    } | null>(null);
+    const [viewGroupPlanDetail, setViewGroupPlanDetail] = useState<any | null>(null);
+    const [impDeleteConfirm, setImpDeleteConfirm] = useState<string | null>(null); // planId to delete
+    const [impTeacherSignDialog, setImpTeacherSignDialog] = useState<{ planId: string; url: string } | null>(null);
+
+    const loadGroupPlans = async (gId?: string) => {
+        const id = gId || selectedGroupId;
+        if (!id) return;
+        setGroupPlansLoading(true);
+        try {
+            const res = await getGroupImprovementPlans(id);
+            if (res.success && res.data) setGroupPlans(res.data);
+        } catch (e) {
+            console.error("Error cargando planes del grupo:", e);
+        } finally {
+            setGroupPlansLoading(false);
+        }
+    };
+
+    const handleImpUpsert = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!impPlanFormDialog) return;
+        if (!impPlanFormDialog.studentId || !impPlanFormDialog.planNumber.trim() || !impPlanFormDialog.startDate || !impPlanFormDialog.endDate) {
+            toast.error("Por favor completa los campos requeridos (*)");
+            return;
+        }
+        const toastId = toast.loading("Guardando plan...");
+        const res = await upsertImprovementPlan({
+            id: impPlanFormDialog.id,
+            planNumber: impPlanFormDialog.planNumber.trim(),
+            studentId: impPlanFormDialog.studentId,
+            teacherDocUrl: impPlanFormDialog.teacherDocUrl.trim() || undefined,
+            startDate: impPlanFormDialog.startDate,
+            endDate: impPlanFormDialog.endDate,
+            observations: impPlanFormDialog.observations.trim() || undefined,
+            planScore: impPlanFormDialog.planScore !== "" ? parseFloat(String(impPlanFormDialog.planScore)) : undefined,
+            finalGrade: impPlanFormDialog.finalGrade !== "" ? parseFloat(String(impPlanFormDialog.finalGrade)) : undefined,
+            evidenceUrl: impPlanFormDialog.evidenceUrl.trim() || undefined,
+        });
+        if (res.success) {
+            toast.success("Plan guardado exitosamente", { id: toastId });
+            setImpPlanFormDialog(null);
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al guardar el plan", { id: toastId });
+        }
+    };
+
+    const handleImpDelete = async (planId: string) => {
+        const toastId = toast.loading("Eliminando plan...");
+        const res = await deleteImprovementPlan(planId);
+        if (res.success) {
+            toast.success("Plan eliminado correctamente", { id: toastId });
+            setImpDeleteConfirm(null);
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al eliminar", { id: toastId });
+        }
+    };
+
+    const handleImpDeleteSignedDoc = async (planId: string) => {
+        const toastId = toast.loading("Eliminando documento firmado...");
+        const res = await deleteSignedDocument(planId);
+        if (res.success) {
+            toast.success("Documento eliminado correctamente", { id: toastId });
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al eliminar el documento", { id: toastId });
+        }
+    };
+
+    const handleImpDeleteTeacherSignedDoc = async (planId: string) => {
+        const toastId = toast.loading("Eliminando contrafirma del docente...");
+        const res = await deleteTeacherSignedDoc(planId);
+        if (res.success) {
+            toast.success("Contrafirma eliminada correctamente", { id: toastId });
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al eliminar", { id: toastId });
+        }
+    };
+
+    const handleImpTeacherSign = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!impTeacherSignDialog || !impTeacherSignDialog.url.trim()) {
+            toast.error("El enlace no puede estar vacío");
+            return;
+        }
+        const toastId = toast.loading("Guardando contrafirma...");
+        const res = await submitTeacherSignedDoc(impTeacherSignDialog.planId, impTeacherSignDialog.url.trim());
+        if (res.success) {
+            toast.success("Contrafirma guardada exitosamente", { id: toastId });
+            setImpTeacherSignDialog(null);
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al guardar", { id: toastId });
+        }
+    };
+
+    const handleImpEmail = (plan: any) => {
+        const studentEmail = plan.student?.email || "";
+        const studentName = formatName(plan.student?.name, plan.student?.profile);
+        const teacherName = formatName(plan.teacher?.name, plan.teacher?.profile);
+        const subject = encodeURIComponent(`Plan de Mejoramiento Académico - ${plan.planNumber}`);
+        let bodyText = `Hola, ${studentName}.\n\n`;
+        bodyText += `Se ha registrado el Plan de Mejoramiento Académico N° ${plan.planNumber} en la plataforma AcademiX.\n\n`;
+        bodyText += `Detalles del Plan:\n`;
+        bodyText += `- Fecha de Inicio: ${format(new Date(plan.startDate), "dd/MM/yyyy")}\n`;
+        bodyText += `- Fecha de Finalización: ${format(new Date(plan.endDate), "dd/MM/yyyy")}\n`;
+        bodyText += `- Docente: ${teacherName}\n`;
+        if (plan.teacherDocUrl) bodyText += `- Documento del Plan: ${plan.teacherDocUrl}\n`;
+        if (plan.observations) bodyText += `- Observaciones/Criterios: ${plan.observations}\n`;
+        bodyText += `\nPor favor ingresa a la plataforma AcademiX para revisar el plan en detalle, firmarlo y cargar el documento firmado.\n\nAtentamente,\n${teacherName}`;
+        window.location.href = `mailto:${studentEmail}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+    };
+
+    useEffect(() => {
+        if (activeTab === "improvement" && selectedGroupId) {
+            loadGroupPlans(selectedGroupId);
+        }
+    }, [activeTab, selectedGroupId]);
+
     // Attendance Tab State
     const [attMode, setAttMode] = useState<"list" | "matrix" | "summary" | "history" | "metrics">("list");
     const printMetricsRef = useRef<HTMLDivElement>(null);
@@ -387,13 +525,13 @@ export function GroupManager({ groups }: GroupManagerProps) {
     // Remarks Message Templates State
     const [remarkTemplates, setRemarkTemplates] = useState<any[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState("");
-    const [includeStudentName, setIncludeStudentName] = useState(false);
     const [manageTemplatesOpen, setManageTemplatesOpen] = useState(false);
     
     // Modal states for creating/editing templates
     const [templateEditId, setTemplateEditId] = useState<string | null>(null);
     const [templateTitle, setTemplateTitle] = useState("");
     const [templateDesc, setTemplateDesc] = useState("");
+    const [templateType, setTemplateType] = useState<"ATTENTION" | "COMMENDATION" | "CITATION" | "OTHER">("ATTENTION");
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
     const [confirmConfig, setConfirmConfig] = useState<{
@@ -426,30 +564,25 @@ export function GroupManager({ groups }: GroupManagerProps) {
         fetchTemplates();
     }, []);
 
-    const getParsedDescription = () => {
-        if (!remarkDesc) return "";
+    useEffect(() => {
+        setSelectedTemplateId("");
+    }, [remarkType]);
 
-        let names = "";
-        if (includeStudentName) {
-            if (selectedStudents.length === 0) {
-                names = "Estudiante: [Nombre del estudiante]\n\n";
-            } else if (selectedStudents.length === 1) {
-                const student = selectedGroup?.students?.find((s: any) => s.id === selectedStudents[0]);
-                names = student ? `Estudiante: ${formatName(student.name, student.profile)}\n\n` : "Estudiante: [Nombre del estudiante]\n\n";
-            } else {
-                const selectedList = (selectedGroup?.students || []).filter((s: any) => selectedStudents.includes(s.id));
-                const formattedNames = selectedList.map((s: any) => formatName(s.name, s.profile));
-                names = `Estudiantes: ${formattedNames.join(", ")}\n\n`;
-            }
+    const [modalFilterType, setModalFilterType] = useState<"ALL" | "ATTENTION" | "COMMENDATION" | "CITATION" | "OTHER">("ALL");
+
+    const filteredModalTemplates = useMemo(() => {
+        if (modalFilterType === "ALL") return remarkTemplates;
+        return remarkTemplates.filter((t) => t.type === modalFilterType);
+    }, [remarkTemplates, modalFilterType]);
+
+    useEffect(() => {
+        if (modalFilterType !== "ALL" && !templateEditId) {
+            setTemplateType(modalFilterType as any);
         }
-        
-        let desc = remarkDesc;
-        const singleName = selectedStudents.length === 1 
-            ? (selectedGroup?.students?.find((s: any) => s.id === selectedStudents[0]) ? formatName(selectedGroup.students.find((s: any) => s.id === selectedStudents[0]).name, selectedGroup.students.find((s: any) => s.id === selectedStudents[0]).profile) : "[Nombre]")
-            : "[Nombre]";
-        desc = desc.replaceAll("{{nombre}}", singleName).replaceAll("{{estudiante}}", singleName);
-        
-        return `${names}${desc}`;
+    }, [modalFilterType, templateEditId]);
+
+    const getParsedDescription = () => {
+        return remarkDesc;
     };
 
     const handleCopyToClipboard = async () => {
@@ -761,6 +894,9 @@ const handleOpenAnalytics = async () => {
         return Object.values(grouped);
     }, [remarksHistory]);
 
+    const filteredTemplates = useMemo(() => {
+        return remarkTemplates.filter((t) => t.type === remarkType);
+    }, [remarkTemplates, remarkType]);
 
     const handleResetPassword = async () => {
         if (!studentToResetPassword) return;
@@ -1364,7 +1500,7 @@ const handleOpenAnalytics = async () => {
         if (!remarkTitle.trim() || !remarkDesc.trim()) return toast.error("Completa el título y la descripción");
 
         setIsSavingRemark(true);
-        const res = await saveRemarkBatch(teacherId!, remarkCourseId, selectedStudents, remarkType, remarkTitle, remarkDesc, includeStudentName);
+        const res = await saveRemarkBatch(teacherId!, remarkCourseId, selectedStudents, remarkType, remarkTitle, remarkDesc);
         if (res.success) {
             toast.success("Observación guardada correctamente");
             
@@ -1583,6 +1719,24 @@ const handleOpenAnalytics = async () => {
                                                     <li>El estudiante recibe notificación y puede ver su historial</li>
                                                     <li>Consulta el historial de observaciones del grupo</li>
                                                 </ul>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </span>
+                                </TabsTrigger>
+
+                                {/* ── PLANES DE MEJORAMIENTO ── */}
+                                <TabsTrigger value="improvement" className="flex-1 rounded-lg py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm shrink-0 font-bold">
+                                    <span className="flex items-center gap-1">
+                                        Planes de Mejoramiento
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span onClick={e => e.stopPropagation()} className="cursor-help">
+                                                    <HelpCircle className="w-3 h-3 text-muted-foreground/60 hover:text-primary transition-colors" />
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-xs text-left p-3 space-y-1.5 font-normal">
+                                                <p className="font-bold text-sm">📄 Planes de Mejoramiento</p>
+                                                <p className="text-xs text-muted-foreground">Gestiona y califica planes de mejoramiento para los estudiantes del grupo.</p>
                                             </TooltipContent>
                                         </Tooltip>
                                     </span>
@@ -3655,44 +3809,11 @@ const handleOpenAnalytics = async () => {
                                 <div className="bg-primary/5 border border-primary/20 rounded-2xl sm:rounded-3xl p-4 sm:p-8 space-y-4 relative overflow-hidden">
                                     <ShieldAlert className="absolute right-0 top-0 w-64 h-64 text-primary/5 -translate-y-1/4 translate-x-1/4 pointer-events-none" />
                                     <div className="relative z-10">
-                                        <h3 className="text-xl sm:text-2xl font-black text-foreground mb-6">Registrar Observación Disciplinaria / Académica</h3>
+                                        <h3 className="text-xl sm:text-2xl font-black text-foreground mb-2">Registrar Observación Disciplinaria / Académica</h3>
+                                        <p className="text-xs text-muted-foreground mb-6">
+                                            Ten en cuenta que todas las observaciones registradas pueden ser visualizadas y modificadas por todos los profesores.
+                                        </p>
                                         
-                                        {/* Template Selector Row */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 items-end">
-                                            <div className="space-y-2 md:col-span-2">
-                                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Plantilla de Mensaje</Label>
-                                                <Select value={selectedTemplateId} onValueChange={(val) => {
-                                                    setSelectedTemplateId(val);
-                                                    const template = remarkTemplates.find(t => t.id === val);
-                                                    if (template) {
-                                                        setRemarkTitle(template.title);
-                                                        setRemarkDesc(template.description);
-                                                    }
-                                                }}>
-                                                    <SelectTrigger className="h-12 rounded-xl bg-background border-primary/20">
-                                                        <SelectValue placeholder="Seleccionar plantilla predefinida..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {remarkTemplates.map((t) => (
-                                                            <SelectItem key={t.id} value={t.id} className="font-semibold">
-                                                                {t.title}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div>
-                                                <Button 
-                                                    type="button" 
-                                                    variant="outline" 
-                                                    onClick={() => setManageTemplatesOpen(true)}
-                                                    className="w-full h-12 rounded-xl border-primary/20 hover:bg-primary/5 text-primary font-bold flex items-center justify-center gap-2 cursor-pointer"
-                                                >
-                                                    <ClipboardList className="w-4 h-4" /> Gestionar Plantillas
-                                                </Button>
-                                            </div>
-                                        </div>
-
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                             <div className="space-y-2">
                                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Tipo de Observación</Label>
@@ -3723,13 +3844,53 @@ const handleOpenAnalytics = async () => {
                                             </div>
                                         </div>
 
+                                        {/* Template Selector Row */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 items-end">
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Plantilla de Mensaje</Label>
+                                                <Select value={selectedTemplateId} onValueChange={(val) => {
+                                                    setSelectedTemplateId(val);
+                                                    const template = remarkTemplates.find(t => t.id === val);
+                                                    if (template) {
+                                                        setRemarkTitle(template.title);
+                                                        setRemarkDesc(template.description);
+                                                    }
+                                                }}>
+                                                    <SelectTrigger className="h-12 rounded-xl bg-background border-primary/20">
+                                                        <SelectValue placeholder="Seleccionar plantilla predefinida..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {filteredTemplates.map((t) => (
+                                                            <SelectItem key={t.id} value={t.id} className="font-semibold">
+                                                                {t.title}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    onClick={() => {
+                                                        setModalFilterType(remarkType);
+                                                        setManageTemplatesOpen(true);
+                                                    }}
+                                                    className="w-full h-12 rounded-xl border-primary/20 hover:bg-primary/5 text-primary font-bold flex items-center justify-center gap-2 cursor-pointer"
+                                                >
+                                                    <ClipboardList className="w-4 h-4" /> Gestionar Plantillas
+                                                </Button>
+                                            </div>
+                                        </div>
+
                                         <div className="space-y-2 mb-6">
                                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Estudiantes a aplicar</Label>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <button 
+                                                        <Button 
                                                             type="button" 
-                                                            className="flex h-12 w-full items-center justify-between rounded-xl border border-primary/20 bg-background px-3 py-2 text-sm text-foreground font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/25 focus:ring-offset-0 transition-colors"
+                                                            variant="outline"
+                                                            className="flex h-12 w-full items-center justify-between rounded-xl border border-primary/20 bg-background px-3 py-2 text-sm text-foreground font-medium hover:bg-background hover:text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/25 focus:ring-offset-0 transition-colors"
                                                         >
                                                             <span className="truncate">
                                                                 {selectedStudents.length === 0 
@@ -3739,7 +3900,7 @@ const handleOpenAnalytics = async () => {
                                                                         : `${selectedStudents.length} estudiantes seleccionados`}
                                                             </span>
                                                             <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
-                                                        </button>
+                                                        </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent className="w-[300px] max-h-[350px] overflow-y-auto p-2" align="start">
                                                         <div className="p-1.5 border-b mb-2 flex gap-1">
@@ -3841,31 +4002,8 @@ const handleOpenAnalytics = async () => {
                                             <Textarea className="min-h-[120px] rounded-xl bg-background border-primary/20 p-4" value={remarkDesc} onChange={e => setRemarkDesc(e.target.value)} placeholder="Describe el suceso o justificación de la observación..." />
                                         </div>
 
-                                        {/* Dynamic Replaced Description Live Preview */}
-                                        {includeStudentName && remarkDesc.trim() && (
-                                            <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-xl transition-all duration-300">
-                                                <p className="text-[10px] uppercase font-bold text-primary tracking-wider mb-1.5 flex items-center gap-1">
-                                                    <Users className="w-3.5 h-3.5" /> Vista previa del mensaje personalizado
-                                                </p>
-                                                <p className="text-xs text-foreground italic whitespace-pre-wrap leading-relaxed">{getParsedDescription()}</p>
-                                            </div>
-                                        )}
-
                                         {/* Settings Row: Switches Grid */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 mt-6">
-                                            <div className="flex items-center gap-3 bg-background/50 p-4 rounded-xl border border-primary/10 transition-colors hover:bg-background/80">
-                                                <Switch 
-                                                    id="include-student-name"
-                                                    checked={includeStudentName}
-                                                    onCheckedChange={setIncludeStudentName}
-                                                    className="shrink-0 cursor-pointer"
-                                                />
-                                                <Label htmlFor="include-student-name" className="text-xs sm:text-sm font-bold text-foreground cursor-pointer select-none flex items-center gap-2">
-                                                    <Users className="w-4 h-4 text-primary shrink-0" />
-                                                    <span>Incluir nombre de estudiantes (reemplaza {"{{nombre}}"})</span>
-                                                </Label>
-                                            </div>
-
+                                        <div className="grid grid-cols-1 gap-4 mb-8 mt-6">
                                             <div className="flex items-center gap-3 bg-background/50 p-4 rounded-xl border border-primary/10 transition-colors hover:bg-background/80">
                                                 <Switch 
                                                     id="send-email-remark"
@@ -4013,6 +4151,430 @@ const handleOpenAnalytics = async () => {
                                     </div>
                                 </div>
                             </TabsContent>
+
+                            {/* TAB: PLANES DE MEJORAMIENTO */}
+                            <TabsContent value="improvement" className="m-0 space-y-6 outline-none">
+                                {/* Header */}
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-bold">Planes de Mejoramiento</h2>
+                                        <p className="text-sm text-muted-foreground">Gestión y seguimiento de compromisos académicos de superación.</p>
+                                    </div>
+                                    <Button
+                                        onClick={() => setImpPlanFormDialog({
+                                            open: true,
+                                            studentId: selectedGroup?.students?.[0]?.id || "",
+                                            planNumber: "",
+                                            teacherDocUrl: "",
+                                            startDate: format(new Date(), "yyyy-MM-dd"),
+                                            endDate: format(new Date(), "yyyy-MM-dd"),
+                                            observations: "",
+                                            planScore: "",
+                                            finalGrade: "",
+                                            evidenceUrl: "",
+                                        })}
+                                        className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        Crear Plan de Mejoramiento
+                                    </Button>
+                                </div>
+
+                                {/* Loading state */}
+                                {groupPlansLoading ? (
+                                    <div className="flex items-center justify-center py-16">
+                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                    </div>
+                                ) : groupPlans.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center p-16 border border-dashed rounded-2xl bg-muted/5 text-muted-foreground">
+                                        <FileText className="w-12 h-12 mb-4 opacity-40" />
+                                        <p className="font-semibold text-base">Sin Planes de Mejoramiento</p>
+                                        <p className="text-sm text-center mt-1">No se registran planes de mejoramiento en este grupo. Crea el primero con el botón superior.</p>
+                                    </div>
+                                ) : (() => {
+                                    // Group plans by student
+                                    const byStudent: Record<string, { student: any; plans: any[] }> = {};
+                                    for (const plan of groupPlans) {
+                                        const sid = plan.student?.id || plan.studentId;
+                                        if (!byStudent[sid]) byStudent[sid] = { student: plan.student, plans: [] };
+                                        byStudent[sid].plans.push(plan);
+                                    }
+                                    return (
+                                        <div className="space-y-6">
+                                            {Object.values(byStudent).map(({ student, plans: sPlans }) => (
+                                                <div key={student?.id} className="border border-border/60 rounded-2xl overflow-hidden">
+                                                    {/* Student header */}
+                                                    <div className="flex items-center gap-3 bg-muted/30 px-5 py-3 border-b border-border/60">
+                                                        <GraduationCap className="w-5 h-5 text-primary shrink-0" />
+                                                        <div>
+                                                            <p className="font-semibold text-sm">{formatName(student?.name, student?.profile)}</p>
+                                                            <p className="text-xs text-muted-foreground">{sPlans.length} plan{sPlans.length !== 1 ? "es" : ""} de mejoramiento</p>
+                                                        </div>
+                                                        <div className="ml-auto">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="text-xs h-8 gap-1"
+                                                                onClick={() => setImpPlanFormDialog({
+                                                                    open: true,
+                                                                    studentId: student?.id || "",
+                                                                    planNumber: "",
+                                                                    teacherDocUrl: "",
+                                                                    startDate: format(new Date(), "yyyy-MM-dd"),
+                                                                    endDate: format(new Date(), "yyyy-MM-dd"),
+                                                                    observations: "",
+                                                                    planScore: "",
+                                                                    finalGrade: "",
+                                                                    evidenceUrl: "",
+                                                                })}
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5" />
+                                                                Nuevo plan
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Plans for student — Stepper Cards */}
+                                                    <div className="divide-y divide-border/40">
+                                                        {sPlans.map((plan: any) => {
+                                                            // ── Compute step completion ──
+                                                            const step1Done = !!plan.teacherDocUrl;
+                                                            const step2Done = !!plan.signedDocUrl;
+                                                            const step3Done = !!plan.teacherSignedDocUrl;
+                                                            const isPastEnd = new Date() > new Date(plan.endDate);
+                                                            const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
+
+                                                            // ── Date progress bar ──
+                                                            const nowMs = Date.now();
+                                                            const startMs = new Date(plan.startDate).getTime();
+                                                            const endMs = new Date(plan.endDate).getTime();
+                                                            const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
+                                                            const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
+                                                            const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
+
+                                                            const steps = [
+                                                                { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
+                                                                { label: "Est. firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
+                                                                { label: "Doc. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
+                                                                { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
+                                                            ];
+
+                                                            return (
+                                                                <div key={plan.id} className="p-5 hover:bg-muted/10 transition-colors space-y-4">
+                                                                    {/* Plan title + actions row */}
+                                                                    <div className="flex items-start justify-between gap-3">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                                <span className="font-bold text-sm">Plan N° {plan.planNumber}</span>
+                                                                                {plan.viewedAt ? (
+                                                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-300 gap-0.5"><Eye className="w-3 h-3" />Visto</Badge>
+                                                                                ) : (
+                                                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-300 gap-0.5"><EyeOff className="w-3 h-3" />No visto</Badge>
+                                                                                )}
+                                                                                {plan.finalGrade !== null && plan.finalGrade !== undefined && (
+                                                                                    <Badge className="text-[10px] bg-primary text-primary-foreground">Nota: {plan.finalGrade}</Badge>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="text-[11px] text-muted-foreground mt-0.5">
+                                                                                {format(new Date(plan.startDate), "dd/MM/yyyy")} → {format(new Date(plan.endDate), "dd/MM/yyyy")}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1 shrink-0">
+                                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" title="Enviar correo" onClick={() => handleImpEmail(plan)}><Mail className="w-3.5 h-3.5" /></Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewGroupPlanDetail(plan)}><Eye className="w-3 h-3" />Ver</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setImpPlanFormDialog({ open: true, id: plan.id, studentId: plan.studentId, planNumber: plan.planNumber, teacherDocUrl: plan.teacherDocUrl || "", startDate: format(new Date(plan.startDate), "yyyy-MM-dd"), endDate: format(new Date(plan.endDate), "yyyy-MM-dd"), observations: plan.observations || "", planScore: plan.planScore !== null && plan.planScore !== undefined ? plan.planScore : "", finalGrade: plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade : "", evidenceUrl: plan.evidenceUrl || "" })}><FileText className="w-3 h-3" />Editar</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => setImpDeleteConfirm(plan.id)}><Trash2 className="w-3 h-3" />Eliminar</Button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* ── Temporal progress bar ── */}
+                                                                    <div className="space-y-1">
+                                                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                                                                            <span>Progreso temporal del plan</span>
+                                                                            <span className={datePct >= 100 ? "text-red-500 font-bold" : "text-primary font-semibold"}>
+                                                                                {datePct}% · {Math.min(daysPassed, daysTotal)}/{daysTotal} días
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                            <div
+                                                                                className={`h-full rounded-full transition-all duration-500 ${datePct >= 100 ? "bg-red-500" : datePct >= 75 ? "bg-amber-500" : "bg-primary"}`}
+                                                                                style={{ width: `${datePct}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* ── 4-Step Stepper ── */}
+                                                                    <div className="relative grid grid-cols-4 gap-2">
+                                                                        <div className="absolute top-4 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
+                                                                        {steps.map((step, idx) => (
+                                                                            <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10">
+                                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
+                                                                                    step.done
+                                                                                        ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                                        : step.locked
+                                                                                            ? "bg-muted border-border text-muted-foreground"
+                                                                                            : step.active
+                                                                                                ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
+                                                                                                : "bg-background border-muted text-muted-foreground"
+                                                                                }`}>
+                                                                                    {step.done ? (
+                                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                                                    ) : step.locked ? (
+                                                                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                                                    ) : (
+                                                                                        <span>{idx + 1}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="text-center">
+                                                                                    <p className={`text-[10px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
+                                                                                    <p className="text-[9px] text-muted-foreground">{step.sub}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+
+                                                                    {/* ── Step 3 action: Teacher countersign prompt ── */}
+                                                                    {step2Done && !step3Done && (
+                                                                        <div className="flex items-center gap-2 p-3 bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-800 rounded-xl">
+                                                                            <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                                                                            <p className="text-xs text-blue-700 dark:text-blue-400 flex-1">El aprendiz ya firmó el plan. Ahora debes subir tu copia firmada.</p>
+                                                                            <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1 shrink-0" onClick={() => setImpTeacherSignDialog({ planId: plan.id, url: "" })}>
+                                                                                <FileText className="w-3 h-3" />Subir mi firma
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
+                                                                    {step3Done && (
+                                                                        <div className="flex items-center gap-2 p-2.5 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-200 rounded-xl">
+                                                                            <a href={plan.teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 hover:underline font-semibold flex-1 truncate">
+                                                                                ✓ Tu firma cargada — ver documento
+                                                                            </a>
+                                                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700 shrink-0" title="Eliminar mi firma" onClick={() => handleImpDeleteTeacherSignedDoc(plan.id)}><Trash2 className="w-3 h-3" /></Button>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* ── Student signed doc link ── */}
+                                                                    {step2Done && plan.signedDocUrl && (
+                                                                        <div className="flex items-center gap-2 p-2.5 bg-muted/30 border border-border/60 rounded-xl">
+                                                                            <a href={plan.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-semibold flex-1 truncate">
+                                                                                Firma aprendiz — ver documento
+                                                                            </a>
+                                                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-amber-600 hover:text-amber-700 shrink-0" title="Eliminar firma del aprendiz" onClick={() => handleImpDeleteSignedDoc(plan.id)}><Trash2 className="w-3 h-3" /></Button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+
+
+                                {/* ── Create / Edit Plan Modal ── */}
+                                <Dialog open={!!impPlanFormDialog?.open} onOpenChange={(o) => { if (!o) setImpPlanFormDialog(null); }}>
+                                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                                        <DialogHeader>
+                                            <DialogTitle>{impPlanFormDialog?.id ? "Editar" : "Crear"} Plan de Mejoramiento</DialogTitle>
+                                            <DialogDescription>Gestiona el plan de mejoramiento académico para el aprendiz seleccionado.</DialogDescription>
+                                        </DialogHeader>
+                                        {impPlanFormDialog && (
+                                            <form onSubmit={handleImpUpsert} className="space-y-4 pt-2">
+                                                {/* Student selector — only show when creating */}
+                                                {!impPlanFormDialog.id && (
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-student">Aprendiz *</Label>
+                                                        <Select
+                                                            value={impPlanFormDialog.studentId}
+                                                            onValueChange={(v) => setImpPlanFormDialog(prev => prev ? { ...prev, studentId: v } : prev)}
+                                                        >
+                                                            <SelectTrigger id="imp-student" className="w-full h-10">
+                                                                <SelectValue placeholder="Seleccione un aprendiz..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {(selectedGroup?.students || []).map((s: any) => (
+                                                                    <SelectItem key={s.id} value={s.id}>
+                                                                        {formatName(s.name, s.profile)}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-planNumber">Número de Plan *</Label>
+                                                        <Input id="imp-planNumber" placeholder="Ej: 2026-001" value={impPlanFormDialog.planNumber} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, planNumber: e.target.value } : prev)} required />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-teacherDocUrl">Enlace Documento del Plan</Label>
+                                                        <Input id="imp-teacherDocUrl" placeholder="https://..." value={impPlanFormDialog.teacherDocUrl} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, teacherDocUrl: e.target.value } : prev)} />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-startDate">Fecha de Inicio *</Label>
+                                                        <Input id="imp-startDate" type="date" value={impPlanFormDialog.startDate} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, startDate: e.target.value } : prev)} required />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-endDate">Fecha de Finalización *</Label>
+                                                        <Input id="imp-endDate" type="date" value={impPlanFormDialog.endDate} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, endDate: e.target.value } : prev)} required />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor="imp-observations">Observaciones / Criterios de Evaluación</Label>
+                                                    <Textarea id="imp-observations" placeholder="Descripción detallada del plan, actividades y criterios..." rows={4} value={impPlanFormDialog.observations} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, observations: e.target.value } : prev)} />
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-planScore">Calificación del Plan (0-5)</Label>
+                                                        <Input id="imp-planScore" type="number" min={0} max={5} step={0.1} placeholder="—" value={impPlanFormDialog.planScore} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, planScore: e.target.value === "" ? "" : parseFloat(e.target.value) } : prev)} />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-finalGrade">Nota Final (0-5)</Label>
+                                                        <Input id="imp-finalGrade" type="number" min={0} max={5} step={0.1} placeholder="—" value={impPlanFormDialog.finalGrade} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, finalGrade: e.target.value === "" ? "" : parseFloat(e.target.value) } : prev)} />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="imp-evidenceUrl">Enlace Evidencias de Evaluación</Label>
+                                                        <Input id="imp-evidenceUrl" placeholder="https://..." value={impPlanFormDialog.evidenceUrl} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, evidenceUrl: e.target.value } : prev)} />
+                                                    </div>
+                                                </div>
+                                                <DialogFooter className="pt-2">
+                                                    <Button type="button" variant="outline" onClick={() => setImpPlanFormDialog(null)}>Cancelar</Button>
+                                                    <Button type="submit">{impPlanFormDialog.id ? "Guardar Cambios" : "Crear Plan"}</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        )}
+                                    </DialogContent>
+                                </Dialog>
+
+                                {/* ── View Plan Detail Modal ── */}
+                                <Dialog open={!!viewGroupPlanDetail} onOpenChange={(o) => { if (!o) setViewGroupPlanDetail(null); }}>
+                                    <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+                                        <DialogHeader>
+                                            <DialogTitle>Detalle — Plan N° {viewGroupPlanDetail?.planNumber}</DialogTitle>
+                                        </DialogHeader>
+                                        {viewGroupPlanDetail && (
+                                            <div className="space-y-4 text-sm">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-medium text-muted-foreground">Aprendiz</p>
+                                                        <p className="font-semibold">{formatName(viewGroupPlanDetail.student?.name, viewGroupPlanDetail.student?.profile)}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-medium text-muted-foreground">Docente</p>
+                                                        <p className="font-semibold">{formatName(viewGroupPlanDetail.teacher?.name, viewGroupPlanDetail.teacher?.profile)}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-medium text-muted-foreground">Fecha Inicio</p>
+                                                        <p>{format(new Date(viewGroupPlanDetail.startDate), "dd/MM/yyyy")}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-medium text-muted-foreground">Fecha Fin</p>
+                                                        <p>{format(new Date(viewGroupPlanDetail.endDate), "dd/MM/yyyy")}</p>
+                                                    </div>
+                                                </div>
+                                                {viewGroupPlanDetail.observations && (
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-medium text-muted-foreground">Observaciones</p>
+                                                        <p className="text-sm whitespace-pre-line bg-muted/30 rounded-lg p-3">{viewGroupPlanDetail.observations}</p>
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {viewGroupPlanDetail.teacherDocUrl && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-medium text-muted-foreground">Paso 1 — Documento del Plan</p>
+                                                            <a href={viewGroupPlanDetail.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs break-all">{viewGroupPlanDetail.teacherDocUrl}</a>
+                                                        </div>
+                                                    )}
+                                                    {viewGroupPlanDetail.signedDocUrl && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-medium text-muted-foreground">Paso 2 — Firma Aprendiz</p>
+                                                            <a href={viewGroupPlanDetail.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline text-xs break-all">{viewGroupPlanDetail.signedDocUrl}</a>
+                                                        </div>
+                                                    )}
+                                                    {viewGroupPlanDetail.teacherSignedDocUrl && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-medium text-muted-foreground">Paso 3 — Firma Docente</p>
+                                                            <a href={viewGroupPlanDetail.teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs break-all">{viewGroupPlanDetail.teacherSignedDocUrl}</a>
+                                                        </div>
+                                                    )}
+                                                    {viewGroupPlanDetail.evidenceUrl && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-medium text-muted-foreground">Paso 4 — Evidencias de Evaluación</p>
+                                                            <a href={viewGroupPlanDetail.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs break-all">{viewGroupPlanDetail.evidenceUrl}</a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {viewGroupPlanDetail.planScore !== null && viewGroupPlanDetail.planScore !== undefined && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-medium text-muted-foreground">Calificación del Plan</p>
+                                                            <p className="text-lg font-bold text-primary">{viewGroupPlanDetail.planScore}</p>
+                                                        </div>
+                                                    )}
+                                                    {viewGroupPlanDetail.finalGrade !== null && viewGroupPlanDetail.finalGrade !== undefined && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-medium text-muted-foreground">Nota Final</p>
+                                                            <p className="text-lg font-bold text-emerald-600">{viewGroupPlanDetail.finalGrade}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {viewGroupPlanDetail.viewedAt ? (
+                                                        <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-300"><Eye className="w-3 h-3 mr-1" />Revisado por el aprendiz</Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-300"><EyeOff className="w-3 h-3 mr-1" />No revisado aún</Badge>
+                                                    )}
+                                                </div>
+                                                <DialogFooter>
+                                                    <Button variant="outline" onClick={() => setViewGroupPlanDetail(null)}>Cerrar</Button>
+                                                    <Button variant="ghost" className="gap-1" onClick={() => { handleImpEmail(viewGroupPlanDetail); }}>
+                                                        <Mail className="w-4 h-4" />Enviar Correo
+                                                    </Button>
+                                                </DialogFooter>
+                                            </div>
+                                        )}
+                                    </DialogContent>
+                                </Dialog>
+
+                                {/* ── Teacher Countersign Modal (Step 3) ── */}
+                                <Dialog open={!!impTeacherSignDialog} onOpenChange={(o) => { if (!o) setImpTeacherSignDialog(null); }}>
+                                    <DialogContent className="max-w-md">
+                                        <DialogHeader>
+                                            <DialogTitle className="flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600" />Subir mi Firma — Paso 3</DialogTitle>
+                                            <DialogDescription>Pega el enlace del documento del plan con tu firma (Google Drive, OneDrive, etc.).</DialogDescription>
+                                        </DialogHeader>
+                                        {impTeacherSignDialog && (
+                                            <form onSubmit={handleImpTeacherSign} className="space-y-4 pt-2">
+                                                <div className="space-y-1">
+                                                    <Label htmlFor="teacher-sign-url">URL del Documento Firmado por el Docente *</Label>
+                                                    <Input id="teacher-sign-url" type="url" required placeholder="https://drive.google.com/..." value={impTeacherSignDialog.url} onChange={(e) => setImpTeacherSignDialog(prev => prev ? { ...prev, url: e.target.value } : prev)} />
+                                                </div>
+                                                <DialogFooter>
+                                                    <Button type="button" variant="outline" onClick={() => setImpTeacherSignDialog(null)}>Cancelar</Button>
+                                                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">Confirmar Firma</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        )}
+                                    </DialogContent>
+                                </Dialog>
+
+                                {/* ── Delete Confirm ── */}
+                                <AlertDialog open={!!impDeleteConfirm} onOpenChange={(o) => { if (!o) setImpDeleteConfirm(null); }}>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>¿Eliminar este plan?</AlertDialogTitle>
+                                            <AlertDialogDescription>Esta acción no se puede deshacer. El plan de mejoramiento y todos sus datos serán eliminados permanentemente.</AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => impDeleteConfirm && handleImpDelete(impDeleteConfirm)}>Eliminar</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </TabsContent>
                         </div>
                     </Tabs>
                 ) : (
@@ -4035,7 +4597,7 @@ const handleOpenAnalytics = async () => {
                             Gestionar Plantillas de Observaciones
                         </DialogTitle>
                         <DialogDescription className="text-sm text-muted-foreground">
-                            Crea y edita plantillas de observaciones que pueden usar todos los profesores. Activa la opción "Incluir nombre de estudiantes" en el formulario para agregar automáticamente los nombres al copiar, enviar o guardar.
+                            Crea y edita plantillas de observaciones. Todos los profesores pueden visualizar y modificar estas plantillas. Están organizadas por tipo de observación.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -4043,16 +4605,53 @@ const handleOpenAnalytics = async () => {
                         {/* List of Templates */}
                         <div className="flex flex-col h-full overflow-hidden min-h-0">
                             <h4 className="font-bold text-sm text-muted-foreground uppercase tracking-wider mb-3 shrink-0">Plantillas Activas</h4>
+                            
+                            {/* Filter Tabs */}
+                            <div className="flex flex-wrap gap-1 mb-4 shrink-0 bg-muted/40 p-1 rounded-xl border border-border/40">
+                                {[
+                                    { value: "ALL", label: "Todas" },
+                                    { value: "ATTENTION", label: "🔴 Llamados" },
+                                    { value: "COMMENDATION", label: "🟢 Felicitaciones" },
+                                    { value: "CITATION", label: "🔵 Citaciones" },
+                                    { value: "OTHER", label: "⚪ Otras" }
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.value}
+                                        type="button"
+                                        onClick={() => setModalFilterType(tab.value as any)}
+                                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center whitespace-nowrap ${
+                                            modalFilterType === tab.value
+                                                ? "bg-background text-foreground shadow-xs border border-border/10"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+
                             <div className="flex-grow overflow-y-auto pr-2 space-y-2.5 max-h-[30vh] md:max-h-none">
                                 {remarkTemplates.length === 0 ? (
                                     <p className="text-xs text-muted-foreground text-center py-8 bg-muted/20 rounded-xl border border-dashed">
                                         No hay plantillas creadas. Usa el formulario para crear la primera.
                                     </p>
+                                ) : filteredModalTemplates.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground text-center py-8 bg-muted/20 rounded-xl border border-dashed">
+                                        No hay plantillas registradas en esta categoría.
+                                    </p>
                                 ) : (
-                                    remarkTemplates.map((template) => (
+                                    filteredModalTemplates.map((template) => (
                                         <div key={template.id} className="p-3.5 bg-muted/30 hover:bg-muted/50 rounded-xl border border-border/40 transition-colors flex flex-col gap-2 relative group/item">
-                                            <div className="flex justify-between items-start">
-                                                <h5 className="font-bold text-xs text-foreground truncate max-w-[200px]">{template.title}</h5>
+                                            <div className="flex justify-between items-start gap-2">
+                                                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                                    <h5 className="font-bold text-xs text-foreground truncate max-w-[200px]">{template.title}</h5>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {template.type === "ATTENTION" && <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-red-50 text-red-700 border-red-200">Llamado de Atención</Badge>}
+                                                        {template.type === "COMMENDATION" && <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-200">Felicitación</Badge>}
+                                                        {template.type === "CITATION" && <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-blue-50 text-blue-700 border-blue-200">Citación</Badge>}
+                                                        {template.type === "OTHER" && <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-gray-50 text-gray-700 border-gray-200">Otra</Badge>}
+                                                    </div>
+                                                </div>
                                                 <div className="flex gap-1 shrink-0">
                                                     <Button 
                                                         variant="ghost" 
@@ -4062,6 +4661,7 @@ const handleOpenAnalytics = async () => {
                                                             setTemplateEditId(template.id);
                                                             setTemplateTitle(template.title);
                                                             setTemplateDesc(template.description);
+                                                            setTemplateType(template.type || "ATTENTION");
                                                         }}
                                                         title="Editar"
                                                     >
@@ -4117,6 +4717,20 @@ const handleOpenAnalytics = async () => {
                                         className="h-11 rounded-lg bg-background"
                                     />
                                 </div>
+                                <div className="space-y-1.5 shrink-0">
+                                    <Label className="text-xs font-bold text-muted-foreground">Categoría (Tipo de Observación)</Label>
+                                    <Select value={templateType} onValueChange={(v) => setTemplateType(v as any)}>
+                                        <SelectTrigger className="h-11 rounded-lg bg-background">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ATTENTION" className="text-red-600 font-bold">🔴 Llamado de Atención</SelectItem>
+                                            <SelectItem value="COMMENDATION" className="text-emerald-600 font-bold">🟢 Felicitación</SelectItem>
+                                            <SelectItem value="CITATION" className="text-blue-600 font-bold">🔵 Citación</SelectItem>
+                                            <SelectItem value="OTHER" className="text-gray-600 font-bold">⚪ Otra Observación</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                                 <div className="space-y-1.5 flex-grow flex flex-col min-h-0">
                                     <Label className="text-xs font-bold text-muted-foreground shrink-0">Descripción detallada</Label>
                                     <Textarea 
@@ -4135,6 +4749,7 @@ const handleOpenAnalytics = async () => {
                                                 setTemplateEditId(null);
                                                 setTemplateTitle("");
                                                 setTemplateDesc("");
+                                                setTemplateType("ATTENTION");
                                             }}
                                             className="text-xs rounded-lg h-9 cursor-pointer"
                                         >
@@ -4151,15 +4766,16 @@ const handleOpenAnalytics = async () => {
                                             setIsSavingTemplate(true);
                                             try {
                                                 if (templateEditId) {
-                                                    await updateRemarkTemplateAction(templateEditId, templateTitle, templateDesc);
+                                                    await updateRemarkTemplateAction(templateEditId, templateTitle, templateDesc, templateType);
                                                     toast.success("Plantilla actualizada correctamente");
                                                 } else {
-                                                    await createRemarkTemplateAction(templateTitle, templateDesc);
+                                                    await createRemarkTemplateAction(templateTitle, templateDesc, templateType);
                                                     toast.success("Plantilla creada correctamente");
                                                 }
                                                 setTemplateEditId(null);
                                                 setTemplateTitle("");
                                                 setTemplateDesc("");
+                                                setTemplateType("ATTENTION");
                                                 fetchTemplates();
                                             } catch (err: any) {
                                                 toast.error("Error al guardar la plantilla: " + err.message);
@@ -4308,7 +4924,7 @@ const handleOpenAnalytics = async () => {
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto min-h-0">
-                                <StudentRecords studentId={selectedStudentForAnalytics.id} hideTables={true} />
+                                <StudentRecords studentId={selectedStudentForAnalytics.id} hideTables={false} hideDocumentation={true} />
                             </div>
                         </div>
                     )}

@@ -80,6 +80,7 @@ interface EnvironmentManagementProps {
  initialEnvironments: TrainingEnvironment[];
  programId: string;
  onActionComplete?: () => void;
+ isObserver?: boolean;
 }
 
 // ─── Suggested Resources ─────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ const emptyForm = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function EnvironmentManagement({ initialEnvironments, programId, onActionComplete }: EnvironmentManagementProps) {
+export function EnvironmentManagement({ initialEnvironments, programId, onActionComplete, isObserver = false }: EnvironmentManagementProps) {
  const [environments, setEnvironments] = useState<TrainingEnvironment[]>(initialEnvironments);
 
  useEffect(() => {
@@ -284,14 +285,16 @@ export function EnvironmentManagement({ initialEnvironments, programId, onAction
  </p>
  </div>
  </div>
- <Button
- id="btn-create-environment"
- onClick={openCreate}
- className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 text-white border-0"
- >
- <Plus className="w-4 h-4" />
- Nuevo Ambiente
- </Button>
+ {!isObserver && (
+	  <Button
+	  id="btn-create-environment"
+	  onClick={openCreate}
+	  className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 text-white border-0"
+	  >
+	  <Plus className="w-4 h-4" />
+	  Nuevo Ambiente
+	  </Button>
+  )}
  </div>
 
  {/* ── Stats Strip ── */}
@@ -469,22 +472,26 @@ export function EnvironmentManagement({ initialEnvironments, programId, onAction
  >
  Detalles
  </Button>
- <Tooltip><TooltipTrigger asChild><Button 
- size="icon" 
- variant="ghost" 
- className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/30" 
- onClick={() => openEdit(env)}
- >
- <Edit className="h-4 w-4" />
- </Button></TooltipTrigger><TooltipContent><p>Editar</p></TooltipContent></Tooltip>
- <Tooltip><TooltipTrigger asChild><Button 
- size="icon" 
- variant="ghost" 
- className="h-8 w-8 text-destructive hover:bg-destructive/10" 
- onClick={() => setDeleteId(env.id)}
- >
- <Trash2 className="h-4 w-4" />
- </Button></TooltipTrigger><TooltipContent><p>Eliminar</p></TooltipContent></Tooltip>
+ {!isObserver && (
+	  <>
+	  <Tooltip><TooltipTrigger asChild><Button 
+	  size="icon" 
+	  variant="ghost" 
+	  className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/30" 
+	  onClick={() => openEdit(env)}
+	  >
+	  <Edit className="h-4 w-4" />
+	  </Button></TooltipTrigger><TooltipContent><p>Editar</p></TooltipContent></Tooltip>
+	  <Tooltip><TooltipTrigger asChild><Button 
+	  size="icon" 
+	  variant="ghost" 
+	  className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+	  onClick={() => setDeleteId(env.id)}
+	  >
+	  <Trash2 className="h-4 w-4" />
+	  </Button></TooltipTrigger><TooltipContent><p>Eliminar</p></TooltipContent></Tooltip>
+	  </>
+  )}
  </div>
  </TableCell>
  </TableRow>

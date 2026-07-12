@@ -213,6 +213,7 @@ interface CalendarGroupGridProps {
     openDlg: (gid: string, day: DayOfWeek, title: string, startStr?: string, durationMin?: number) => void;
     openEditDlg: (gid: string, day: DayOfWeek, slot: any) => void;
     setItemToDelete: (val: { courseId: string; scheduleId: string } | null) => void;
+    isObserver?: boolean;
 }
 
 export function CalendarGroupGrid({
@@ -229,7 +230,8 @@ export function CalendarGroupGrid({
     localUpdate,
     openDlg,
     openEditDlg,
-    setItemToDelete
+    setItemToDelete,
+    isObserver = false
 }: CalendarGroupGridProps) {
     const gS = toMin(g.startTime);
     const gE = toMin(g.endTime);
@@ -387,10 +389,15 @@ export function CalendarGroupGrid({
                                     cursor: groupId && g.id !== groupId ? "not-allowed" : undefined,
                                 }}
                                 onDragEnter={e => {
+                                    if (isObserver) return;
                                     if (groupId && g.id !== groupId) return;
                                     e.currentTarget.style.backgroundColor = th.bg;
                                 }}
                                 onDragOver={e => {
+                                    if (isObserver) {
+                                        e.dataTransfer.dropEffect = "none";
+                                        return;
+                                    }
                                     if (groupId && g.id !== groupId) {
                                         e.dataTransfer.dropEffect = "none";
                                         return;
@@ -481,6 +488,7 @@ export function CalendarGroupGrid({
                                     }
                                 }}
                                 onDrop={e => {
+                                    if (isObserver) { e.preventDefault(); return; }
                                     if (groupId && g.id !== groupId) { e.preventDefault(); return; }
                                     e.preventDefault();
                                     e.currentTarget.style.backgroundColor = "";
@@ -521,7 +529,7 @@ export function CalendarGroupGrid({
                                                 <div
                                                     className={`absolute left-0 right-0 border-b ${lc} hover:bg-primary/[0.04] cursor-pointer transition-colors duration-75`}
                                                     style={{ top: `${pct}%`, height: `${slotH}%` }}
-                                                    onClick={() => openDlg(g.id, day, "", toStr(tick.min))}
+                                                    onClick={() => { if (!isObserver) openDlg(g.id, day, "", toStr(tick.min)); }}
                                                 />
                                             </TooltipTrigger>
                                             <TooltipContent>
@@ -583,8 +591,9 @@ export function CalendarGroupGrid({
                                         <Tooltip key={`${slot.courseId}-${slot.scheduleId}-${idx}`}>
                                             <TooltipTrigger asChild>
                                                 <div
-                                                    draggable={isSelectedGroup}
+                                                    draggable={isSelectedGroup && !isObserver}
                                                     onDragStart={e => {
+                                                        if (isObserver) { e.preventDefault(); return; }
                                                         if (!isSelectedGroup) { e.preventDefault(); return; }
                                                         const rect = e.currentTarget.getBoundingClientRect();
                                                         const bodyH = e.currentTarget.closest(".column-body")?.clientHeight ?? rect.height;
@@ -610,6 +619,7 @@ export function CalendarGroupGrid({
                                                         };
                                                     }}
                                                     onClick={e => {
+                                                        if (isObserver) return;
                                                         e.stopPropagation();
                                                         openEditDlg(g.id, day, slot);
                                                     }}
@@ -724,76 +734,80 @@ export function CalendarGroupGrid({
                                                         <div className="flex items-center gap-1 pt-1 border-t border-current/10 text-[8.5px] font-bold shrink-0 mt-0.5 relative" style={{ color: cardText }}>
                                                             <Clock className="w-3 h-3 shrink-0 opacity-80" />
                                                             <span className="opacity-90 time-label">{toFormat12h(slot.startTime)}–{toFormat12h(slot.endTime)}</span>
-                                                            <div className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-30 group/resize"
-                                                                onMouseDown={(e) => {
-                                                                    e.stopPropagation();
-                                                                    e.preventDefault();
-                                                                    const card = e.currentTarget.closest('.group\\/c') as HTMLElement;
-                                                                    const timeSpan = card?.querySelector('.time-label');
-                                                                    const startY = e.clientY;
-                                                                    const rect = e.currentTarget.closest('.column-body')?.getBoundingClientRect();
-                                                                    if (!rect || !card) return;
-                                                                    const pixelsPerMin = rect.height / dur;
-                                                                    let currentEndMins = eM;
-                                                                    let currentStartMins = sM;
+                                                            {!isObserver && (
+                                                                <div className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-30 group/resize"
+                                                                    onMouseDown={(e) => {
+                                                                        e.stopPropagation();
+                                                                        e.preventDefault();
+                                                                        const card = e.currentTarget.closest('.group\\/c') as HTMLElement;
+                                                                        const timeSpan = card?.querySelector('.time-label');
+                                                                        const startY = e.clientY;
+                                                                        const rect = e.currentTarget.closest('.column-body')?.getBoundingClientRect();
+                                                                        if (!rect || !card) return;
+                                                                        const pixelsPerMin = rect.height / dur;
+                                                                        let currentEndMins = eM;
+                                                                        let currentStartMins = sM;
 
-                                                                    card.style.transition = "none";
+                                                                        card.style.transition = "none";
 
-                                                                    const onMouseMove = (mvEvent: MouseEvent) => {
-                                                                        const deltaY = mvEvent.clientY - startY;
-                                                                        const deltaMins = deltaY / pixelsPerMin;
-                                                                        let newEndMins = Math.round((eM + deltaMins) / 15) * 15;
-                                                                        newEndMins = Math.max(currentStartMins + 15, Math.min(gE, newEndMins));
-                                                                        if (newEndMins !== currentEndMins) {
-                                                                            currentEndMins = newEndMins;
-                                                                            card.style.height = `${((newEndMins - currentStartMins) / dur) * 100}%`;
-                                                                            if (timeSpan) timeSpan.textContent = `${toFormat12h(slot.startTime)}–${toFormat12h(toStr(newEndMins))}`;
-                                                                        }
-                                                                    };
-                                                                    const onMouseUp = () => {
-                                                                        window.removeEventListener("mousemove", onMouseMove);
-                                                                        window.removeEventListener("mouseup", onMouseUp);
-                                                                        document.body.style.cursor = "";
-                                                                        card.style.transition = "";
-
-                                                                        if (currentEndMins !== eM) {
-                                                                            const ok = localUpdate(slot.courseId, slot.scheduleId, slot.title, slot.teacher?.id, day, slot.startTime, toStr(currentEndMins));
-                                                                            if (!ok) {
-                                                                                card.style.height = `${((eM - currentStartMins) / dur) * 100}%`;
-                                                                                if (timeSpan) timeSpan.textContent = `${toFormat12h(slot.startTime)}–${toFormat12h(slot.endTime)}`;
+                                                                        const onMouseMove = (mvEvent: MouseEvent) => {
+                                                                            const deltaY = mvEvent.clientY - startY;
+                                                                            const deltaMins = deltaY / pixelsPerMin;
+                                                                            let newEndMins = Math.round((eM + deltaMins) / 15) * 15;
+                                                                            newEndMins = Math.max(currentStartMins + 15, Math.min(gE, newEndMins));
+                                                                            if (newEndMins !== currentEndMins) {
+                                                                                currentEndMins = newEndMins;
+                                                                                card.style.height = `${((newEndMins - currentStartMins) / dur) * 100}%`;
+                                                                                if (timeSpan) timeSpan.textContent = `${toFormat12h(slot.startTime)}–${toFormat12h(toStr(newEndMins))}`;
                                                                             }
-                                                                        }
-                                                                    };
-                                                                    window.addEventListener("mousemove", onMouseMove);
-                                                                    window.addEventListener("mouseup", onMouseUp);
-                                                                    document.body.style.cursor = "ns-resize";
-                                                                }}
-                                                            >
-                                                                <div className="w-8 h-1 bg-foreground/20 rounded-full mx-auto mt-1 group-hover/resize:bg-primary transition-colors" />
-                                                            </div>
+                                                                        };
+                                                                        const onMouseUp = () => {
+                                                                            window.removeEventListener("mousemove", onMouseMove);
+                                                                            window.removeEventListener("mouseup", onMouseUp);
+                                                                            document.body.style.cursor = "";
+                                                                            card.style.transition = "";
+
+                                                                            if (currentEndMins !== eM) {
+                                                                                const ok = localUpdate(slot.courseId, slot.scheduleId, slot.title, slot.teacher?.id, day, slot.startTime, toStr(currentEndMins));
+                                                                                if (!ok) {
+                                                                                    card.style.height = `${((eM - currentStartMins) / dur) * 100}%`;
+                                                                                    if (timeSpan) timeSpan.textContent = `${toFormat12h(slot.startTime)}–${toFormat12h(slot.endTime)}`;
+                                                                                }
+                                                                            }
+                                                                        };
+                                                                        window.addEventListener("mousemove", onMouseMove);
+                                                                        window.addEventListener("mouseup", onMouseUp);
+                                                                        document.body.style.cursor = "ns-resize";
+                                                                    }}
+                                                                >
+                                                                    <div className="w-8 h-1 bg-foreground/20 rounded-full mx-auto mt-1 group-hover/resize:bg-primary transition-colors" />
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         {/* Delete action — revealed on hover as a floating pill */}
-                                                        <div
-                                                            className="absolute bottom-0 left-0 right-0 opacity-0 group-hover/c:opacity-100 transition-opacity duration-150 pt-6 pb-1.5 flex justify-center pointer-events-none"
-                                                            style={{ background: `linear-gradient(to top, ${getGradientColor(cardBg)}, transparent)` }}
-                                                        >
-                                                            <button
-                                                                onClick={e => {
-                                                                    e.stopPropagation();
-                                                                    setItemToDelete({ courseId: slot.courseId, scheduleId: slot.scheduleId });
-                                                                }}
-                                                                className="flex items-center justify-center gap-1 py-1 px-2.5 rounded-full text-[8.5px] font-bold border transition-all duration-150 shadow-sm pointer-events-auto backdrop-blur-sm hover:scale-105 active:scale-95"
-                                                                style={{
-                                                                    backgroundColor: `${cardBorder}22`,
-                                                                    color: cardText,
-                                                                    borderColor: `${cardBorder}66`,
-                                                                }}
+                                                        {!isObserver && (
+                                                            <div
+                                                                className="absolute bottom-0 left-0 right-0 opacity-0 group-hover/c:opacity-100 transition-opacity duration-150 pt-6 pb-1.5 flex justify-center pointer-events-none"
+                                                                style={{ background: `linear-gradient(to top, ${getGradientColor(cardBg)}, transparent)` }}
                                                             >
-                                                                <Trash2 className="w-2.5 h-2.5" />
-                                                                Eliminar
-                                                            </button>
-                                                        </div>
+                                                                <button
+                                                                    onClick={e => {
+                                                                        e.stopPropagation();
+                                                                        setItemToDelete({ courseId: slot.courseId, scheduleId: slot.scheduleId });
+                                                                    }}
+                                                                    className="flex items-center justify-center gap-1 py-1 px-2.5 rounded-full text-[8.5px] font-bold border transition-all duration-150 shadow-sm pointer-events-auto backdrop-blur-sm hover:scale-105 active:scale-95"
+                                                                    style={{
+                                                                        backgroundColor: `${cardBorder}22`,
+                                                                        color: cardText,
+                                                                        borderColor: `${cardBorder}66`,
+                                                                    }}
+                                                                >
+                                                                    <Trash2 className="w-2.5 h-2.5" />
+                                                                    Eliminar
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </TooltipTrigger>

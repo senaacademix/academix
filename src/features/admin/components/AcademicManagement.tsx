@@ -310,6 +310,7 @@ interface AcademicManagementProps {
     initialCourses: Course[];
     teachers: Teacher[];
     totalCount: number;
+    isObserver?: boolean;
 }
 
 interface SortableCourseItemProps {
@@ -527,7 +528,7 @@ function SortablePeriodCard({
     );
 }
 
-export function AcademicManagement({ initialCourses, teachers, totalCount }: AcademicManagementProps) {
+export function AcademicManagement({ initialCourses, teachers, totalCount, isObserver = false }: AcademicManagementProps) {
     const [programs, setPrograms] = useState<Program[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [teachersList, setTeachersList] = useState<Teacher[]>(teachers);
@@ -1914,12 +1915,14 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                         Gestiona Programas de Formación, Periodos, Grupos y Materias.
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button onClick={openCreateProgram} className="shadow-md hover:shadow-lg transition-all">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Nuevo Programa
-                    </Button>
-                </div>
+                {!isObserver && (
+                    <div className="flex gap-2">
+                        <Button onClick={openCreateProgram} className="shadow-md hover:shadow-lg transition-all">
+                            <Plus className="mr-2 h-4 w-4" />
+                            Nuevo Programa
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {selectedProgram === null ? (
@@ -1936,9 +1939,11 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                             <p className="text-muted-foreground text-sm max-w-sm mx-auto mt-1">
                                 Crea tu primer programa de formación profesional para empezar a organizar periodos académicos y grupos.
                             </p>
-                            <Button onClick={openCreateProgram} className="mt-4">
-                                <Plus className="mr-2 h-4 w-4" /> Crear Programa
-                            </Button>
+                            {!isObserver && (
+                                <Button onClick={openCreateProgram} className="mt-4">
+                                    <Plus className="mr-2 h-4 w-4" /> Crear Programa
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1952,14 +1957,16 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                 <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
                                                     <GraduationCap className="h-6 w-6" />
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEditProgram(program)}>
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => triggerDelete("program", program.id, program.name)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+                                                {!isObserver && (
+                                                    <div className="flex items-center gap-1">
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEditProgram(program)}>
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => triggerDelete("program", program.id, program.name)}>
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </div>
                                             <CardTitle className="text-xl font-bold mt-3 leading-tight">{program.name}</CardTitle>
                                             <CardDescription className="line-clamp-2 text-sm mt-1 h-10">
@@ -2013,16 +2020,18 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 {selectedProgram.description || "Sin descripción."}
                             </p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 pl-10 sm:pl-0">
-                            <Button size="sm" variant="outline" onClick={() => openEditProgram(selectedProgram)}>
-                                <Edit className="h-4 w-4 mr-1.5" />
-                                Editar
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => triggerDelete("program", selectedProgram.id, selectedProgram.name)}>
-                                <Trash2 className="h-4 w-4 mr-1.5" />
-                                Eliminar
-                            </Button>
-                        </div>
+                        {!isObserver && (
+                            <div className="flex items-center gap-2 shrink-0 pl-10 sm:pl-0">
+                                <Button size="sm" variant="outline" onClick={() => openEditProgram(selectedProgram)}>
+                                    <Edit className="h-4 w-4 mr-1.5" />
+                                    Editar
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => triggerDelete("program", selectedProgram.id, selectedProgram.name)}>
+                                    <Trash2 className="h-4 w-4 mr-1.5" />
+                                    Eliminar
+                                </Button>
+                            </div>
+                        )}
                     </div>
 
                     <Tabs value={subTab} onValueChange={setSubTab} className="space-y-6">
@@ -2088,10 +2097,12 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                         <TabsContent value="periods" className="space-y-6 mt-0">
                             <div className="flex justify-between items-center pb-2">
                                 <h4 className="text-base font-semibold text-muted-foreground">Periodos y Materias de {selectedProgram.name}</h4>
-                                <Button onClick={openCreatePeriod} size="sm" className="shadow-sm">
-                                    <Plus className="h-4 w-4 mr-1.5" />
-                                    Agregar Periodo
-                                </Button>
+                                {!isObserver && (
+                                    <Button onClick={openCreatePeriod} size="sm" className="shadow-sm">
+                                        <Plus className="h-4 w-4 mr-1.5" />
+                                        Agregar Periodo
+                                    </Button>
+                                )}
                             </div>
 
                             {selectedProgram.periods.length === 0 ? (
@@ -2101,9 +2112,11 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
                                         Crea el primer periodo académico para este programa para empezar a crear materias.
                                     </p>
-                                    <Button onClick={openCreatePeriod} className="mt-4" size="sm">
-                                        <Plus className="mr-1.5 h-4 w-4" /> Crear Periodo
-                                    </Button>
+                                    {!isObserver && (
+                                        <Button onClick={openCreatePeriod} className="mt-4" size="sm">
+                                            <Plus className="mr-1.5 h-4 w-4" /> Crear Periodo
+                                        </Button>
+                                    )}
                                 </div>
                             ) : (
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePeriodDragEnd}>
@@ -2264,10 +2277,12 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center pb-2">
                                         <h4 className="text-base font-semibold text-muted-foreground">Grupos de Alumnos de {selectedProgram.name}</h4>
-                                        <Button onClick={openCreateGroup} size="sm" className="shadow-sm">
-                                            <Plus className="h-4 w-4 mr-1.5" />
-                                            Agregar Grupo
-                                        </Button>
+                                        {!isObserver && (
+                                            <Button onClick={openCreateGroup} size="sm" className="shadow-sm">
+                                                <Plus className="h-4 w-4 mr-1.5" />
+                                                Agregar Grupo
+                                            </Button>
+                                        )}
                                     </div>
 
                                     {selectedProgram.groups.length === 0 ? (
@@ -2277,9 +2292,11 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                             <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
                                                 Crea el primer grupo en este programa para empezar a asociar estudiantes.
                                             </p>
-                                            <Button onClick={openCreateGroup} className="mt-4" size="sm">
-                                                <Plus className="mr-1.5 h-4 w-4" /> Crear Grupo
-                                            </Button>
+                                            {!isObserver && (
+                                                <Button onClick={openCreateGroup} className="mt-4" size="sm">
+                                                    <Plus className="mr-1.5 h-4 w-4" /> Crear Grupo
+                                                </Button>
+                                            )}
                                         </div>
                                     ) : (
                                         <Card className="border-none shadow-sm bg-background overflow-hidden">
@@ -2337,22 +2354,26 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                                                                                                                     <Users className="h-3.5 w-3.5" />
                                                                                                                                                     <span>Gestionar</span>
                                                                                                                                                 </Button></TooltipTrigger><TooltipContent><p>Gestionar Estudiantes</p></TooltipContent></Tooltip>
-                                                                        <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                                    size="icon" 
-                                                                                                                                                    variant="ghost" 
-                                                                                                                                                    className="h-8 w-8 text-muted-foreground hover:bg-muted/10" 
-                                                                                                                                                    onClick={() => openEditGroup(group)}
-                                                                                                                                                >
-                                                                                                                                                    <Edit className="h-3.5 w-3.5" />
-                                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Editar Grupo</p></TooltipContent></Tooltip>
-                                                                        <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                                    size="icon" 
-                                                                                                                                                    variant="ghost" 
-                                                                                                                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10" 
-                                                                                                                                                    onClick={() => triggerDelete("group", group.id, group.name)}
-                                                                                                                                                >
-                                                                                                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Eliminar Grupo</p></TooltipContent></Tooltip>
+                                                                        {!isObserver && (
+                                                                            <>
+                                                                                <Tooltip><TooltipTrigger asChild><Button 
+                                                                                                                                                            size="icon" 
+                                                                                                                                                            variant="ghost" 
+                                                                                                                                                            className="h-8 w-8 text-muted-foreground hover:bg-muted/10" 
+                                                                                                                                                            onClick={() => openEditGroup(group)}
+                                                                                                                                                        >
+                                                                                                                                                            <Edit className="h-3.5 w-3.5" />
+                                                                                                                                                        </Button></TooltipTrigger><TooltipContent><p>Editar Grupo</p></TooltipContent></Tooltip>
+                                                                                <Tooltip><TooltipTrigger asChild><Button 
+                                                                                                                                                            size="icon" 
+                                                                                                                                                            variant="ghost" 
+                                                                                                                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                                                                                                                                                            onClick={() => triggerDelete("group", group.id, group.name)}
+                                                                                                                                                        >
+                                                                                                                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                                                                                                                        </Button></TooltipTrigger><TooltipContent><p>Eliminar Grupo</p></TooltipContent></Tooltip>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </TableCell>
                                                             </TableRow>
@@ -2370,10 +2391,12 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                         <TabsContent value="teachers" className="space-y-6 mt-0">
                             <div className="flex justify-between items-center pb-2">
                                 <h4 className="text-base font-semibold text-muted-foreground">Profesores de {selectedProgram.name}</h4>
-                                <Button onClick={() => setAssignTeachersDialogOpen(true)} size="sm" className="shadow-sm">
-                                    <Plus className="h-4 w-4 mr-1.5" />
-                                    Registrar Profesor
-                                </Button>
+                                {!isObserver && (
+                                    <Button onClick={() => setAssignTeachersDialogOpen(true)} size="sm" className="shadow-sm">
+                                        <Plus className="h-4 w-4 mr-1.5" />
+                                        Registrar Profesor
+                                    </Button>
+                                )}
                             </div>
 
                             {(!selectedProgram.teachers || selectedProgram.teachers.length === 0) ? (
@@ -2383,13 +2406,15 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                     <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
                                         Registra profesores en este programa de formación para que puedan ser asignados a impartir materias.
                                     </p>
-                                    <Button onClick={() => setAssignTeachersDialogOpen(true)} className="mt-4" size="sm">
-                                        <Plus className="mr-1.5 h-4 w-4" /> Registrar Profesor
-                                    </Button>
+                                    {!isObserver && (
+                                        <Button onClick={() => setAssignTeachersDialogOpen(true)} className="mt-4" size="sm">
+                                            <Plus className="mr-1.5 h-4 w-4" /> Registrar Profesor
+                                        </Button>
+                                    )}
                                 </div>
                             ) : (
                                 <>
-                                    {selectedTeacherIds.length > 0 && (
+                                    {!isObserver && selectedTeacherIds.length > 0 && (
                                         <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-primary/5 border border-primary/10 rounded-xl mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
                                             <div className="flex items-center gap-2">
                                                 <Checkbox 
@@ -2469,18 +2494,20 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                             <Table>
                                                 <TableHeader className="bg-muted/10">
                                                     <TableRow>
-                                                        <TableHead className="w-[45px] py-3 text-center">
-                                                            <Checkbox 
-                                                                checked={selectedTeacherIds.length === selectedProgram.teachers.length && selectedProgram.teachers.length > 0}
-                                                                onCheckedChange={(checked) => {
-                                                                    if (checked) {
-                                                                        setSelectedTeacherIds(selectedProgram.teachers.map(t => t.id));
-                                                                    } else {
-                                                                        setSelectedTeacherIds([]);
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </TableHead>
+                                                        {!isObserver && (
+                                                            <TableHead className="w-[45px] py-3 text-center">
+                                                                <Checkbox 
+                                                                    checked={selectedTeacherIds.length === selectedProgram.teachers.length && selectedProgram.teachers.length > 0}
+                                                                    onCheckedChange={(checked) => {
+                                                                        if (checked) {
+                                                                            setSelectedTeacherIds(selectedProgram.teachers.map(t => t.id));
+                                                                        } else {
+                                                                            setSelectedTeacherIds([]);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </TableHead>
+                                                        )}
                                                         <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
                                                         <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
                                                         <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
@@ -2495,92 +2522,98 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                                         const isTeacherSelected = selectedTeacherIds.includes(teacher.id);
                                                         return (
                                                             <TableRow key={teacher.id} className={cn("hover:bg-muted/5 group", isTeacherSelected && "bg-primary/5 hover:bg-primary/5")}>
-                                                                <TableCell className="py-3 text-center">
-                                                                    <Checkbox 
-                                                                        checked={isTeacherSelected}
-                                                                        onCheckedChange={(checked) => {
-                                                                            if (checked) {
-                                                                                setSelectedTeacherIds(prev => [...prev, teacher.id]);
-                                                                            } else {
-                                                                                setSelectedTeacherIds(prev => prev.filter(id => id !== teacher.id));
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                </TableCell>
+                                                                {!isObserver && (
+                                                                    <TableCell className="py-3 text-center">
+                                                                        <Checkbox 
+                                                                            checked={isTeacherSelected}
+                                                                            onCheckedChange={(checked) => {
+                                                                                if (checked) {
+                                                                                    setSelectedTeacherIds(prev => [...prev, teacher.id]);
+                                                                                } else {
+                                                                                    setSelectedTeacherIds(prev => prev.filter(id => id !== teacher.id));
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </TableCell>
+                                                                )}
                                                                 <TableCell className="py-3 text-xs font-medium text-foreground">
                                                                     {teacher.profile?.identificacion || "—"}
                                                                 </TableCell>
-                                                        <TableCell className="py-3 text-xs font-bold text-foreground">
-                                                            {teacher.name || "Sin nombre"}
-                                                        </TableCell>
-                                                        <TableCell className="py-3 text-xs text-muted-foreground font-sans">
-                                                            {teacher.email}
-                                                        </TableCell>
-                                                        <TableCell className="py-3 text-xs text-muted-foreground font-sans">
-                                                            {teacher.profile?.telefono || "—"}
-                                                        </TableCell>
-                                                        <TableCell className="py-3 text-center">
-                                                            <Badge
-                                                                variant="outline"
-                                                                className={`font-bold text-[10.5px] px-2 py-0.5 rounded ${
-                                                                    teacher.qualifiedCoursesLocked
-                                                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
-                                                                        : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
-                                                                }`}
-                                                            >
-                                                                {teacher.qualifiedCoursesLocked ? "Publicado" : "Borrador"}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="py-3 text-center">
-                                                            <Badge
-                                                                variant="outline"
-                                                                className={`font-bold text-[10.5px] px-2 py-0.5 rounded ${
-                                                                    teacher.availabilityLocked
-                                                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
-                                                                        : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
-                                                                }`}
-                                                            >
-                                                                {teacher.availabilityLocked ? "Publicado" : "Borrador"}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="py-3 text-right">
-                                                            <div className="flex justify-end items-center gap-1.5 ml-auto opacity-80 group-hover:opacity-100 transition-opacity">
-                                                                <Tooltip><TooltipTrigger asChild><Button
-                                                                    size="icon"
-                                                                    variant="ghost"
-                                                                    className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
-                                                                    onClick={() => handleOpenEditTeacher(teacher)}
-                                                                >
-                                                                    <Edit className="h-3.5 w-3.5" />
-                                                                </Button></TooltipTrigger><TooltipContent><p>Editar Información</p></TooltipContent></Tooltip>
-                                                                <Tooltip><TooltipTrigger asChild><Button
-                                                                    size="icon"
-                                                                    variant="ghost"
-                                                                    className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
-                                                                    onClick={() => handleOpenQual(teacher)}
-                                                                >
-                                                                    <BookOpen className="h-3.5 w-3.5" />
-                                                                </Button></TooltipTrigger><TooltipContent><p>Materias Habilitadas</p></TooltipContent></Tooltip>
-                                                                <Tooltip><TooltipTrigger asChild><Button
-                                                                    size="icon"
-                                                                    variant="ghost"
-                                                                    className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
-                                                                    onClick={() => handleOpenTeacherAvailability(teacher)}
-                                                                >
-                                                                    <Clock className="h-3.5 w-3.5" />
-                                                                </Button></TooltipTrigger><TooltipContent><p>Ver Disponibilidad</p></TooltipContent></Tooltip>
+                                                                <TableCell className="py-3 text-xs font-bold text-foreground">
+                                                                    {teacher.name || "Sin nombre"}
+                                                                </TableCell>
+                                                                <TableCell className="py-3 text-xs text-muted-foreground font-sans">
+                                                                    {teacher.email}
+                                                                </TableCell>
+                                                                <TableCell className="py-3 text-xs text-muted-foreground font-sans">
+                                                                    {teacher.profile?.telefono || "—"}
+                                                                </TableCell>
+                                                                <TableCell className="py-3 text-center">
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={`font-bold text-[10.5px] px-2 py-0.5 rounded ${
+                                                                            teacher.qualifiedCoursesLocked
+                                                                                ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                                                                : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
+                                                                        }`}
+                                                                    >
+                                                                        {teacher.qualifiedCoursesLocked ? "Publicado" : "Borrador"}
+                                                                    </Badge>
+                                                                </TableCell>
+                                                                <TableCell className="py-3 text-center">
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={`font-bold text-[10.5px] px-2 py-0.5 rounded ${
+                                                                            teacher.availabilityLocked
+                                                                                ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                                                                : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
+                                                                        }`}
+                                                                    >
+                                                                        {teacher.availabilityLocked ? "Publicado" : "Borrador"}
+                                                                    </Badge>
+                                                                </TableCell>
+                                                                <TableCell className="py-3 text-right">
+                                                                    <div className="flex justify-end items-center gap-1.5 ml-auto opacity-80 group-hover:opacity-100 transition-opacity">
+                                                                        {!isObserver && (
+                                                                            <Tooltip><TooltipTrigger asChild><Button
+                                                                                size="icon"
+                                                                                variant="ghost"
+                                                                                className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
+                                                                                onClick={() => handleOpenEditTeacher(teacher)}
+                                                                            >
+                                                                                <Edit className="h-3.5 w-3.5" />
+                                                                            </Button></TooltipTrigger><TooltipContent><p>Editar Información</p></TooltipContent></Tooltip>
+                                                                        )}
+                                                                        <Tooltip><TooltipTrigger asChild><Button
+                                                                            size="icon"
+                                                                            variant="ghost"
+                                                                            className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
+                                                                            onClick={() => handleOpenQual(teacher)}
+                                                                        >
+                                                                            <BookOpen className="h-3.5 w-3.5" />
+                                                                        </Button></TooltipTrigger><TooltipContent><p>Materias Habilitadas</p></TooltipContent></Tooltip>
+                                                                        <Tooltip><TooltipTrigger asChild><Button
+                                                                            size="icon"
+                                                                            variant="ghost"
+                                                                            className="h-7 w-7 text-muted-foreground hover:bg-muted/10"
+                                                                            onClick={() => handleOpenTeacherAvailability(teacher)}
+                                                                        >
+                                                                            <Clock className="h-3.5 w-3.5" />
+                                                                        </Button></TooltipTrigger><TooltipContent><p>Ver Disponibilidad</p></TooltipContent></Tooltip>
 
-                                                                <Tooltip><TooltipTrigger asChild><Button 
-                                                                    size="icon" 
-                                                                    variant="ghost" 
-                                                                    className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                                                    onClick={() => triggerDelete("teacher", teacher.id, teacher.name || "Profesor")}
-                                                                >
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                </Button></TooltipTrigger><TooltipContent><p>Eliminar profesor del sistema</p></TooltipContent></Tooltip>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
+                                                                        {!isObserver && (
+                                                                            <Tooltip><TooltipTrigger asChild><Button 
+                                                                                size="icon" 
+                                                                                variant="ghost" 
+                                                                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                                                                onClick={() => triggerDelete("teacher", teacher.id, teacher.name || "Profesor")}
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                            </Button></TooltipTrigger><TooltipContent><p>Desvincular Profesor</p></TooltipContent></Tooltip>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
                                                         );
                                                     })}
                                                 </TableBody>
@@ -2597,6 +2630,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount }: Aca
                                 initialEnvironments={selectedProgram.environments || []}
                                 programId={selectedProgram.id}
                                 onActionComplete={refreshAll}
+                                isObserver={isObserver}
                             />
                         </TabsContent>
                     </Tabs>

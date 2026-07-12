@@ -1,8 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Shield, GraduationCap, BookOpen } from "lucide-react"
-
+import Image from "next/image"
 import { SidebarMenu, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar"
 import { authClient } from "@/lib/auth-client"
 import { getRoleFromUser } from "@/features/auth/services/authService"
@@ -18,19 +17,6 @@ export function AppIdentity() {
   }, [])
 
   const role = getRoleFromUser(session?.user)
-
-  const getRoleIcon = () => {
-    switch (role) {
-      case "admin":
-        return Shield
-      case "teacher":
-        return GraduationCap
-      case "student":
-        return BookOpen
-      default:
-        return BookOpen // Or a neutral icon like 'Layout' or 'Command'
-    }
-  }
 
   const getRoleLabel = () => {
     switch (role) {
@@ -48,39 +34,41 @@ export function AppIdentity() {
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
 
-  const RoleIcon = getRoleIcon()
-
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <div
           className={cn(
-            "flex items-center justify-center transition-all duration-200 ease-in-out",
-            isCollapsed ? "h-12 py-2" : "h-16 flex-col border-b bg-sidebar px-6"
+            "flex items-center transition-all duration-200 ease-in-out w-full",
+            isCollapsed ? "justify-center h-12 py-2" : "justify-start h-16 border-b bg-sidebar px-4"
           )}
         >
-          <div className={cn("flex items-center gap-2", isCollapsed && "justify-center")}>
-            {isMounted && !isPending ? (
-              <RoleIcon className={cn("text-primary transition-all", isCollapsed ? "h-6 w-6" : "h-6 w-6")} />
-            ) : (
-              <BookOpen className={cn("text-primary transition-all", isCollapsed ? "h-6 w-6" : "h-6 w-6")} />
-            )}
+          <div className="flex items-center gap-2.5">
+            <div className={cn("relative flex items-center justify-center shrink-0 transition-all", isCollapsed ? "h-8 w-8" : "h-9 w-9")}>
+              <Image 
+                src="/logo.png" 
+                alt="Logo" 
+                width={isCollapsed ? 32 : 36} 
+                height={isCollapsed ? 32 : 36} 
+                className="object-contain" 
+                priority
+              />
+            </div>
 
             {!isCollapsed && (
               isMounted && !isPending ? (
-                <span className="text-lg font-bold whitespace-nowrap">{getRoleLabel()}</span>
+                <div className="flex flex-col items-start min-w-0">
+                  <span className="text-sm font-bold text-sidebar-foreground leading-tight whitespace-nowrap">{getRoleLabel()}</span>
+                  <span className="text-[10px] text-muted-foreground leading-none mt-0.5">AcademiX</span>
+                </div>
               ) : (
-                <span className="h-6 w-24 animate-pulse rounded bg-sidebar-accent" />
+                <div className="flex flex-col gap-1">
+                  <span className="h-4 w-20 animate-pulse rounded bg-sidebar-accent" />
+                  <span className="h-3 w-12 animate-pulse rounded bg-sidebar-accent" />
+                </div>
               )
             )}
           </div>
-          {!isCollapsed && (
-            isMounted && !isPending ? (
-              <div className="mt-0.5 text-xs text-muted-foreground whitespace-nowrap">AcademiX</div>
-            ) : (
-              <span className="mt-1 h-3 w-20 animate-pulse rounded bg-sidebar-accent" />
-            )
-          )}
         </div>
       </SidebarMenuItem>
     </SidebarMenu>

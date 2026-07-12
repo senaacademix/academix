@@ -187,8 +187,7 @@ export async function saveRemarkBatch(
     studentIds: string[], 
     type: RemarkType, 
     title: string, 
-    description: string,
-    includeStudentName?: boolean
+    description: string
 ) {
     try {
         const teacher = await requireTeacher();
@@ -197,28 +196,14 @@ export async function saveRemarkBatch(
 
         if (studentIds.length === 0) throw new Error("No students selected");
 
-        const { formatName } = await import("@/lib/utils");
-        const students = await prisma.user.findMany({
-            where: { id: { in: studentIds } },
-            include: { profile: true }
-        });
-        const studentMap = new Map(students.map(s => [s.id, s]));
-
         const finalData = studentIds.map(studentId => {
-            const s = studentMap.get(studentId);
-            const name = s ? formatName(s.name, s.profile) : "Estudiante";
-            let desc = description;
-            desc = desc.replaceAll("{{nombre}}", name).replaceAll("{{estudiante}}", name);
-            if (includeStudentName) {
-                desc = `Estudiante: ${name}\n\n${desc}`;
-            }
             return {
                 userId: studentId,
                 teacherId,
                 courseId,
                 type,
                 title,
-                description: desc,
+                description,
                 date: new Date()
             };
         });

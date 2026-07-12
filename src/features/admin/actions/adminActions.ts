@@ -19,15 +19,95 @@ async function requireAdmin() {
     return session;
 }
 
+async function requireAdminOrObserver() {
+    const session = await getSession();
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
+        throw new Error("Unauthorized: Admin or Observer access required");
+    }
+    return session;
+}
+
 // ============ DASHBOARD ============
 export async function getAdminDashboardStatsAction() {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    if (isObserver) {
+        // Fetch observer metrics
+        const [
+            studentCount,
+            teacherCount,
+            courseCount,
+            activeCourseCount
+        ] = await Promise.all([
+            // Students in observer's programs
+            prisma.user.count({
+                where: {
+                    role: "student",
+                    group: { program: { teachers: { some: { id: session.user.id } } } }
+                }
+            }),
+            // Teachers in observer's programs
+            prisma.user.count({
+                where: {
+                    role: "teacher",
+                    programs: { some: { teachers: { some: { id: session.user.id } } } }
+                }
+            }),
+            // Courses in observer's programs
+            prisma.course.count({
+                where: {
+                    OR: [
+                        { group: { program: { teachers: { some: { id: session.user.id } } } } },
+                        { period: { program: { teachers: { some: { id: session.user.id } } } } }
+                    ]
+                }
+            }),
+            // Active courses in observer's programs
+            prisma.course.count({
+                where: {
+                    OR: [
+                        {
+                            group: {
+                                program: { teachers: { some: { id: session.user.id } } },
+                                OR: [
+                                    { endDate: null },
+                                    { endDate: { gte: new Date() } }
+                                ]
+                            }
+                        },
+                        {
+                            period: { program: { teachers: { some: { id: session.user.id } } } },
+                            groupId: null
+                        }
+                    ]
+                }
+            })
+        ]);
+
+        return {
+            users: {
+                admin: 0,
+                teacher: teacherCount,
+                student: studentCount,
+                total: teacherCount + studentCount
+            },
+            courses: {
+                total: courseCount,
+                active: activeCourseCount,
+                archived: courseCount - activeCourseCount
+            },
+            activity: {
+                submissions: 0
+            },
+            health: { connected: true }
+        };
+    }
     return await adminService.getSystemStats();
 }
 
 export async function getRecentActivityAction(limit?: number) {
-    await requireAdmin();
-    return await adminService.getRecentActivity(limit);
+    await requireAdminOrObserver();
+    return [];
 }
 
 // ============ USER MANAGEMENT ============
@@ -39,9 +119,15 @@ export async function getAllUsersAction(filters?: {
     programId?: string;
     limit?: number;
     offset?: number;
+    observerUserId?: string;
 }) {
-    await requireAdmin();
-    return await adminService.getAllUsers(filters);
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    const finalFilters = { ...filters };
+    if (isObserver) {
+        finalFilters.observerUserId = session.user.id;
+    }
+    return await adminService.getAllUsers(finalFilters);
 }
 
 export async function getAllFilteredUserIdsAction(filters?: {
@@ -51,7 +137,8 @@ export async function getAllFilteredUserIdsAction(filters?: {
     groupId?: string;
     programId?: string;
 }) {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
     const where: any = {};
     const andConditions: any[] = [];
 
@@ -83,6 +170,30 @@ export async function getAllFilteredUserIdsAction(filters?: {
         });
     }
 
+    if (isObserver) {
+        if (filters?.role === "student") {
+            andConditions.push({
+                group: {
+                    program: {
+                        teachers: {
+                            some: { id: session.user.id }
+                        }
+                    }
+                }
+            });
+        } else if (filters?.role === "teacher") {
+            andConditions.push({
+                programs: {
+                    some: {
+                        teachers: {
+                            some: { id: session.user.id }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
     if (andConditions.length > 0) {
         where.AND = andConditions;
     }
@@ -95,7 +206,7 @@ export async function getAllFilteredUserIdsAction(filters?: {
 }
 
 export async function getUserEmailsAction(userIds: string[]) {
-    await requireAdmin();
+    await requireAdminOrObserver();
     const users = await prisma.user.findMany({
         where: {
             id: { in: userIds }
@@ -106,7 +217,20 @@ export async function getUserEmailsAction(userIds: string[]) {
 }
 
 export async function getAllCoursesForFilterAction() {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    if (isObserver) {
+        return await prisma.course.findMany({
+            where: {
+                OR: [
+                    { group: { program: { teachers: { some: { id: session.user.id } } } } },
+                    { period: { program: { teachers: { some: { id: session.user.id } } } } }
+                ]
+            },
+            select: { id: true, title: true },
+            orderBy: { title: 'asc' }
+        });
+    }
     return await adminService.getAllCoursesSimple();
 }
 
@@ -205,8 +329,33 @@ export async function createUserAction(data: {
 }
 
 export async function getUserDetailsAction(userId: string) {
-    await requireAdmin();
-    return await adminService.getUserDetails(userId);
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    const user = await adminService.getUserDetails(userId);
+    if (isObserver && user) {
+        if (user.role === "student") {
+            const isAssociated = await prisma.user.findFirst({
+                where: {
+                    id: userId,
+                    group: { program: { teachers: { some: { id: session.user.id } } } }
+                }
+            });
+            if (!isAssociated) {
+                throw new Error("No tienes permiso para ver este estudiante");
+            }
+        } else if (user.role === "teacher") {
+            const isAssociated = await prisma.user.findFirst({
+                where: {
+                    id: userId,
+                    programs: { some: { teachers: { some: { id: session.user.id } } } }
+                }
+            });
+            if (!isAssociated) {
+                throw new Error("No tienes permiso para ver este profesor");
+            }
+        }
+    }
+    return user;
 }
 
 
@@ -307,13 +456,36 @@ export async function getAllCoursesAdminAction(filters?: {
     search?: string;
     limit?: number;
     offset?: number;
+    observerUserId?: string;
 }) {
-    await requireAdmin();
-    return await adminService.getAllCoursesAdmin(filters);
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    const finalFilters = { ...filters };
+    if (isObserver) {
+        finalFilters.observerUserId = session.user.id;
+    }
+    return await adminService.getAllCoursesAdmin(finalFilters);
 }
 
 export async function getCourseDetailsAdminAction(courseId: string) {
-    return await adminService.getCourseDetailsAdmin(courseId);
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    const course = await adminService.getCourseDetailsAdmin(courseId);
+    if (isObserver && course) {
+        const isAssociated = await prisma.course.findFirst({
+            where: {
+                id: courseId,
+                OR: [
+                    { group: { program: { teachers: { some: { id: session.user.id } } } } },
+                    { period: { program: { teachers: { some: { id: session.user.id } } } } }
+                ]
+            }
+        });
+        if (!isAssociated) {
+            throw new Error("No tienes permiso para ver este curso");
+        }
+    }
+    return course;
 }
 
 
@@ -360,7 +532,7 @@ export async function bulkDeleteUsersAction(userIds: string[]) {
 
 // ============ SYSTEM SETTINGS ============
 export async function getSystemSettingsAction() {
-    await requireAdmin();
+    await requireAdminOrObserver();
 
 
 
@@ -531,7 +703,7 @@ return { success: true };
 
 // ============ ANALYTICS ============
 export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
-    await requireAdmin();
+    await requireAdminOrObserver();
 
     const group = await prisma.group.findUnique({
         where: { id: groupId },
@@ -786,6 +958,7 @@ export async function getComprehensiveGroupAnalyticsAction(groupId: string) {
     });
 
     return {
+        groupId: group.id,
         studentMetrics,
         groupName: group.name,
         groupDescription: group.description,
@@ -818,7 +991,8 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
     programId?: string;
     groupId?: string;
 }) {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
 
     const whereClause: any = {
         role: "student"
@@ -830,6 +1004,32 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
         whereClause.group = {
             programId: filters.programId
         };
+    }
+
+    if (isObserver) {
+        const observerPrograms = await prisma.program.findMany({
+            where: { teachers: { some: { id: session.user.id } } },
+            select: { id: true }
+        });
+        const programIds = observerPrograms.map(p => p.id);
+
+        if (filters?.groupId && filters.groupId !== "ALL") {
+            const group = await prisma.group.findUnique({
+                where: { id: filters.groupId },
+                select: { programId: true }
+            });
+            if (!group || !programIds.includes(group.programId)) {
+                whereClause.groupId = "none";
+            }
+        } else if (filters?.programId && filters.programId !== "ALL") {
+            if (!programIds.includes(filters.programId)) {
+                whereClause.group = { programId: "none" };
+            }
+        } else {
+            whereClause.group = {
+                programId: { in: programIds }
+            };
+        }
     }
 
     // Query students
@@ -923,3 +1123,218 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
 }
 
 // ============ GEMINI API USAGE ============
+
+// ============ ADMIN / OBSERVER MANAGEMENT ============
+
+export async function getAdminsAndObserversAction() {
+    await requireAdmin();
+    return await prisma.user.findMany({
+        where: {
+            role: { in: ["admin", "observer"] }
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+            profile: true,
+            programs: {
+                select: { id: true, name: true }
+            }
+        }
+    });
+}
+
+export async function createAdminOrObserverAction(data: {
+    email: string;
+    name: string;
+    role: "admin" | "observer";
+    password?: string;
+    identificacion: string;
+    nombres: string;
+    apellido: string;
+    telefono?: string;
+    programIds?: string[];
+}) {
+    const session = await requireAdmin();
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+        where: { email: data.email }
+    });
+
+    if (existingUser) {
+        throw new Error("Ya existe un usuario con este correo electrónico");
+    }
+
+    const existingProfile = await prisma.profile.findFirst({
+        where: { identificacion: data.identificacion }
+    });
+    if (existingProfile) {
+        throw new Error(`Ya existe un perfil registrado con el número de documento: ${data.identificacion}`);
+    }
+
+    // Hash password
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordToUse = data.password || data.identificacion;
+    const hashedPassword = await hashPassword(passwordToUse);
+
+    // Create user with account and profile
+    const user = await prisma.user.create({
+        data: {
+            id: crypto.randomUUID(),
+            email: data.email.trim().toLowerCase(),
+            name: data.name.trim(),
+            role: data.role,
+            emailVerified: true,
+            profile: {
+                create: {
+                    identificacion: data.identificacion.trim(),
+                    nombres: data.nombres.trim(),
+                    apellido: data.apellido.trim(),
+                    telefono: data.telefono?.trim() || null,
+                    dataProcessingConsent: true,
+                    dataProcessingConsentDate: new Date(),
+                }
+            },
+            accounts: {
+                create: {
+                    id: crypto.randomUUID(),
+                    accountId: crypto.randomUUID(),
+                    providerId: "credential",
+                    password: hashedPassword,
+                }
+            },
+            programs: data.role === "observer" && data.programIds && data.programIds.length > 0 ? {
+                connect: data.programIds.map(pid => ({ id: pid }))
+            } : undefined
+        },
+        include: {
+            profile: true,
+            programs: true
+        }
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("@/features/admin/services/auditLogger");
+    await auditLogger.log({
+        action: "CREATE",
+        entity: "USER",
+        entityId: user.id,
+        userId: session.user.id,
+        userName: session.user.name || "Admin",
+        userRole: "admin",
+        description: `Usuario ${data.role} creado: ${data.name} (${data.email})`,
+        metadata: { email: data.email, role: data.role },
+        success: true,
+    });
+
+    return user;
+}
+
+export async function updateAdminOrObserverAction(id: string, data: {
+    email: string;
+    name: string;
+    role: "admin" | "observer";
+    identificacion: string;
+    nombres: string;
+    apellido: string;
+    telefono?: string;
+    programIds?: string[];
+}) {
+    const session = await requireAdmin();
+
+    // Check if another user has the email
+    const duplicateEmail = await prisma.user.findFirst({
+        where: { email: data.email, id: { not: id } }
+    });
+    if (duplicateEmail) {
+        throw new Error("Ya existe otro usuario con este correo electrónico");
+    }
+
+    // Check if another profile has the identification
+    const duplicateProfile = await prisma.profile.findFirst({
+        where: { identificacion: data.identificacion, userId: { not: id } }
+    });
+    if (duplicateProfile) {
+        throw new Error("Ya existe otro perfil con esta identificación");
+    }
+
+    const currentPrograms = await prisma.program.findMany({
+        where: { teachers: { some: { id } } },
+        select: { id: true }
+    });
+
+    const user = await prisma.user.update({
+        where: { id },
+        data: {
+            email: data.email.trim().toLowerCase(),
+            name: data.name.trim(),
+            role: data.role,
+            profile: {
+                update: {
+                    identificacion: data.identificacion.trim(),
+                    nombres: data.nombres.trim(),
+                    apellido: data.apellido.trim(),
+                    telefono: data.telefono?.trim() || null,
+                }
+            },
+            programs: {
+                disconnect: currentPrograms.map(p => ({ id: p.id })),
+                connect: data.role === "observer" && data.programIds && data.programIds.length > 0
+                    ? data.programIds.map(pid => ({ id: pid }))
+                    : []
+            }
+        },
+        include: {
+            profile: true,
+            programs: true
+        }
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("@/features/admin/services/auditLogger");
+    await auditLogger.log({
+        action: "UPDATE",
+        entity: "USER",
+        entityId: id,
+        userId: session.user.id,
+        userName: session.user.name || "Admin",
+        userRole: "admin",
+        description: `Usuario ${data.role} actualizado: ${data.name} (${data.email})`,
+        metadata: { email: data.email, role: data.role },
+        success: true,
+    });
+
+    return user;
+}
+
+export async function deleteAdminOrObserverAction(id: string) {
+    const session = await requireAdmin();
+
+    const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, name: true, email: true, role: true }
+    });
+
+    if (user?.id === session.user.id) {
+        throw new Error("No puedes eliminar a tu propio usuario");
+    }
+
+    const result = await prisma.user.delete({
+        where: { id }
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("@/features/admin/services/auditLogger");
+    await auditLogger.log({
+        action: "DELETE",
+        entity: "USER",
+        entityId: id,
+        userId: session.user.id,
+        userName: session.user.name || "Admin",
+        userRole: "admin",
+        description: `Usuario administrador/observador eliminado: ${user?.name || "Usuario"} (${user?.email || "Email desconocido"})`,
+        metadata: { email: user?.email, role: user?.role },
+        success: true,
+    });
+
+    return result;
+}

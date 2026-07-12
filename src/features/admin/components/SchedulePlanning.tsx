@@ -133,7 +133,8 @@ export function SchedulePlanning({
     initialScheduleTitle = "Horario Académico",
     initialScheduleStartDate = null,
     initialScheduleEndDate = null,
-    initialMaxTeacherHours = 40
+    initialMaxTeacherHours = 40,
+    isObserver = false
 }: {
     initialPrograms: Program[];
     initialEnvironments?: TrainingEnvironment[];
@@ -142,6 +143,7 @@ export function SchedulePlanning({
     initialScheduleStartDate?: Date | null;
     initialScheduleEndDate?: Date | null;
     initialMaxTeacherHours?: number;
+    isObserver?: boolean;
 }) {
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
@@ -795,6 +797,7 @@ export function SchedulePlanning({
                         isSaveDisabled={isScheduleBlocked}
                         handleExportExcel={handleExportExcel}
                         isExportingExcel={isExportingExcel}
+                        isObserver={isObserver}
                     />
                     </div>
                 )}
@@ -971,6 +974,7 @@ export function SchedulePlanning({
                                                                 openDlg={openDlg}
                                                                 openEditDlg={openEditDlg}
                                                                 setItemToDelete={setItemToDelete}
+                                                                isObserver={isObserver}
                                                             />
                                                         </div>
                                                     </div>

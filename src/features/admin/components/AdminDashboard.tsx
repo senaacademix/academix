@@ -44,9 +44,10 @@ interface AdminDashboardProps {
         };
     };
     recentActivity: any[];
+    isObserver?: boolean;
 }
 
-export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
+export function AdminDashboard({ stats, recentActivity, isObserver = false }: AdminDashboardProps) {
     const kpis = [
         {
             title: "Usuarios Totales",
@@ -102,12 +103,14 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                             Configuración
                         </Link>
                     </Button>
-                    <Button asChild className="rounded-xl h-12 shadow-lg shadow-primary/20">
-                        <Link href="/dashboard/admin/users">
-                            <UserPlus className="h-5 w-5 mr-2" />
-                            Nuevo Usuario
-                        </Link>
-                    </Button>
+                    {!isObserver && (
+                        <Button asChild className="rounded-xl h-12 shadow-lg shadow-primary/20">
+                            <Link href="/dashboard/admin/users">
+                                <UserPlus className="h-5 w-5 mr-2" />
+                                Nuevo Usuario
+                            </Link>
+                        </Button>
+                    )}
                 </div>
             </div>
 

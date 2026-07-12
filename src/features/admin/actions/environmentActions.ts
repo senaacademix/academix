@@ -17,12 +17,36 @@ async function requireAdmin() {
     return session;
 }
 
+async function requireAdminOrObserver() {
+    const session = await getSession();
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
+        throw new Error("Unauthorized: Admin or Observer access required");
+    }
+    return session;
+}
+
 // ============ TRAINING ENVIRONMENTS CRUD ============
 
 export async function getEnvironmentsAction(programId?: string) {
-    await requireAdmin();
+    const session = await requireAdminOrObserver();
+    const isObserver = session.user.role === "observer";
+    
+    const whereClause: any = {};
+    if (programId) {
+        whereClause.programId = programId;
+    }
+    if (isObserver) {
+        whereClause.program = {
+            teachers: {
+                some: {
+                    id: session.user.id
+                }
+            }
+        };
+    }
+
     return await prisma.trainingEnvironment.findMany({
-        where: programId ? { programId } : undefined,
+        where: whereClause,
         orderBy: { createdAt: "desc" },
     });
 }

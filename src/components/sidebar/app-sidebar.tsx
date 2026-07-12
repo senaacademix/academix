@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { BookOpen, Calendar, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, Settings2, GraduationCap, Building2, CalendarDays, BarChart3 } from "lucide-react"
+import { BookOpen, Calendar, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, Settings2, GraduationCap, Building2, CalendarDays, BarChart3, UserCog } from "lucide-react"
 
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -57,7 +57,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const navMain =
-    role === "admin"
+    role === "admin" || role === "observer"
       ? [
         {
           title: "Inicio",
@@ -96,14 +96,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: BarChart3,
           isActive: false,
         },
+        ...(role === "admin"
+          ? [
+              {
+                title: "Usuarios Administradores",
+                url: "/dashboard/admin/admins",
+                icon: UserCog,
+                isActive: false,
+              },
+            ]
+          : []),
         {
           title: "Configuración",
           url: "/dashboard/admin/settings",
           icon: Settings2,
           isActive: false,
         },
-
-
       ]
       : role === "teacher"
         ? [

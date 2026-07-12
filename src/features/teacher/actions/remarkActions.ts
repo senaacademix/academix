@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { parseISOAsUTC } from "@/lib/dateUtils";
+import { RemarkType } from "@/generated/prisma/client";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -135,18 +136,18 @@ export async function getRemarkTemplatesAction() {
     });
 }
 
-export async function createRemarkTemplateAction(title: string, description: string) {
+export async function createRemarkTemplateAction(title: string, description: string, type: RemarkType) {
     const session = await getSession();
     if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
         throw new Error("Unauthorized");
     }
 
-    if (!title || !description) {
-        throw new Error("El título y la descripción son obligatorios.");
+    if (!title || !description || !type) {
+        throw new Error("El título, la descripción y el tipo son obligatorios.");
     }
 
     const template = await prisma.remarkTemplate.create({
-        data: { title, description },
+        data: { title, description, type },
     });
 
     // 🎯 AUDIT LOG
@@ -165,19 +166,19 @@ export async function createRemarkTemplateAction(title: string, description: str
     return template;
 }
 
-export async function updateRemarkTemplateAction(id: string, title: string, description: string) {
+export async function updateRemarkTemplateAction(id: string, title: string, description: string, type: RemarkType) {
     const session = await getSession();
     if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
         throw new Error("Unauthorized");
     }
 
-    if (!title || !description) {
-        throw new Error("El título y la descripción son obligatorios.");
+    if (!title || !description || !type) {
+        throw new Error("El título, la descripción y el tipo son obligatorios.");
     }
 
     const template = await prisma.remarkTemplate.update({
         where: { id },
-        data: { title, description },
+        data: { title, description, type },
     });
 
     // 🎯 AUDIT LOG

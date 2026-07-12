@@ -47,6 +47,8 @@ model User {
   qualifiedCourses      Course[]               @relation("TeacherQualifiedCourses")
   coursesTaught         Course[]               @relation("CourseTeacher")
   studentGrades         StudentGrade[]
+  studentImprovementPlans ImprovementPlan[]    @relation("StudentImprovementPlans")
+  teacherImprovementPlans ImprovementPlan[]    @relation("TeacherImprovementPlans")
 
   groupId                     String?
   group                       Group?            @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -550,13 +552,45 @@ model AttendancePermissionRequest {
 }
 
 model RemarkTemplate {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
+  type        RemarkType @default(ATTENTION)
   title       String
   description String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@map("remark_template")
+}
+
+model ImprovementPlan {
+  id            String    @id @default(cuid())
+  planNumber    String    // Número del plan de mejoramiento
+  teacherDocUrl        String?   // Paso 1: Enlace al documento del plan (subido por profesor)
+  signedDocUrl         String?   // Paso 2: Enlace al documento firmado (subido por estudiante)
+  teacherSignedDocUrl  String?   // Paso 3: Contrafirma del profesor (enlace subido por profesor)
+  startDate            DateTime
+  endDate              DateTime
+  observations         String?   // Observaciones
+  
+  // Relations
+  studentId     String
+  student       User      @relation("StudentImprovementPlans", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  teacherId     String
+  teacher       User      @relation("TeacherImprovementPlans", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  // Status
+  viewedAt      DateTime? // Fecha de revisión por el estudiante
+  
+  // Evaluation
+  planScore     Float?    // Calificación del plan (0-5)
+  finalGrade    Float?    // Nota final (0-5)
+  evidenceUrl   String?   // Enlace a la evidencia de evaluación (subido por profesor)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("improvement_plan")
 }
 
 

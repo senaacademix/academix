@@ -25,6 +25,7 @@ interface ScheduleToolbarsProps {
     handleSaveAll: () => void;
     handleExportExcel?: () => void;
     isExportingExcel?: boolean;
+    isObserver?: boolean;
 }
 
 export function ScheduleToolbars({
@@ -45,7 +46,8 @@ export function ScheduleToolbars({
     handleDiscard,
     handleSaveAll,
     handleExportExcel,
-    isExportingExcel = false
+    isExportingExcel = false,
+    isObserver = false
 }: ScheduleToolbarsProps) {
     return (
         <div className="flex items-center gap-2">
@@ -127,20 +129,23 @@ export function ScheduleToolbars({
                 <TooltipContent side="bottom" align="center"><p className="text-xs">Analítica de Horarios</p></TooltipContent>
             </Tooltip>
 
-            <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-7 w-7 rounded border-border/40 shrink-0">
-                        <Settings className="w-3.5 h-3.5 text-primary" />
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" align="center"><p className="text-xs">Configuración</p></TooltipContent>
-            </Tooltip>
+            {!isObserver && (
+                <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-7 w-7 rounded border-border/40 shrink-0">
+                            <Settings className="w-3.5 h-3.5 text-primary" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" align="center"><p className="text-xs">Configuración</p></TooltipContent>
+                </Tooltip>
+            )}
 
 
             <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPublishConfirmOpen(true)}
+                disabled={isObserver}
                 className={`h-7 px-3 text-xs font-semibold rounded gap-1.5 transition-colors border-border/40 ${schedulesPublished ? 'bg-emerald-50/50 hover:bg--100 dark:bg--900/30 dark:bg-emerald-900/20 text--600 dark:text--400 dark:text-emerald-400 border--200 dark:border--800/50 dark:border-emerald-800' : 'bg-orange-50/50 hover:bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800'}`}
             >
                 {schedulesPublished ? <Globe className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}

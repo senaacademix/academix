@@ -7,7 +7,7 @@ import { getAllCoursesAdminAction, getAllUsersAction } from "@/app/admin-actions
 export default async function AdminCoursesPage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
-    if (!session || session.user.role !== "admin") {
+    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
         redirect("/dashboard/student");
     }
 
@@ -33,9 +33,10 @@ export default async function AdminCoursesPage() {
     return (
         <div className="p-4 sm:p-8">
             <AcademicManagement
-                initialCourses={mappedCourses}
+                initialCourses={mappedCourses as any}
                 teachers={mappedTeachers}
                 totalCount={total}
+                isObserver={session.user.role === "observer"}
             />
         </div>
     );

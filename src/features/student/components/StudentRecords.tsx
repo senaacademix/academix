@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3, UserX } from "lucide-react";
+import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3, UserX, Mail } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,14 @@ import { formatName, cn } from "@/lib/utils";
 import { fromUTC } from "@/lib/dateUtils";
 import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation, deleteJustificationAction } from "../actions/studentActions";
 import { getStudentGrades, submitStudentSubmissionLink } from "@/features/teacher/actions/gradeActions";
+import {
+    getImprovementPlans,
+    upsertImprovementPlan,
+    deleteImprovementPlan,
+    submitSignedDocument,
+    deleteSignedDocument,
+    markPlanViewed
+} from "../actions/improvementPlanActions";
 import { authClient } from "@/lib/auth-client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
@@ -66,9 +74,11 @@ interface StudentRecordsProps {
     studentId?: string;
     hideTables?: boolean;
     hideDocumentation?: boolean;
+    defaultTab?: string;
+    onlyImprovement?: boolean;
 }
 
-export function StudentRecords({ studentId, hideTables = false, hideDocumentation = false }: StudentRecordsProps = {}) {
+export function StudentRecords({ studentId, hideTables = false, hideDocumentation = false, defaultTab = "attendance", onlyImprovement = false }: StudentRecordsProps = {}) {
     const [records, setRecords] = useState<{ attendances: any[], remarks: any[], groupDates?: { startDate: Date | null, endDate: Date | null } | null, scheduleDates?: { startDate: Date | null, endDate: Date | null } | null } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [courses, setCourses] = useState<any[]>([]);
@@ -96,10 +106,183 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
     const [viewingJustification, setViewingJustification] = useState<{ justification: string; url?: string | null; date: string; statusName: string } | null>(null);
     const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
+    // Improvement Plans State
+    const [improvementPlans, setImprovementPlans] = useState<any[]>([]);
+    const [improvementLoading, setImprovementLoading] = useState(true);
+    
+    // Improvement Plan Dialogs
+    const [planFormDialog, setPlanFormDialog] = useState<{
+        open: boolean;
+        id?: string;
+        planNumber: string;
+        teacherDocUrl: string;
+        startDate: string;
+        endDate: string;
+        observations: string;
+        planScore?: number | "";
+        finalGrade?: number | "";
+        evidenceUrl: string;
+    } | null>(null);
+
+    const [signedDocDialog, setSignedDocDialog] = useState<{
+        open: boolean;
+        planId: string;
+        signedDocUrl: string;
+    } | null>(null);
+    
+    const [viewPlanDetail, setViewPlanDetail] = useState<any | null>(null);
+    const [impDeleteConfirm, setImpDeleteConfirm] = useState<string | null>(null);
+    const [docDeleteConfirm, setDocDeleteConfirm] = useState<string | null>(null);
+
+    const loadImprovementPlans = async () => {
+        setImprovementLoading(true);
+        try {
+            const res = await getImprovementPlans(studentId);
+            if (res.success && res.data) {
+                setImprovementPlans(res.data);
+            }
+        } catch (error) {
+            console.error("Error al cargar planes de mejoramiento:", error);
+        } finally {
+            setImprovementLoading(false);
+        }
+    };
+
+    const handleDeletePlan = (id: string) => {
+        setImpDeleteConfirm(id);
+    };
+
+    const handleDeleteSignedDoc = (planId: string) => {
+        setDocDeleteConfirm(planId);
+    };
+
+    const onConfirmDeletePlan = async () => {
+        if (!impDeleteConfirm) return;
+        const toastId = toast.loading("Eliminando plan...");
+        const res = await deleteImprovementPlan(impDeleteConfirm);
+        if (res.success) {
+            toast.success("Plan de mejoramiento eliminado correctamente", { id: toastId });
+            setImpDeleteConfirm(null);
+            loadImprovementPlans();
+        } else {
+            toast.error(res.error || "Error al eliminar el plan", { id: toastId });
+        }
+    };
+
+    const onConfirmDeleteSignedDoc = async () => {
+        if (!docDeleteConfirm) return;
+        const toastId = toast.loading("Eliminando documento firmado...");
+        const res = await deleteSignedDocument(docDeleteConfirm);
+        if (res.success) {
+            toast.success("Documento firmado eliminado correctamente", { id: toastId });
+            setDocDeleteConfirm(null);
+            loadImprovementPlans();
+        } else {
+            toast.error(res.error || "Error al eliminar el documento", { id: toastId });
+        }
+    };
+
+    const handleUpsertPlan = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!planFormDialog) return;
+        if (!planFormDialog.planNumber.trim() || !planFormDialog.startDate || !planFormDialog.endDate) {
+            toast.error("Por favor completa los campos requeridos (*)");
+            return;
+        }
+
+        const toastId = toast.loading("Guardando plan de mejoramiento...");
+        const payload = {
+            id: planFormDialog.id,
+            planNumber: planFormDialog.planNumber.trim(),
+            studentId: studentId || (records as any)?.currentUser?.id || "",
+            teacherDocUrl: planFormDialog.teacherDocUrl.trim() || undefined,
+            startDate: planFormDialog.startDate,
+            endDate: planFormDialog.endDate,
+            observations: planFormDialog.observations.trim() || undefined,
+            planScore: planFormDialog.planScore !== "" ? parseFloat(String(planFormDialog.planScore)) : undefined,
+            finalGrade: planFormDialog.finalGrade !== "" ? parseFloat(String(planFormDialog.finalGrade)) : undefined,
+            evidenceUrl: planFormDialog.evidenceUrl.trim() || undefined,
+        };
+
+        const res = await upsertImprovementPlan(payload);
+        if (res.success) {
+            toast.success("Plan de mejoramiento guardado con éxito", { id: toastId });
+            setPlanFormDialog(null);
+            loadImprovementPlans();
+        } else {
+            toast.error(res.error || "Error al guardar el plan", { id: toastId });
+        }
+    };
+
+    const handleSignedDocSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!signedDocDialog) return;
+        if (!signedDocDialog.signedDocUrl.trim()) {
+            toast.error("El enlace no puede estar vacío");
+            return;
+        }
+
+        const toastId = toast.loading("Enviando documento firmado...");
+        const res = await submitSignedDocument(signedDocDialog.planId, signedDocDialog.signedDocUrl.trim());
+        if (res.success) {
+            toast.success("Documento firmado enviado con éxito", { id: toastId });
+            setSignedDocDialog(null);
+            loadImprovementPlans();
+        } else {
+            toast.error(res.error || "Error al enviar el documento", { id: toastId });
+        }
+    };
+
+    const handleViewPlan = async (plan: any) => {
+        setViewPlanDetail(plan);
+        if (currentUserRole === "student" && !plan.viewedAt) {
+            try {
+                const res = await markPlanViewed(plan.id);
+                if (res.success) {
+                    // Update local state optimistically
+                    setImprovementPlans(prev =>
+                        prev.map(p => p.id === plan.id ? { ...p, viewedAt: new Date() } : p)
+                    );
+                }
+            } catch (err) {
+                console.error("Error marking plan as viewed:", err);
+            }
+        }
+    };
+
+    const handleEmailPlan = (plan: any) => {
+        const studentEmail = plan.student?.email || "";
+        const studentName = formatName(plan.student?.name, plan.student?.profile);
+        const teacherName = formatName(plan.teacher?.name, plan.teacher?.profile);
+        const subject = encodeURIComponent(`Plan de Mejoramiento Académico - ${plan.planNumber}`);
+        
+        let bodyText = `Hola, ${studentName}.\n\n`;
+        bodyText += `Se ha registrado el Plan de Mejoramiento Académico N° ${plan.planNumber} en la plataforma AcademiX.\n\n`;
+        bodyText += `Detalles del Plan:\n`;
+        bodyText += `- Fecha de Inicio: ${format(new Date(plan.startDate), "dd/MM/yyyy")}\n`;
+        bodyText += `- Fecha de Finalización: ${format(new Date(plan.endDate), "dd/MM/yyyy")}\n`;
+        bodyText += `- Docente: ${teacherName}\n`;
+        if (plan.teacherDocUrl) {
+            bodyText += `- Documento del Plan: ${plan.teacherDocUrl}\n`;
+        }
+        if (plan.observations) {
+            bodyText += `- Observaciones/Criterios: ${plan.observations}\n`;
+        }
+        bodyText += `\nPor favor ingresa a la plataforma AcademiX para revisar el plan en detalle, firmarlo y cargar el documento firmado para su posterior evaluación.\n\n`;
+        bodyText += `Atentamente,\n`;
+        bodyText += `${teacherName}`;
+
+        const body = encodeURIComponent(bodyText);
+        
+        // Open default system mail client
+        window.location.href = `mailto:${studentEmail}?subject=${subject}&body=${body}`;
+    };
+
     useEffect(() => {
         loadRecords();
         loadGrades();
         loadDocumentation();
+        loadImprovementPlans();
     }, [studentId]);
 
     const loadRecords = () => {
@@ -682,84 +865,92 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
     return (
         <div className="space-y-8">
             {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Faltas */}
-                <Card className="border-red-200/60 dark:border-red-900/40">
-                    <CardHeader className="p-4 pb-2">
-                        <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
-                            <UserX className="w-4 h-4 text-red-500" />
-                            Faltas
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-end gap-3">
-                        <div className="text-3xl font-black text-red-600 dark:text-red-400">{absentCount}</div>
-                        <div className="text-sm text-muted-foreground font-medium pb-1">Inasistencias totales</div>
-                    </CardContent>
-                </Card>
+            {!onlyImprovement && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Faltas */}
+                    <Card className="border-red-200/60 dark:border-red-900/40">
+                        <CardHeader className="p-4 pb-2">
+                            <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
+                                <UserX className="w-4 h-4 text-red-500" />
+                                Faltas
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 flex items-end gap-3">
+                            <div className="text-3xl font-black text-red-600 dark:text-red-400">{absentCount}</div>
+                            <div className="text-sm text-muted-foreground font-medium pb-1">Inasistencias totales</div>
+                        </CardContent>
+                    </Card>
 
-                {/* Tardanzas */}
-                <Card className="border-amber-200/60 dark:border-amber-900/40">
-                    <CardHeader className="p-4 pb-2">
-                        <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-amber-500" />
-                            Llegadas Tarde
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-end gap-3">
-                        <div className="text-3xl font-black text-amber-600 dark:text-amber-400">{lateCount}</div>
-                        <div className="text-sm text-muted-foreground font-medium pb-1">Tardanzas totales</div>
-                    </CardContent>
-                </Card>
+                    {/* Tardanzas */}
+                    <Card className="border-amber-200/60 dark:border-amber-900/40">
+                        <CardHeader className="p-4 pb-2">
+                            <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-amber-500" />
+                                Llegadas Tarde
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 flex items-end gap-3">
+                            <div className="text-3xl font-black text-amber-600 dark:text-amber-400">{lateCount}</div>
+                            <div className="text-sm text-muted-foreground font-medium pb-1">Tardanzas totales</div>
+                        </CardContent>
+                    </Card>
 
-                {/* Llamados de Atención */}
-                <Card>
-                    <CardHeader className="p-4 pb-2">
-                        <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
-                            <ShieldAlert className="w-4 h-4 text-red-500" />
-                            Observaciones Disciplinarias
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-end gap-3">
-                        <div className="text-3xl font-black text-foreground">{remarks.filter(r => r.type === 'ATTENTION').length}</div>
-                        <div className="text-sm text-muted-foreground font-medium pb-1">Llamados de Atención</div>
-                    </CardContent>
-                </Card>
-            </div>
+                    {/* Llamados de Atención */}
+                    <Card>
+                        <CardHeader className="p-4 pb-2">
+                            <CardDescription className="uppercase font-bold tracking-wider text-xs flex items-center gap-2">
+                                <ShieldAlert className="w-4 h-4 text-red-500" />
+                                Observaciones Disciplinarias
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 flex items-end gap-3">
+                            <div className="text-3xl font-black text-foreground">{remarks.filter(r => r.type === 'ATTENTION').length}</div>
+                            <div className="text-sm text-muted-foreground font-medium pb-1">Llamados de Atención</div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {hideTables ? (
                 analyticsContent
             ) : (
-                <Tabs defaultValue="attendance" className="space-y-6">
-                    <TabsList className={cn(
-                        "flex w-full overflow-x-auto justify-start md:grid h-auto p-1 bg-muted/50 rounded-xl gap-1 scrollbar-none",
-                        hideDocumentation ? "md:grid-cols-4" : "md:grid-cols-5"
-                    )}>
-                        <TabsTrigger value="attendance" className="flex items-center gap-1.5 shrink-0">
-                            <Clock className="w-4 h-4 hidden sm:block" />
-                            Asistencia
-                        </TabsTrigger>
-                        <TabsTrigger value="grades" className="flex items-center gap-1.5 shrink-0">
-                            <GraduationCap className="w-4 h-4 hidden sm:block" />
-                            Calificaciones
-                        </TabsTrigger>
-                        {!hideDocumentation && (
-                            <TabsTrigger value="documentation" className="flex items-center gap-1.5 shrink-0">
-                                <BookOpen className="w-4 h-4 hidden sm:block" />
-                                Documentación
+                <Tabs defaultValue={onlyImprovement ? "improvement" : defaultTab} className="space-y-6">
+                    {!onlyImprovement && (
+                        <TabsList className={cn(
+                            "flex w-full overflow-x-auto justify-start md:grid h-auto p-1 bg-muted/50 rounded-xl gap-1 scrollbar-none",
+                            hideDocumentation ? "md:grid-cols-5" : "md:grid-cols-6"
+                        )}>
+                            <TabsTrigger value="attendance" className="flex items-center gap-1.5 shrink-0">
+                                <Clock className="w-4 h-4 hidden sm:block" />
+                                Asistencia
                             </TabsTrigger>
-                        )}
-                        <TabsTrigger value="remarks" className="flex items-center gap-1.5 shrink-0">
-                            <ShieldAlert className="w-4 h-4 hidden sm:block" />
-                            Observaciones
-                        </TabsTrigger>
-                        <TabsTrigger value="analytics" className="flex items-center gap-1.5 shrink-0">
-                            <BarChart3 className="w-4 h-4 hidden sm:block" />
-                            Analítica
-                        </TabsTrigger>
-                    </TabsList>
+                            <TabsTrigger value="grades" className="flex items-center gap-1.5 shrink-0">
+                                <GraduationCap className="w-4 h-4 hidden sm:block" />
+                                Calificaciones
+                            </TabsTrigger>
+                            {!hideDocumentation && (
+                                <TabsTrigger value="documentation" className="flex items-center gap-1.5 shrink-0">
+                                    <BookOpen className="w-4 h-4 hidden sm:block" />
+                                    Documentación
+                                </TabsTrigger>
+                            )}
+                            <TabsTrigger value="remarks" className="flex items-center gap-1.5 shrink-0">
+                                <ShieldAlert className="w-4 h-4 hidden sm:block" />
+                                Observaciones
+                            </TabsTrigger>
+                            <TabsTrigger value="improvement" className="flex items-center gap-1.5 shrink-0">
+                                <FileText className="w-4 h-4 hidden sm:block" />
+                                Planes de Mejoramiento
+                            </TabsTrigger>
+                            <TabsTrigger value="analytics" className="flex items-center gap-1.5 shrink-0">
+                                <BarChart3 className="w-4 h-4 hidden sm:block" />
+                                Analítica
+                            </TabsTrigger>
+                        </TabsList>
+                    )}
 
                     {/* ── ATTENDANCE (table per course) ────────────────────── */}
-                    <TabsContent value="attendance" className="m-0 border-none p-0 outline-none">
+                    {!onlyImprovement && <TabsContent value="attendance" className="m-0 border-none p-0 outline-none">
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
                             {attendances.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
@@ -1179,10 +1370,10 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                 );
                             })()}
                         </motion.div>
-                    </TabsContent>
+                    </TabsContent>}
 
                     {/* ── GRADES ─────────────────────────────────────────────── */}
-                    <TabsContent value="grades" className="m-0 border-none p-0 outline-none">
+                    {!onlyImprovement && <TabsContent value="grades" className="m-0 border-none p-0 outline-none">
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
                             {gradesLoading ? (
                                 <div className="flex justify-center items-center h-48">
@@ -1347,10 +1538,10 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                 })
                             )}
                         </motion.div>
-                    </TabsContent>
+                    </TabsContent>}
 
                     {/* ── DOCUMENTATION (links per course) ────────────────────── */}
-                    {!hideDocumentation && <TabsContent value="documentation" className="m-0 border-none p-0 outline-none">
+                    {!onlyImprovement && !hideDocumentation && <TabsContent value="documentation" className="m-0 border-none p-0 outline-none">
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
                             {docLoading ? (
                                 <div className="flex items-center justify-center p-12">
@@ -1429,7 +1620,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
 
 
                     {/* ── REMARKS (table per course) ──────────────────────────── */}
-                    <TabsContent value="remarks" className="m-0 border-none p-0 outline-none">
+                    {!onlyImprovement && <TabsContent value="remarks" className="m-0 border-none p-0 outline-none">
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
                             {remarks.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
@@ -1540,12 +1731,302 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                 });
                             })()}
                         </motion.div>
+                    </TabsContent>}
+
+                    {/* ── IMPROVEMENT PLANS (planes de mejoramiento) ────────────────── */}
+                    <TabsContent value="improvement" className="m-0 border-none p-0 outline-none">
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                            
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div>
+                                    <h3 className="text-lg font-black text-foreground">Planes de Mejoramiento</h3>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Gestión y seguimiento de compromisos académicos de superación.</p>
+                                </div>
+                                {currentUserRole === "teacher" && (
+                                    <Button 
+                                        onClick={() => setPlanFormDialog({
+                                            open: true,
+                                            planNumber: `PM-${improvementPlans.length + 1}-${new Date().getFullYear()}`,
+                                            teacherDocUrl: "",
+                                            startDate: new Date().toISOString().substring(0, 10),
+                                            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10),
+                                            observations: "",
+                                            planScore: "",
+                                            finalGrade: "",
+                                            evidenceUrl: ""
+                                        })}
+                                        className="gap-2 cursor-pointer font-bold h-12"
+                                    >
+                                        <FileText className="w-4 h-4" /> Crear Plan de Mejoramiento
+                                    </Button>
+                                )}
+                            </div>
+
+                            {improvementLoading ? (
+                                <div className="flex justify-center items-center py-12">
+                                    <LoadingSpinner />
+                                </div>
+                            ) : improvementPlans.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/5 text-muted-foreground">
+                                    <FileText className="w-12 h-12 mb-4 opacity-50 text-muted-foreground" />
+                                    <p className="font-semibold text-base">Sin Planes de Mejoramiento</p>
+                                    <p className="text-sm text-center mt-1">No se registran planes de mejoramiento asignados para este estudiante.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {improvementPlans.map((plan) => {
+                                        // ── Compute step completion ──
+                                        const step1Done = !!plan.teacherDocUrl;
+                                        const step2Done = !!plan.signedDocUrl;
+                                        const step3Done = !!(plan as any).teacherSignedDocUrl;
+                                        const isPastEnd = new Date() > new Date(plan.endDate);
+                                        const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
+
+                                        // ── Date progress bar ──
+                                        const nowMs = Date.now();
+                                        const startMs = new Date(plan.startDate).getTime();
+                                        const endMs = new Date(plan.endDate).getTime();
+                                        const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
+                                        const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
+                                        const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
+
+                                        const steps = [
+                                            { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
+                                            { label: "Mi firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
+                                            { label: "Prof. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
+                                            { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
+                                        ];
+
+                                        return (
+                                            <Card key={plan.id} className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-shadow">
+                                                <CardHeader className="bg-muted/10 border-b p-5 pb-4">
+                                                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <h4 className="text-base font-black text-foreground">Plan N° {plan.planNumber}</h4>
+                                                                {plan.viewedAt ? (
+                                                                    <Badge variant="outline" className="text-[10px] py-0 px-2 text-emerald-700 border-emerald-200 bg-emerald-50 gap-0.5 font-bold" title={`Revisado el ${format(new Date(plan.viewedAt), "dd/MM/yyyy HH:mm")}`}>
+                                                                        <Eye className="w-3 h-3" /> Revisado
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-[10px] py-0 px-2 text-amber-700 border-amber-200 bg-amber-50 gap-0.5 font-bold">
+                                                                        <EyeOff className="w-3 h-3" /> No revisado
+                                                                    </Badge>
+                                                                )}
+                                                                {plan.finalGrade !== null && plan.finalGrade !== undefined && (
+                                                                    <Badge variant="outline" className="text-[10px] py-0 px-2 text-blue-700 border-blue-200 bg-blue-50 font-extrabold">
+                                                                        Nota Final: {plan.finalGrade.toFixed(1)}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-medium">
+                                                                <span><strong className="text-foreground font-semibold">Inicio:</strong> {format(new Date(plan.startDate), "dd MMM yyyy", { locale: es })}</span>
+                                                                <span><strong className="text-foreground font-semibold">Límite:</strong> {format(new Date(plan.endDate), "dd MMM yyyy", { locale: es })}</span>
+                                                                <span><strong className="text-foreground font-semibold">Docente:</strong> {formatName(plan.teacher.name, plan.teacher.profile)}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2 shrink-0">
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                onClick={() => handleViewPlan(plan)}
+                                                                className="h-8 text-xs font-bold gap-1 cursor-pointer"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" /> Ver Detalle
+                                                            </Button>
+                                                            {(currentUserRole === "teacher" || currentUserRole === "admin") && (
+                                                                <Button 
+                                                                    size="sm" 
+                                                                    variant="outline" 
+                                                                    onClick={() => handleEmailPlan(plan)}
+                                                                    className="h-8 text-xs font-bold gap-1 text-sky-600 border-sky-200 hover:bg-sky-50 hover:text-sky-700 cursor-pointer"
+                                                                >
+                                                                    <Mail className="w-3.5 h-3.5" /> Enviar Correo
+                                                                </Button>
+                                                            )}
+                                                            {(currentUserRole === "teacher" || currentUserRole === "admin") && (
+                                                                <Button 
+                                                                    size="sm" 
+                                                                    variant="outline" 
+                                                                    onClick={() => handleDeletePlan(plan.id)}
+                                                                    className="h-8 text-xs font-bold gap-1 text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive cursor-pointer"
+                                                                >
+                                                                    Eliminar
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </CardHeader>
+
+                                                <CardContent className="p-5 space-y-4">
+                                                    {plan.observations && (
+                                                        <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/20 border border-muted p-3.5 rounded-xl text-left">
+                                                            <strong className="text-foreground block font-bold mb-1">Observaciones del compromiso:</strong>
+                                                            {plan.observations}
+                                                        </div>
+                                                    )}
+
+                                                    {/* ── Temporal progress bar ── */}
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                                                            <span>Progreso temporal del plan</span>
+                                                            <span className={datePct >= 100 ? "text-red-500 font-bold" : "text-primary font-semibold"}>
+                                                                {datePct}% · {Math.min(daysPassed, daysTotal)}/{daysTotal} días
+                                                            </span>
+                                                        </div>
+                                                        <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-700 ${datePct >= 100 ? "bg-red-500" : datePct >= 75 ? "bg-amber-500" : "bg-primary"}`}
+                                                                style={{ width: `${datePct}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ── 4-Step Stepper ── */}
+                                                    <div className="relative grid grid-cols-4 gap-2 py-2">
+                                                        <div className="absolute top-6 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
+                                                        {steps.map((step, idx) => (
+                                                            <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10">
+                                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all shadow-sm ${
+                                                                    step.done
+                                                                        ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                        : step.locked
+                                                                            ? "bg-muted border-border text-muted-foreground"
+                                                                            : step.active
+                                                                                ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
+                                                                                : "bg-background border-muted text-muted-foreground"
+                                                                }`}>
+                                                                    {step.done ? (
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                                    ) : step.locked ? (
+                                                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                                    ) : (
+                                                                        <span>{idx + 1}</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-center">
+                                                                    <p className={`text-[10px] font-semibold leading-tight ${
+                                                                        step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"
+                                                                    }`}>{step.label}</p>
+                                                                    <p className="text-[9px] text-muted-foreground">{step.sub}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* ── Step action areas ── */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                        {/* Documento del plan (Step 1) */}
+                                                        <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
+                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 1 — Documento del Plan</span>
+                                                            {plan.teacherDocUrl ? (
+                                                                <a href={plan.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-bold flex items-center gap-1 mt-1">
+                                                                    <ExternalLink className="w-3.5 h-3.5" /> Descargar y Firmar
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground italic mt-1">Sin documento cargado</span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Firma estudiante (Step 2) */}
+                                                        <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
+                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 2 — Mi Firma</span>
+                                                            {plan.signedDocUrl ? (
+                                                                <div className="flex items-center justify-between gap-2 mt-1">
+                                                                    <a href={plan.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline font-bold flex items-center gap-1 truncate">
+                                                                        <ExternalLink className="w-3.5 h-3.5 shrink-0" /> Ver Documento Firmado
+                                                                    </a>
+                                                                    {currentUserRole === "teacher" && (
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="icon" 
+                                                                            onClick={() => handleDeleteSignedDoc(plan.id)}
+                                                                            className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md shrink-0 cursor-pointer"
+                                                                            title="Eliminar firma del estudiante"
+                                                                        >
+                                                                            <UserX className="w-3.5 h-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex flex-col gap-1 mt-1">
+                                                                    <span className="text-xs text-muted-foreground italic">Pendiente de firma del aprendiz</span>
+                                                                    {currentUserRole === "student" && (
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            variant="outline" 
+                                                                            onClick={() => setSignedDocDialog({ open: true, planId: plan.id, signedDocUrl: "" })}
+                                                                            className="h-7 text-[10px] font-bold mt-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
+                                                                        >
+                                                                            Subir Firma
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Evidencias evaluación (Step 4) */}
+                                                        <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
+                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 4 — Evidencias</span>
+                                                            {plan.evidenceUrl ? (
+                                                                <a href={plan.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-bold flex items-center gap-1 mt-1">
+                                                                    <ExternalLink className="w-3.5 h-3.5" /> Ver Evidencias
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground italic mt-1">{isPastEnd ? "Sin evidencias registradas" : "Disponible al vencer el plan"}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Paso 3 — Firma del docente (read-only display) */}
+                                                    {step2Done && (
+                                                        <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${
+                                                            step3Done
+                                                                ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200"
+                                                                : "bg-blue-50/50 dark:bg-blue-950/10 border-blue-200"
+                                                        }`}>
+                                                            <FileText className={`w-4 h-4 shrink-0 ${step3Done ? "text-emerald-600" : "text-blue-600"}`} />
+                                                            {step3Done ? (
+                                                                <a href={(plan as any).teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 hover:underline font-semibold flex-1 truncate">
+                                                                    Paso 3 — Docente firmó. Ver documento
+                                                                </a>
+                                                            ) : (
+                                                                <p className="text-xs text-blue-700 dark:text-blue-400">Paso 3 — Esperando firma del docente...</p>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {(plan.planScore !== null || plan.finalGrade !== null) && (
+                                                        <div className="border-t pt-4 mt-2 grid grid-cols-2 gap-4">
+                                                            <div className="space-y-1 bg-primary/5 p-3 rounded-xl border border-primary/20">
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Calificación Plan</span>
+                                                                <span className="text-lg font-black text-primary">
+                                                                    {plan.planScore !== null && plan.planScore !== undefined ? plan.planScore.toFixed(1) : "N/D"}
+                                                                </span>
+                                                            </div>
+                                                            <div className="space-y-1 bg-blue-50/50 p-3 rounded-xl border border-blue-200">
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Nota Final</span>
+                                                                <span className="text-lg font-black text-blue-700">
+                                                                    {plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade.toFixed(1) : "N/D"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </motion.div>
                     </TabsContent>
 
                     {/* ── ANALYTICS (charts only) ────────────────────────────── */}
-                    <TabsContent value="analytics" className="m-0 border-none p-0 outline-none">
-                        {analyticsContent}
-                    </TabsContent>
+                    {!onlyImprovement && (
+                        <TabsContent value="analytics" className="m-0 border-none p-0 outline-none">
+                            {analyticsContent}
+                        </TabsContent>
+                    )}
                 </Tabs>
             )}
 
@@ -1785,6 +2266,316 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                         >
                             Eliminar
                         </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Plan Form Dialog (Create / Edit) */}
+            <Dialog open={!!planFormDialog} onOpenChange={(open) => !open && setPlanFormDialog(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 font-bold text-lg">
+                            <FileText className="w-5 h-5 text-primary" />
+                            {planFormDialog?.id ? "Editar Plan de Mejoramiento" : "Crear Plan de Mejoramiento"}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Define los compromisos de superación para el aprendiz. Los campos con (*) son obligatorios.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {planFormDialog && (
+                        <form onSubmit={handleUpsertPlan} className="space-y-4 py-2 text-left">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-muted-foreground">Número de Plan *</Label>
+                                    <Input 
+                                        required
+                                        placeholder="Ej. PM-01-2026" 
+                                        value={planFormDialog.planNumber}
+                                        onChange={e => setPlanFormDialog(prev => prev ? { ...prev, planNumber: e.target.value } : null)}
+                                        className="h-12 rounded-lg bg-background"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-muted-foreground">Documento del Plan (Enlace) *</Label>
+                                    <Input 
+                                        type="url"
+                                        placeholder="https://drive.google.com/..." 
+                                        value={planFormDialog.teacherDocUrl}
+                                        onChange={e => setPlanFormDialog(prev => prev ? { ...prev, teacherDocUrl: e.target.value } : null)}
+                                        className="h-12 rounded-lg bg-background"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-muted-foreground">Fecha Inicio *</Label>
+                                    <Input 
+                                        required
+                                        type="date" 
+                                        value={planFormDialog.startDate}
+                                        onChange={e => setPlanFormDialog(prev => prev ? { ...prev, startDate: e.target.value } : null)}
+                                        className="h-12 rounded-lg bg-background"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-muted-foreground">Fecha Límite *</Label>
+                                    <Input 
+                                        required
+                                        type="date" 
+                                        value={planFormDialog.endDate}
+                                        onChange={e => setPlanFormDialog(prev => prev ? { ...prev, endDate: e.target.value } : null)}
+                                        className="h-12 rounded-lg bg-background"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-muted-foreground">Observaciones / Compromisos</Label>
+                                <Textarea 
+                                    placeholder="Describe los criterios, actividades a realizar y acuerdos..." 
+                                    value={planFormDialog.observations}
+                                    onChange={e => setPlanFormDialog(prev => prev ? { ...prev, observations: e.target.value } : null)}
+                                    className="min-h-[90px] rounded-lg bg-background p-3 text-xs resize-none"
+                                />
+                            </div>
+
+                            {planFormDialog.id && (
+                                <div className="border-t pt-4 mt-2 space-y-4">
+                                    <h4 className="font-bold text-sm text-foreground">Evaluación y Resultado</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-muted-foreground">Calificación Plan (0.0 - 5.0)</Label>
+                                            <Input 
+                                                type="number"
+                                                step="0.1"
+                                                min="0"
+                                                max="5"
+                                                placeholder="Ej. 4.5"
+                                                value={planFormDialog.planScore}
+                                                onChange={e => setPlanFormDialog(prev => prev ? { ...prev, planScore: e.target.value === "" ? "" : parseFloat(e.target.value) } : null)}
+                                                className="h-12 rounded-lg bg-background"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-muted-foreground">Nota Final Obtenida (0.0 - 5.0)</Label>
+                                            <Input 
+                                                type="number"
+                                                step="0.1"
+                                                min="0"
+                                                max="5"
+                                                placeholder="Ej. 3.8"
+                                                value={planFormDialog.finalGrade}
+                                                onChange={e => setPlanFormDialog(prev => prev ? { ...prev, finalGrade: e.target.value === "" ? "" : parseFloat(e.target.value) } : null)}
+                                                className="h-12 rounded-lg bg-background"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-bold text-muted-foreground">Enlace a Evidencias de Evaluación</Label>
+                                        <Input 
+                                            type="url"
+                                            placeholder="https://drive.google.com/..." 
+                                            value={planFormDialog.evidenceUrl}
+                                            onChange={e => setPlanFormDialog(prev => prev ? { ...prev, evidenceUrl: e.target.value } : null)}
+                                            className="h-12 rounded-lg bg-background"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <DialogFooter className="pt-2">
+                                <Button type="button" variant="outline" onClick={() => setPlanFormDialog(null)} className="h-12">Cancelar</Button>
+                                <Button type="submit" className="font-bold h-12">Guardar Cambios</Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Student Signed Document Submit Dialog */}
+            <Dialog open={!!signedDocDialog} onOpenChange={(open) => !open && setSignedDocDialog(null)}>
+                <DialogContent className="max-w-md rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 font-bold text-base">
+                            <Link2 className="w-5 h-5 text-primary" />
+                            Subir Documento Firmado
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Pega el enlace del plan de mejoramiento con tu firma y la del instructor (Google Drive, OneDrive, etc.).
+                        </DialogDescription>
+                    </DialogHeader>
+                    {signedDocDialog && (
+                        <form onSubmit={handleSignedDocSubmit} className="space-y-4 py-2 text-left">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="signed-doc-url" className="text-xs font-bold text-muted-foreground">URL del Documento Firmado *</Label>
+                                <Input
+                                    id="signed-doc-url"
+                                    type="url"
+                                    required
+                                    placeholder="https://drive.google.com/..."
+                                    value={signedDocDialog.signedDocUrl}
+                                    onChange={e => setSignedDocDialog(prev => prev ? { ...prev, signedDocUrl: e.target.value } : null)}
+                                    className="h-12 rounded-lg bg-background"
+                                />
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setSignedDocDialog(null)} className="h-12">Cancelar</Button>
+                                <Button type="submit" className="font-bold h-12">Confirmar Entrega</Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Plan Detail Dialog (Read-only Detail Modal) */}
+            <Dialog open={!!viewPlanDetail} onOpenChange={(open) => !open && setViewPlanDetail(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 font-bold text-lg">
+                            <FileText className="w-5 h-5 text-primary" />
+                            Detalle de Plan de Mejoramiento N° {viewPlanDetail?.planNumber}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Información general, compromisos y estado de evaluación del plan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {viewPlanDetail && (
+                        <div className="space-y-5 py-2 text-left">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Docente Asignador</span>
+                                    <span className="text-sm font-semibold">{formatName(viewPlanDetail.teacher.name, viewPlanDetail.teacher.profile)}</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Estado de Revisión</span>
+                                    {viewPlanDetail.viewedAt ? (
+                                        <Badge variant="outline" className="text-xs font-bold text-emerald-700 border-emerald-200 bg-emerald-50 gap-0.5">
+                                            <Eye className="w-3.5 h-3.5" /> Revisado el {format(new Date(viewPlanDetail.viewedAt), "dd/MM/yyyy HH:mm")}
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-xs font-bold text-amber-700 border-amber-200 bg-amber-50 gap-0.5">
+                                            <EyeOff className="w-3.5 h-3.5" /> No revisado aún
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Fecha de Inicio</span>
+                                    <span className="text-sm font-semibold">{format(new Date(viewPlanDetail.startDate), "dd 'de' MMMM 'de' yyyy", { locale: es })}</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Fecha Límite de Entrega</span>
+                                    <span className="text-sm font-semibold">{format(new Date(viewPlanDetail.endDate), "dd 'de' MMMM 'de' yyyy", { locale: es })}</span>
+                                </div>
+                            </div>
+
+                            {viewPlanDetail.observations && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Compromisos / Criterios de Evaluación</span>
+                                    <div className="p-3.5 bg-muted/40 border border-muted/70 rounded-xl text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                                        {viewPlanDetail.observations}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 border-t pt-4">
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Paso 1: Plan Docente</span>
+                                    {viewPlanDetail.teacherDocUrl ? (
+                                        <a href={viewPlanDetail.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold">
+                                            <ExternalLink className="w-3.5 h-3.5" /> Ver Documento
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground italic">No cargado</span>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Paso 2: Firma Aprendiz</span>
+                                    {viewPlanDetail.signedDocUrl ? (
+                                        <a href={viewPlanDetail.signedDocUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline font-bold">
+                                            <ExternalLink className="w-3.5 h-3.5" /> Ver Firmado
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground italic">Pendiente de firma</span>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Paso 3: Firma Docente</span>
+                                    {(viewPlanDetail as any).teacherSignedDocUrl ? (
+                                        <a href={(viewPlanDetail as any).teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline font-bold">
+                                            <ExternalLink className="w-3.5 h-3.5" /> Ver Contrafirma
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground italic">Pendiente de firma</span>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Paso 4: Evidencia</span>
+                                    {viewPlanDetail.evidenceUrl ? (
+                                        <a href={viewPlanDetail.evidenceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold">
+                                            <ExternalLink className="w-3.5 h-3.5" /> Ver Evidencia
+                                        </a>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground italic">No evaluado</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {(viewPlanDetail.planScore !== null || viewPlanDetail.finalGrade !== null) && (
+                                <div className="border-t pt-4 mt-2 grid grid-cols-2 gap-4">
+                                    <div className="space-y-1 bg-primary/5 p-3 rounded-xl border border-primary/20">
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Calificación Plan</span>
+                                        <span className="text-lg font-black text-primary">
+                                            {viewPlanDetail.planScore !== null && viewPlanDetail.planScore !== undefined ? viewPlanDetail.planScore.toFixed(1) : "N/D"}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-1 bg-blue-50/50 p-3 rounded-xl border border-blue-200">
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Nota Final</span>
+                                        <span className="text-lg font-black text-blue-700">
+                                            {viewPlanDetail.finalGrade !== null && viewPlanDetail.finalGrade !== undefined ? viewPlanDetail.finalGrade.toFixed(1) : "N/D"}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <DialogFooter className="border-t pt-4">
+                                <Button onClick={() => setViewPlanDetail(null)} className="h-12">Cerrar</Button>
+                            </DialogFooter>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+            {/* Shadcn UI Delete Plan Alert */}
+            <AlertDialog open={!!impDeleteConfirm} onOpenChange={(o) => !o && setImpDeleteConfirm(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar Plan de Mejoramiento?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            ¿Estás seguro de que deseas eliminar este plan de mejoramiento? Esta acción no se puede deshacer.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setImpDeleteConfirm(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={onConfirmDeletePlan} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Eliminar</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Shadcn UI Delete Student Document Alert */}
+            <AlertDialog open={!!docDeleteConfirm} onOpenChange={(o) => !o && setDocDeleteConfirm(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar Documento Firmado?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            ¿Estás seguro de que deseas eliminar la firma/documento del estudiante? Esta acción no se puede deshacer.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDocDeleteConfirm(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={onConfirmDeleteSignedDoc} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Eliminar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

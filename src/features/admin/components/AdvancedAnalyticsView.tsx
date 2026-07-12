@@ -47,6 +47,7 @@ ChartJS.register(
 interface AdvancedAnalyticsViewProps {
     programs: any[];
     environments: any[];
+    isObserver?: boolean;
 }
 
 const DAYS_ORDER: Record<string, number> = {
@@ -65,7 +66,7 @@ function getHours(start: string, end: string) {
     return (h2 + m2 / 60) - (h1 + m1 / 60);
 }
 
-export function AdvancedAnalyticsView({ programs, environments }: AdvancedAnalyticsViewProps) {
+export function AdvancedAnalyticsView({ programs, environments, isObserver = false }: AdvancedAnalyticsViewProps) {
     const [selectedProgramId, setSelectedProgramId] = useState<string>("ALL");
     const [selectedGroupId, setSelectedGroupId] = useState<string>("ALL");
     const [studentStats, setStudentStats] = useState<any>(null);
