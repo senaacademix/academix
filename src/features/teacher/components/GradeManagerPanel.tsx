@@ -16,6 +16,7 @@ import { WorkGroupManagerDialog } from "./WorkGroupManagerDialog";
 import { getCourseActivities, createActivity, updateActivity, deleteActivity, saveStudentGrades, toggleCourseWeightMode } from "../actions/gradeActions";
 import { formatName, getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -448,7 +449,10 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
                         <AvatarFallback className="text-[10px] font-bold bg-primary/5 text-primary">{getInitials(formatName(student.name, student.profile))}</AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
-                        <span className="leading-tight">{formatName(student.name, student.profile)}</span>
+                        <span className="leading-tight flex items-center gap-1.5">
+                          <span>{formatName(student.name, student.profile)}</span>
+                          <StudentNovedadBadge novedad={student.profile?.novedad} color={student.profile?.novedadColor} />
+                        </span>
                         <span className="text-[10px] text-muted-foreground/80 font-normal">{student.email}</span>
                       </div>
                     </div>
@@ -654,7 +658,10 @@ export function GradeManagerPanel({ courses, students }: GradeManagerPanelProps)
                               <AvatarImage src={student.image} />
                               <AvatarFallback className="text-[10px]">{getInitials(formatName(student.name, student.profile))}</AvatarFallback>
                             </Avatar>
-                            <span>{formatName(student.name, student.profile)}</span>
+                            <span className="flex items-center gap-1.5">
+                              <span>{formatName(student.name, student.profile)}</span>
+                              <StudentNovedadBadge novedad={student.profile?.novedad} color={student.profile?.novedadColor} />
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

@@ -357,7 +357,7 @@ export async function getGroupsAction() {
     });
 }
 
-export async function createGroupAction(data: { name: string; description?: string; programId: string; startTime?: string; endTime?: string; periodId?: string }) {
+export async function createGroupAction(data: { name: string; description?: string; programId: string; startTime?: string; endTime?: string; periodId?: string; categoria?: string }) {
     const session = await requireAdmin();
     if (!data.name || data.name.trim().length < 2) {
         throw new Error("El nombre del grupo debe tener al menos 2 caracteres");
@@ -380,6 +380,7 @@ export async function createGroupAction(data: { name: string; description?: stri
             startTime: data.startTime,
             endTime: data.endTime,
             periodId: data.periodId || null,
+            categoria: data.categoria || "LECTIVA",
         }
     });
 
@@ -400,7 +401,7 @@ export async function createGroupAction(data: { name: string; description?: stri
     return group;
 }
 
-export async function updateGroupAction(id: string, data: { name: string; description?: string; startTime?: string; endTime?: string; periodId?: string }) {
+export async function updateGroupAction(id: string, data: { name: string; description?: string; startTime?: string; endTime?: string; periodId?: string; categoria?: string }) {
     const session = await requireAdmin();
     if (!data.name || data.name.trim().length < 2) {
         throw new Error("El nombre del grupo debe tener al menos 2 caracteres");
@@ -420,6 +421,7 @@ export async function updateGroupAction(id: string, data: { name: string; descri
             startTime: data.startTime,
             endTime: data.endTime,
             periodId: data.periodId || null,
+            categoria: data.categoria || "LECTIVA",
         }
     });
 
@@ -675,8 +677,8 @@ export async function registerStudentManualAction(data: {
                 nombres: data.nombres.trim(),
                 apellido: data.apellido.trim(),
                 telefono: data.telefono?.trim() || null,
-                dataProcessingConsent: true,
-                dataProcessingConsentDate: new Date(),
+                dataProcessingConsent: false,
+                dataProcessingConsentDate: null,
             }
         });
 
@@ -846,8 +848,8 @@ export async function registerStudentsBulkAction(groupId: string, list: StudentI
                         nombres: student.nombres,
                         apellido: student.apellido,
                         telefono: student.telefono || null,
-                        dataProcessingConsent: true,
-                        dataProcessingConsentDate: new Date(),
+                        dataProcessingConsent: false,
+                        dataProcessingConsentDate: null,
                     }
                 });
             });

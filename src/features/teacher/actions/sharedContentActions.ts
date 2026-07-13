@@ -4,6 +4,8 @@ import { sharedContentService } from "@/features/teacher/services/sharedContentS
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import prisma from "@/lib/prisma";
+import { sendPushNotification } from "@/lib/push-notifications";
 
 export async function createSharedContent(data: {
     title: string;
@@ -22,6 +24,34 @@ export async function createSharedContent(data: {
         ...data,
         teacherId: session.user.id,
     });
+
+    // Send push notifications to all enrolled students asynchronously
+    (async () => {
+        try {
+            const course = await prisma.course.findUnique({
+                where: { id: data.courseId },
+                select: { title: true }
+            });
+            const courseTitle = course?.title || "Materia";
+
+            const enrollments = await prisma.enrollment.findMany({
+                where: { courseId: data.courseId, status: "APPROVED" },
+                select: { userId: true }
+            });
+
+            await Promise.all(
+                enrollments.map(async (enrollment) => {
+                    await sendPushNotification(enrollment.userId, {
+                        title: "Nuevo Material Compartido",
+                        body: `Se ha publicado nuevo material de estudio ("${data.title}") en la materia ${courseTitle}.`,
+                        url: "/dashboard/student/records"
+                    });
+                })
+            );
+        } catch (err) {
+            console.error("Error sending shared content notifications:", err);
+        }
+    })();
 
     revalidatePath(`/dashboard/teacher/courses/${data.courseId}`);
     return content;

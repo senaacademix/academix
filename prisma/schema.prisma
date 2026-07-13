@@ -23,6 +23,7 @@ model User {
   updatedAt     DateTime  @default(now()) @updatedAt
   sessions      Session[]
   accounts      Account[]
+  pushSubscriptions PushSubscription[]
 
   role String? // "admin", "teacher", "student"
 
@@ -79,6 +80,8 @@ model Profile {
   nombres                   String
   apellido                  String
   telefono                  String?
+  novedad                   String?
+  novedadColor              String?
   userId                    String    @unique
   user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt                 DateTime  @default(now())
@@ -442,6 +445,7 @@ model Group {
   endDate     DateTime?
   startTime   String     @default("08:00")
   endTime     String     @default("12:00")
+  categoria   String     @default("LECTIVA")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -591,6 +595,19 @@ model ImprovementPlan {
   updatedAt     DateTime  @updatedAt
 
   @@map("improvement_plan")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("push_subscription")
 }
 
 

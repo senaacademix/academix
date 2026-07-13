@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { getProfileAction, updateProfileAction } from "@/features/profile/actions/profileActions";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatName } from "@/lib/utils";
@@ -27,6 +27,8 @@ export function ProfileCompletionCheck() {
 
     // Config State
     const [profileIncomplete, setProfileIncomplete] = useState(false);
+    // true = solo falta el consentimiento (perfil ya completo)
+    const [consentOnly, setConsentOnly] = useState(false);
 
     const { data: session, refetch } = authClient.useSession();
 
@@ -43,7 +45,6 @@ export function ProfileCompletionCheck() {
             ]);
 
             let isProfileIncomplete = false;
-            let isComplete = true;
 
             // Check Profile
             if (!profile?.identificacion || !profile?.nombres || !profile?.apellido) {
@@ -52,22 +53,20 @@ export function ProfileCompletionCheck() {
                 setApellido(profile?.apellido || session?.user?.name?.split(" ").slice(1).join(" ") || "");
                 setIdentificacion(profile?.identificacion || "");
                 setTelefono(profile?.telefono || "");
-                isComplete = false;
             } else {
                 setIdentificacion(profile.identificacion);
                 setNombres(profile.nombres);
                 setApellido(profile.apellido);
                 setTelefono(profile.telefono || "");
             }
-            setConsent(!!profile?.dataProcessingConsent); // Load existing consent if any
+            setConsent(!!profile?.dataProcessingConsent);
 
-            // Check if consent is given
-            if (!profile?.dataProcessingConsent) {
-                isComplete = false;
-            }
+            const needsConsent = !profile?.dataProcessingConsent;
 
-            if (isProfileIncomplete || !profile?.dataProcessingConsent) {
+            if (isProfileIncomplete || needsConsent) {
                 setProfileIncomplete(isProfileIncomplete);
+                // Solo falta consentimiento si el perfil está completo
+                setConsentOnly(!isProfileIncomplete && needsConsent);
                 setIsOpen(true);
             } else {
                 setIsOpen(false);
@@ -93,15 +92,15 @@ export function ProfileCompletionCheck() {
 
         setSaving(true);
         try {
-            const capitalizedNombres = formatName(nombres)
-            const capitalizedApellido = formatName(apellido)
+            const capitalizedNombres = formatName(nombres);
+            const capitalizedApellido = formatName(apellido);
 
             const formData = new FormData();
             formData.append("identificacion", identificacion);
             formData.append("nombres", capitalizedNombres);
             formData.append("apellido", capitalizedApellido);
             if (telefono) formData.append("telefono", telefono);
-            formData.append("dataProcessingConsent", "true"); // Always send true if allowing save
+            formData.append("dataProcessingConsent", "true");
 
             await updateProfileAction(formData);
 
@@ -112,9 +111,12 @@ export function ProfileCompletionCheck() {
             }
 
             await refetch?.();
-            toast.success("Información actualizada correctamente");
+            toast.success(
+                consentOnly
+                    ? "Tratamiento de datos aceptado correctamente"
+                    : "Información actualizada correctamente"
+            );
 
-            // Re-check status instead of just closing to ensure everything is really persisted
             await checkStatus();
 
         } catch (error) {
@@ -127,22 +129,93 @@ export function ProfileCompletionCheck() {
 
     if (!isOpen) return null;
 
+    // ── Modal exclusivo de consentimiento (perfil ya está completo) ──
+    if (consentOnly) {
+        return (
+            <Dialog open={isOpen} onOpenChange={() => { }}>
+                <DialogContent
+                    className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto [&>button]:hidden text-left"
+                    onPointerDownOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                >
+                    <DialogHeader>
+                        <div className="flex items-center gap-2 mb-1">
+                            <ShieldCheck className="h-5 w-5 text-primary" />
+                            <DialogTitle className="text-lg">Autorización de Tratamiento de Datos Personales</DialogTitle>
+                        </div>
+                        <DialogDescription>
+                            Conforme a la legislación colombiana de protección de datos, debes autorizar el tratamiento
+                            de tu información antes de usar la plataforma.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4 space-y-4 text-sm">
+                        <div className="rounded-lg bg-muted/50 border p-4 space-y-3">
+                            <p className="font-semibold text-foreground">Aviso de Privacidad</p>
+                            <p className="text-muted-foreground text-justify leading-relaxed">
+                                En cumplimiento de la <strong className="text-foreground">Ley Estatutaria 1581 de 2012</strong> de protección de datos personales, le informamos que al utilizar la plataforma <strong>AcademiX</strong> sus datos personales (identificación, nombres, apellidos, teléfono y correo electrónico) serán tratados de manera confidencial y segura.
+                            </p>
+                            <p className="text-muted-foreground text-justify leading-relaxed">
+                                La finalidad del tratamiento es netamente académica, orientada a la gestión y administración de procesos formativos, control de asistencia, registro de calificaciones y comunicación. Como titular de la información, tiene derecho a conocer, actualizar y rectificar sus datos.
+                            </p>
+                        </div>
+
+                        {/* Checkbox */}
+                        <div className="flex items-start space-x-3 rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+                            <Checkbox
+                                id="consent-only"
+                                checked={consent}
+                                onCheckedChange={(checked) => setConsent(checked as boolean)}
+                                className="mt-0.5"
+                            />
+                            <label
+                                htmlFor="consent-only"
+                                className="text-sm font-medium leading-snug cursor-pointer select-none"
+                            >
+                                Autorizo de manera <strong>voluntaria, previa, explícita, informada e inequívoca</strong> el tratamiento de mis datos personales en la plataforma AcademiX.
+                            </label>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <p className="text-xs text-muted-foreground flex-1 hidden sm:block">
+                            Esta autorización es obligatoria para el uso de la plataforma.
+                        </p>
+                        <Button
+                            onClick={handleSave}
+                            disabled={saving || !consent}
+                            className="w-full sm:w-auto"
+                        >
+                            {saving ? "Guardando..." : "Aceptar y Continuar"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        );
+    }
+
+    // ── Modal completo: perfil incompleto + consentimiento ──
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[85vh] overflow-y-auto [&>button]:hidden text-left" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogContent
+                className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto [&>button]:hidden text-left"
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+            >
                 <DialogHeader>
-                    <DialogTitle>Información Requerida</DialogTitle>
+                    <DialogTitle>Información Requerida para Continuar</DialogTitle>
                     <DialogDescription>
-                        Para continuar usando la plataforma, necesitamos que completes la siguiente información.
+                        Para usar la plataforma debes completar tu perfil y autorizar el tratamiento de tus datos personales
+                        conforme a la legislación colombiana vigente.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-4 py-4">
+                <div className="space-y-5 py-4 text-sm">
                     <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle>Atención</AlertTitle>
                         <AlertDescription>
-                            Estos datos son obligatorios para el correcto funcionamiento del sistema y la gestión académica.
+                            Los siguientes datos son obligatorios para el correcto funcionamiento del sistema y la gestión académica.
                         </AlertDescription>
                     </Alert>
 
@@ -169,28 +242,46 @@ export function ProfileCompletionCheck() {
                             </div>
                         </div>
                     )}
-                </div>
 
-                <div className="flex items-start space-x-2 pt-4 border-t">
-                    <Checkbox
-                        id="consent"
-                        checked={consent}
-                        onCheckedChange={(checked) => setConsent(checked as boolean)}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                        <label
-                            htmlFor="consent"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                            Autorización de Tratamiento de Datos
-                        </label>
-                        <p className="text-sm text-muted-foreground text-justify">
-                            De conformidad con la <strong>Ley 1581 de 2012</strong> y el Decreto 1377 de 2013, autorizo de manera voluntaria, previa, explícita, informada e inequívoca el tratamiento de mis datos personales para fines académicos y administrativos dentro de la plataforma.
-                        </p>
+                    {/* Sección legal */}
+                    <div className="space-y-4 border-t pt-4">
+                        <h3 className="font-semibold text-foreground flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-primary" />
+                            Autorización de Tratamiento de Datos Personales
+                        </h3>
+
+                        <div className="rounded-lg bg-muted/50 border p-4 space-y-3">
+                            <p className="font-semibold text-foreground">Aviso de Privacidad</p>
+                            <p className="text-muted-foreground text-justify leading-relaxed">
+                                En cumplimiento de la <strong className="text-foreground">Ley Estatutaria 1581 de 2012</strong> de protección de datos personales, le informamos que al utilizar la plataforma <strong>AcademiX</strong> sus datos personales (identificación, nombres, apellidos, teléfono y correo electrónico) serán tratados de manera confidencial y segura.
+                            </p>
+                            <p className="text-muted-foreground text-justify leading-relaxed">
+                                La finalidad del tratamiento es netamente académica, orientada a la gestión y administración de procesos formativos, control de asistencia, registro de calificaciones y comunicación. Como titular de la información, tiene derecho a conocer, actualizar y rectificar sus datos.
+                            </p>
+                        </div>
+
+                        {/* Checkbox */}
+                        <div className="flex items-start space-x-3 rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+                            <Checkbox
+                                id="consent"
+                                checked={consent}
+                                onCheckedChange={(checked) => setConsent(checked as boolean)}
+                                className="mt-0.5"
+                            />
+                            <label
+                                htmlFor="consent"
+                                className="text-sm font-medium leading-snug cursor-pointer select-none"
+                            >
+                                Autorizo de manera <strong>voluntaria, previa, explícita, informada e inequívoca</strong> el tratamiento de mis datos personales en la plataforma AcademiX.
+                            </label>
+                        </div>
                     </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="gap-2">
+                    <p className="text-xs text-muted-foreground flex-1 hidden sm:block">
+                        Esta autorización es requerida para el uso de la plataforma.
+                    </p>
                     <Button onClick={handleSave} disabled={saving || !consent}>
                         {saving ? "Guardando..." : "Guardar y Continuar"}
                     </Button>

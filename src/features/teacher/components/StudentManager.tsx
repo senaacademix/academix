@@ -59,6 +59,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatName, getInitials } from "@/lib/utils";
+import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 
 export function StudentManager({ 
     courseId, 
@@ -256,7 +257,7 @@ export function StudentManager({
                                             </div>
 
                                             {searchResults.length > 0 ? (
-                                                <div className="rounded-md border text-xs sm:text-sm">
+                                                <div className="rounded-md border text-xs sm:text-sm overflow-x-auto">
                                                     <Table>
                                                         <TableHeader>
                                                             <TableRow>
@@ -294,8 +295,9 @@ export function StudentManager({
                                                                     </TableCell>
                                                                     <TableCell className="font-medium p-2">
                                                                         <div className="flex flex-col">
-                                                                            <span>
-                                                                                {formatName(student.name, student.profile)}
+                                                                            <span className="flex items-center gap-1.5">
+                                                                                <span>{formatName(student.name, student.profile)}</span>
+                                                                                <StudentNovedadBadge novedad={student.profile?.novedad} color={student.profile?.novedadColor} />
                                                                             </span>
                                                                             <span className="text-[10px] text-muted-foreground sm:hidden">
                                                                                 {student.profile?.identificacion || student.email}
@@ -344,9 +346,10 @@ export function StudentManager({
                                                     <AvatarFallback>{getInitials(formatName(selectedStudent.name, selectedStudent.profile))}</AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex-1">
-                                                    <p className="font-medium text-sm">
-                                                        {formatName(selectedStudent.name, selectedStudent.profile)}
-                                                    </p>
+                                                     <p className="font-medium text-sm flex items-center gap-1.5">
+                                                         <span>{formatName(selectedStudent.name, selectedStudent.profile)}</span>
+                                                         <StudentNovedadBadge novedad={selectedStudent.profile?.novedad} color={selectedStudent.profile?.novedadColor} />
+                                                     </p>
                                                     <p className="text-xs text-muted-foreground">{selectedStudent.email}</p>
                                                     {selectedStudent.profile?.identificacion && (
                                                         <p className="text-[10px] text-muted-foreground">
@@ -469,8 +472,9 @@ export function StudentManager({
                                         <AvatarFallback>{getInitials(formatName(enrollment.user.name, enrollment.user.profile))}</AvatarFallback>
                                     </Avatar>
                                 </TableCell>
-                                <TableCell className="font-medium">
-                                    {formatName(enrollment.user.name, enrollment.user.profile)}
+                                <TableCell className="font-medium flex items-center gap-1.5">
+                                    <span>{formatName(enrollment.user.name, enrollment.user.profile)}</span>
+                                    <StudentNovedadBadge novedad={enrollment.user.profile?.novedad} color={enrollment.user.profile?.novedadColor} />
                                 </TableCell>
                                 <TableCell>{enrollment.user.profile?.identificacion || "-"}</TableCell>
                                 <TableCell className="truncate max-w-[200px]">{enrollment.user.email}</TableCell>

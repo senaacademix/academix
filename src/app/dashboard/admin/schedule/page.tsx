@@ -54,7 +54,7 @@ export default async function AdminSchedulePage() {
                     weeklyHours: c.weeklyHours
                 }))
         })),
-        groups: program.groups.map((group: any) => ({
+        groups: program.groups.filter((group: any) => group.categoria === "LECTIVA").map((group: any) => ({
             id: group.id,
             name: group.name,
             description: group.description,

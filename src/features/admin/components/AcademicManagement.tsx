@@ -49,7 +49,7 @@ import {
     Search, Trash2, Edit, Plus, Folder, BookOpen, Users, Calendar, 
     ChevronRight, Layers, Clock, X, Info, GraduationCap, ArrowLeft, ArrowUpRight, GripVertical,
     AlertCircle, Building, Code, Database, Binary, MessageSquare, Terminal,
-    ShieldCheck, Cloud, Rocket, NotebookTabs, Lock as LockIcon
+    ShieldCheck, Cloud, Rocket, NotebookTabs, Lock as LockIcon, Download
 } from "lucide-react";
 import {
     DndContext,
@@ -124,7 +124,7 @@ import { TeacherQualificationsView } from "@/features/teacher/components/Teacher
 import { DayOfWeek } from "@/generated/prisma/client";
 import { EnvironmentManagement, TrainingEnvironment } from "@/features/admin/components/EnvironmentManagement";
 import { AdminAttendanceView } from "@/features/admin/components/AdminAttendanceView";
-
+import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 
 const DAYS_OF_WEEK_ORDERED: { value: DayOfWeek; label: string }[] = [
     { value: "MONDAY", label: "Lunes" },
@@ -265,6 +265,8 @@ interface Student {
         nombres: string;
         apellido: string;
         telefono: string | null;
+        novedad?: string | null;
+        novedadColor?: string | null;
     } | null;
 }
 
@@ -654,6 +656,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
     const [groupStartTime, setGroupStartTime] = useState("");
     const [groupEndTime, setGroupEndTime] = useState("");
     const [groupPeriodId, setGroupPeriodId] = useState<string>("none");
+    const [groupCategoria, setGroupCategoria] = useState("LECTIVA");
 
     const [courseDialogOpen, setCourseDialogOpen] = useState(false);
     const [courseToEdit, setCourseToEdit] = useState<Course | null>(null);
@@ -1273,6 +1276,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
         setGroupStartTime("");
         setGroupEndTime("");
         setGroupPeriodId("none");
+        setGroupCategoria("LECTIVA");
         setGroupDialogOpen(true);
     };
 
@@ -1283,6 +1287,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
         setGroupStartTime(group.startTime || "");
         setGroupEndTime(group.endTime || "");
         setGroupPeriodId(group.periodId || "none");
+        setGroupCategoria((group as any).categoria || "LECTIVA");
         setGroupDialogOpen(true);
     };
 
@@ -1309,7 +1314,8 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                         description: groupDescription || undefined,
                         startTime: groupStartTime,
                         endTime: groupEndTime,
-                        periodId: groupPeriodId === "none" ? undefined : groupPeriodId
+                        periodId: groupPeriodId === "none" ? undefined : groupPeriodId,
+                        categoria: groupCategoria
                     });
                     toast.success("Grupo académico actualizado");
                 } else {
@@ -1319,7 +1325,8 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                         description: groupDescription || undefined,
                         startTime: groupStartTime,
                         endTime: groupEndTime,
-                        periodId: groupPeriodId === "none" ? undefined : groupPeriodId
+                        periodId: groupPeriodId === "none" ? undefined : groupPeriodId,
+                        categoria: groupCategoria
                     });
                     toast.success("Grupo académico creado");
                 }
@@ -1329,6 +1336,127 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 toast.error(error.message || "Error al guardar el grupo");
             }
         });
+    };
+
+    const renderGroupsTable = (groupsFiltered: Group[]) => {
+        if (groupsFiltered.length === 0) {
+            return (
+                <div className="text-center py-12 bg-muted/5 rounded-2xl border border-dashed border-muted/40 animate-in fade-in-50 duration-200">
+                    <Layers className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <h5 className="font-semibold text-sm">Sin grupos en esta categoría</h5>
+                    <p className="text-muted-foreground text-xs mt-1 max-w-xs mx-auto">
+                        Aún no hay grupos creados en esta etapa para este programa académico.
+                    </p>
+                </div>
+            );
+        }
+
+        return (
+            <Card className="border-none shadow-sm bg-background overflow-hidden animate-in fade-in-50 duration-200">
+                <CardContent className="p-0">
+                    <div className="w-full overflow-x-auto">
+                        <Table>
+                        <TableHeader className="bg-muted/10">
+                            <TableRow>
+                                <TableHead className="py-3 text-xs font-semibold">Grupo</TableHead>
+                                <TableHead className="py-3 text-xs font-semibold">Descripción</TableHead>
+                                <TableHead className="py-3 text-xs font-semibold text-center">Cantidad de Alumnos</TableHead>
+                                <TableHead className="py-3 text-xs font-semibold text-right">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {groupsFiltered.map(group => (
+                                <TableRow key={group.id} className="hover:bg-muted/5">
+                                    <TableCell className="py-3 text-xs font-bold text-foreground">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span>{group.name}</span>
+                                            {group.period && (
+                                                <Badge variant="secondary" className="font-semibold text-[10px] px-1.5 py-0.2 bg-primary/10 text-primary border border-primary/20 shrink-0">
+                                                    {group.period.name}
+                                                </Badge>
+                                            )}
+                                            <Badge 
+                                                variant="outline" 
+                                                className={`font-semibold text-[9px] px-1.5 py-0.2 shrink-0 uppercase tracking-wide ${(group as any).categoria === "PRODUCTIVA" ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800" : (group as any).categoria === "EGRESADOS" ? "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-800" : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"}`}
+                                            >
+                                                {(group as any).categoria === "PRODUCTIVA" ? "Etapa Productiva" : (group as any).categoria === "EGRESADOS" ? "Egresados" : "Etapa Lectiva"}
+                                            </Badge>
+                                        </div>
+                                        {(group.startTime || group.endTime) && (
+                                            <div className="text-[10px] text-muted-foreground font-normal mt-1 flex flex-col gap-0.5">
+                                                <div className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3 text-primary/70 shrink-0" />
+                                                    <span>
+                                                        Horario: {group.startTime ? toFormat12h(group.startTime) : "---"} - {group.endTime ? toFormat12h(group.endTime) : "---"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="py-3 text-xs text-muted-foreground max-w-xs truncate">
+                                        {group.description || "Grupo de alumnos de este programa"}
+                                    </TableCell>
+                                    <TableCell className="py-3 text-xs text-center font-semibold">
+                                        <Badge variant="secondary" className="px-2 py-0.5 font-mono text-[11px]">
+                                            {group.students.length}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="py-3 text-right">
+                                        <div className="flex justify-end items-center gap-1.5">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline" 
+                                                        className="h-8 px-2.5 text-xs text-primary hover:text-primary hover:bg-primary/5 flex items-center gap-1.5"
+                                                        onClick={() => setManagingGroup(group)}
+                                                    >
+                                                        <Users className="h-3.5 w-3.5" />
+                                                        <span>Gestionar</span>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent><p>Gestionar Estudiantes</p></TooltipContent>
+                                            </Tooltip>
+                                            {!isObserver && (
+                                                <>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button 
+                                                                size="icon" 
+                                                                variant="ghost" 
+                                                                className="h-8 w-8 text-muted-foreground hover:bg-muted/10" 
+                                                                onClick={() => openEditGroup(group)}
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Editar Grupo</p></TooltipContent>
+                                                    </Tooltip>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button 
+                                                                size="icon" 
+                                                                variant="ghost" 
+                                                                className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                                                                onClick={() => triggerDelete("group", group.id, group.name)}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Eliminar Grupo</p></TooltipContent>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        );
     };
 
     // ============ ASSIGN STUDENT HANDLERS ============
@@ -1431,6 +1559,25 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
         });
     };
 
+    const handleDownloadTemplate = () => {
+        try {
+            const headers = [["Identificación", "Nombres", "Apellidos", "Email", "Teléfono"]];
+            const data = [
+                ["10245678", "Juan Carlos", "Pérez Gómez", "juan.perez@correo.com", "3123456789"],
+                ["98765432", "María Camila", "Ríos Londoño", "maria.rios@correo.com", ""]
+            ];
+            
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
+            
+            XLSX.utils.book_append_sheet(wb, ws, "Plantilla Estudiantes");
+            XLSX.writeFile(wb, "Plantilla_Importar_Estudiantes.xlsx");
+            toast.success("Plantilla de Excel descargada con éxito");
+        } catch (err: any) {
+            toast.error("Error al generar la plantilla: " + err.message);
+        }
+    };
+
     const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -1476,14 +1623,24 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                     );
                 };
 
-                const numDocIdx = getIndex(["identificacion", "identificación", "número de documento", "numero de documento", "documento", "cedula", "tarjeta", "nro doc"]);
-                const nombreIdx = getIndex(["nombre", "nombres", "primer nombre"]);
-                const apellidoIdx = getIndex(["apellido", "apellidos"]);
+                const numDocIdx = getIndex(["identificación", "identificacion", "número de documento", "numero de documento", "documento", "cedula", "tarjeta", "nro doc"]);
+                const nombreIdx = getIndex(["nombres", "nombre", "primer nombre"]);
+                const apellidoIdx = getIndex(["apellidos", "apellido"]);
                 const emailIdx = getIndex(["email", "mail", "correo electrónico", "correo electronico", "correo"]);
                 const telefonoIdx = getIndex(["teléfono", "telefono", "tel", "celular", "movil", "cel"]);
 
                 if (numDocIdx === -1) {
-                    toast.error("No se encontró la columna de 'Identificacion' en el archivo Excel");
+                    toast.error("No se encontró la columna de 'Identificación' en el archivo Excel");
+                    return;
+                }
+
+                if (nombreIdx === -1) {
+                    toast.error("No se encontró la columna de 'Nombres' en el archivo Excel");
+                    return;
+                }
+
+                if (apellidoIdx === -1) {
+                    toast.error("No se encontró la columna de 'Apellidos' en el archivo Excel");
                     return;
                 }
 
@@ -1492,27 +1649,36 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                     return;
                 }
 
-                // Mostrar aviso si faltan algunas columnas comunes, pero permitir continuar
-                const missingCols: string[] = [];
-                if (nombreIdx === -1) missingCols.push("Nombre");
-                if (apellidoIdx === -1) missingCols.push("Apellidos");
-                if (missingCols.length > 0) {
-                    toast.info(`Nota: No se encontraron las columnas: ${missingCols.join(", ")}. Se auto-completarán los datos.`);
-                }
-
                 const parsedList: any[] = [];
                 for (let i = 1; i < jsonData.length; i++) {
                     const row = jsonData[i];
                     if (!row || row.length === 0) continue;
 
                     const identificacion = row[numDocIdx]?.toString().trim();
-                    // Si no hay número de identificación, se salta la fila
-                    if (!identificacion) continue;
-
-                    const nombres = nombreIdx !== -1 && row[nombreIdx] ? row[nombreIdx].toString().trim() : "Estudiante";
-                    const apellido = apellidoIdx !== -1 && row[apellidoIdx] ? row[apellidoIdx].toString().trim() : "";
-                    const email = emailIdx !== -1 && row[emailIdx] ? row[emailIdx].toString().trim() : "";
+                    const nombres = row[nombreIdx]?.toString().trim();
+                    const apellido = row[apellidoIdx]?.toString().trim();
+                    const email = row[emailIdx]?.toString().trim();
                     const telefono = telefonoIdx !== -1 && row[telefonoIdx] ? row[telefonoIdx].toString().trim() : "";
+
+                    // Si toda la fila está vacía, saltar
+                    if (!identificacion && !nombres && !apellido && !email) continue;
+
+                    if (!identificacion) {
+                        toast.error(`Fila ${i + 1}: El campo Identificación es obligatorio`);
+                        return;
+                    }
+                    if (!nombres) {
+                        toast.error(`Fila ${i + 1}: El campo Nombres es obligatorio`);
+                        return;
+                    }
+                    if (!apellido) {
+                        toast.error(`Fila ${i + 1}: El campo Apellidos es obligatorio`);
+                        return;
+                    }
+                    if (!email) {
+                        toast.error(`Fila ${i + 1}: El campo Email es obligatorio`);
+                        return;
+                    }
 
                     parsedList.push({
                         identificacion,
@@ -2224,7 +2390,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                                 </Button>
                                                             </div>
                                                         ) : (
-                                                            <div className="border border-muted/40 rounded-xl overflow-hidden">
+                                                            <div className="border border-muted/40 rounded-xl overflow-x-auto">
                                                                 <Table>
                                                                     <TableHeader className="bg-muted/10">
                                                                         <TableRow>
@@ -2241,7 +2407,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                                                 <TableCell className="py-3 text-xs font-mono">
                                                                                     {student.profile?.identificacion || "S/D"}
                                                                                 </TableCell>
-                                                                                <TableCell className="py-3 text-xs font-medium">{student.name}</TableCell>
+                                                                                <TableCell className="py-3 text-xs font-medium flex items-center gap-2">
+                                                                                    <span>{student.name}</span>
+                                                                                    <StudentNovedadBadge novedad={student.profile?.novedad} color={student.profile?.novedadColor} />
+                                                                                </TableCell>
                                                                                 <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
                                                                                 <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
                                                                                 <TableCell className="py-3 text-right">
@@ -2299,89 +2468,39 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                             )}
                                         </div>
                                     ) : (
-                                        <Card className="border-none shadow-sm bg-background overflow-hidden">
-                                            <CardContent className="p-0">
-                                                <Table>
-                                                    <TableHeader className="bg-muted/10">
-                                                        <TableRow>
-                                                            <TableHead className="py-3 text-xs font-semibold">Grupo</TableHead>
-                                                            <TableHead className="py-3 text-xs font-semibold">Descripción</TableHead>
-                                                            <TableHead className="py-3 text-xs font-semibold text-center">Cantidad de Alumnos</TableHead>
-                                                            <TableHead className="py-3 text-xs font-semibold text-right">Acciones</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {selectedProgram.groups.map(group => (
-                                                            <TableRow key={group.id} className="hover:bg-muted/5">
-                                                                <TableCell className="py-3 text-xs font-bold text-foreground">
-                                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                                        <span>{group.name}</span>
-                                                                        {group.period && (
-                                                                            <Badge variant="secondary" className="font-semibold text-[10px] px-1.5 py-0.2 bg-primary/10 text-primary border border-primary/20 shrink-0">
-                                                                                {group.period.name}
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-                                                                    {(group.startTime || group.endTime) && (
-                                                                        <div className="text-[10px] text-muted-foreground font-normal mt-1 flex flex-col gap-0.5">
-                                                                            {(group.startTime || group.endTime) && (
-                                                                                <div className="flex items-center gap-1">
-                                                                                    <Clock className="h-3 w-3 text-primary/70 shrink-0" />
-                                                                                    <span>
-                                                                                        Horario: {group.startTime ? toFormat12h(group.startTime) : "---"} - {group.endTime ? toFormat12h(group.endTime) : "---"}
-                                                                                    </span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </TableCell>
-                                                                <TableCell className="py-3 text-xs text-muted-foreground max-w-xs truncate">
-                                                                    {group.description || "Grupo de alumnos de este programa"}
-                                                                </TableCell>
-                                                                <TableCell className="py-3 text-xs text-center font-semibold">
-                                                                    <Badge variant="secondary" className="px-2 py-0.5 font-mono text-[11px]">
-                                                                        {group.students.length}
-                                                                    </Badge>
-                                                                </TableCell>
-                                                                <TableCell className="py-3 text-right">
-                                                                    <div className="flex justify-end items-center gap-1.5">
-                                                                        <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                                    size="sm" 
-                                                                                                                                                    variant="outline" 
-                                                                                                                                                    className="h-8 px-2.5 text-xs text-primary hover:text-primary hover:bg-primary/5 flex items-center gap-1.5"
-                                                                                                                                                    onClick={() => setManagingGroup(group)}
-                                                                                                                                                >
-                                                                                                                                                    <Users className="h-3.5 w-3.5" />
-                                                                                                                                                    <span>Gestionar</span>
-                                                                                                                                                </Button></TooltipTrigger><TooltipContent><p>Gestionar Estudiantes</p></TooltipContent></Tooltip>
-                                                                        {!isObserver && (
-                                                                            <>
-                                                                                <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                                            size="icon" 
-                                                                                                                                                            variant="ghost" 
-                                                                                                                                                            className="h-8 w-8 text-muted-foreground hover:bg-muted/10" 
-                                                                                                                                                            onClick={() => openEditGroup(group)}
-                                                                                                                                                        >
-                                                                                                                                                            <Edit className="h-3.5 w-3.5" />
-                                                                                                                                                        </Button></TooltipTrigger><TooltipContent><p>Editar Grupo</p></TooltipContent></Tooltip>
-                                                                                <Tooltip><TooltipTrigger asChild><Button 
-                                                                                                                                                            size="icon" 
-                                                                                                                                                            variant="ghost" 
-                                                                                                                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10" 
-                                                                                                                                                            onClick={() => triggerDelete("group", group.id, group.name)}
-                                                                                                                                                        >
-                                                                                                                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                                                                                                                        </Button></TooltipTrigger><TooltipContent><p>Eliminar Grupo</p></TooltipContent></Tooltip>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
-                                            </CardContent>
-                                        </Card>
+                                        (() => {
+                                            const groupsLectiva = selectedProgram.groups.filter(g => (g as any).categoria === "LECTIVA" || !(g as any).categoria);
+                                            const groupsProductiva = selectedProgram.groups.filter(g => (g as any).categoria === "PRODUCTIVA");
+                                            const groupsEgresados = selectedProgram.groups.filter(g => (g as any).categoria === "EGRESADOS");
+
+                                            return (
+                                                <Tabs defaultValue="lectiva" className="space-y-4 w-full">
+                                                    <TabsList className="flex w-fit bg-muted/40 p-1 rounded-xl">
+                                                        <TabsTrigger value="lectiva" className="rounded-lg text-xs font-semibold px-4">
+                                                            Etapa Lectiva ({groupsLectiva.length})
+                                                        </TabsTrigger>
+                                                        <TabsTrigger value="productiva" className="rounded-lg text-xs font-semibold px-4">
+                                                            Etapa Productiva ({groupsProductiva.length})
+                                                        </TabsTrigger>
+                                                        <TabsTrigger value="egresados" className="rounded-lg text-xs font-semibold px-4">
+                                                            Egresados ({groupsEgresados.length})
+                                                        </TabsTrigger>
+                                                    </TabsList>
+
+                                                    <TabsContent value="lectiva" className="space-y-4 mt-0">
+                                                        {renderGroupsTable(groupsLectiva)}
+                                                    </TabsContent>
+
+                                                    <TabsContent value="productiva" className="space-y-4 mt-0">
+                                                        {renderGroupsTable(groupsProductiva)}
+                                                    </TabsContent>
+
+                                                    <TabsContent value="egresados" className="space-y-4 mt-0">
+                                                        {renderGroupsTable(groupsEgresados)}
+                                                    </TabsContent>
+                                                </Tabs>
+                                            );
+                                        })()
                                     )}
                                 </div>
                             )}
@@ -2491,7 +2610,8 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                     )}
                                     <Card className="border-none shadow-sm bg-background overflow-hidden">
                                         <CardContent className="p-0">
-                                            <Table>
+                                            <div className="w-full overflow-x-auto">
+                                                <Table>
                                                 <TableHeader className="bg-muted/10">
                                                     <TableRow>
                                                         {!isObserver && (
@@ -2618,8 +2738,9 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                     })}
                                                 </TableBody>
                                             </Table>
-                                        </CardContent>
-                                    </Card>
+                                        </div>
+                                    </CardContent>
+                                </Card>
                                 </>
                             )}
                         </TabsContent>
@@ -2790,6 +2911,19 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                             </div>
                         )}
                         <div className="space-y-2">
+                            <Label htmlFor="grpCategory">Categoría del Grupo</Label>
+                            <Select value={groupCategoria} onValueChange={setGroupCategoria}>
+                                <SelectTrigger id="grpCategory">
+                                    <SelectValue placeholder="Selecciona la categoría" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="LECTIVA">Etapa Lectiva</SelectItem>
+                                    <SelectItem value="PRODUCTIVA">Etapa Productiva</SelectItem>
+                                    <SelectItem value="EGRESADOS">Egresados</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
                             <Label htmlFor="grpDesc">Descripción</Label>
                             <Textarea
                                 id="grpDesc"
@@ -2854,7 +2988,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1 col-span-2">
-                                        <Label htmlFor="mNumDoc" className="text-xs">Número de Documento *</Label>
+                                        <Label htmlFor="mNumDoc" className="text-xs">Identificación *</Label>
                                         <Input
                                             id="mNumDoc"
                                             placeholder="Ej: 10245678 (Este número será la contraseña inicial)"
@@ -2887,7 +3021,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                     </div>
 
                                     <div className="space-y-1 col-span-2">
-                                        <Label htmlFor="mEmail" className="text-xs">Correo Electrónico *</Label>
+                                        <Label htmlFor="mEmail" className="text-xs">Email *</Label>
                                         <Input
                                             id="mEmail"
                                             type="email"
@@ -2899,7 +3033,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                     </div>
 
                                     <div className="space-y-1 col-span-2">
-                                        <Label htmlFor="mTel" className="text-xs">Teléfono / Celular</Label>
+                                        <Label htmlFor="mTel" className="text-xs">Teléfono (opcional)</Label>
                                         <Input
                                             id="mTel"
                                             placeholder="Ej: 3123456789"
@@ -2923,6 +3057,20 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                         {/* TAB: EXCEL IMPORT */}
                         <TabsContent value="excel" className="space-y-4 mt-0">
                             <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-muted-foreground uppercase">Importación Masiva</span>
+                                    <Button 
+                                        type="button"
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={handleDownloadTemplate} 
+                                        className="h-8 text-[11px] gap-1 px-3 border-emerald-500/30 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/5 dark:text-emerald-400 dark:hover:text-emerald-300 dark:hover:bg-emerald-500/10"
+                                    >
+                                        <Download className="w-3.5 h-3.5" />
+                                        Descargar Plantilla
+                                    </Button>
+                                </div>
+
                                 <div className="border border-dashed border-muted/50 rounded-xl p-4 bg-muted/5 text-center relative hover:bg-muted/10 transition-colors duration-150">
                                     <input 
                                         type="file" 
@@ -2941,9 +3089,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
 
                                 <div className="bg-muted/10 p-3 rounded-lg text-[10px] text-muted-foreground space-y-1">
                                     <p className="font-semibold text-foreground/70">Columnas requeridas en la primera hoja:</p>
-                                    <p>• <span className="font-semibold">Identificacion</span> (identificación única y contraseña inicial)</p>
+                                    <p>• <span className="font-semibold">Identificación</span> (identificación única y contraseña inicial)</p>
+                                    <p>• <span className="font-semibold">Nombres</span></p>
+                                    <p>• <span className="font-semibold">Apellidos</span></p>
                                     <p>• <span className="font-semibold">Email</span> (correo electrónico único y obligatorio)</p>
-                                    <p>• <span className="font-semibold">Nombre</span>, <span className="font-semibold">Apellidos</span></p>
                                     <p className="mt-1 font-semibold text-foreground/70">Columnas opcionales:</p>
                                     <p>• <span className="font-semibold">Teléfono</span></p>
                                 </div>

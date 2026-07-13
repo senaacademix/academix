@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { sendPushNotification } from "@/lib/push-notifications";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -115,6 +116,27 @@ export async function justifyAttendanceAction(attendanceId: string, justificatio
             justificationUrl: url.trim() || null,
         }
     });
+
+    // Send push notification to teacher asynchronously
+    (async () => {
+        try {
+            const course = await prisma.course.findUnique({
+                where: { id: attendance.courseId },
+                select: { teacherId: true, title: true }
+            });
+
+            if (course?.teacherId) {
+                const studentName = session.user.name || "Un aprendiz";
+                await sendPushNotification(course.teacherId, {
+                    title: "Nueva Justificación de Asistencia",
+                    body: `El aprendiz ${studentName} ha justificado su inasistencia en ${course.title}.`,
+                    url: "/dashboard/teacher/attendance"
+                });
+            }
+        } catch (err) {
+            console.error("Error sending push notification to teacher on justification:", err);
+        }
+    })();
 
     return { success: true, attendance: updated };
 }

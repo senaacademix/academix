@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { PushTestCard } from "@/components/PushTestCard";
 
 interface AdminSettingsProps {
     initialSettings: {
@@ -22,9 +23,8 @@ interface AdminSettingsProps {
     isObserver?: boolean;
 }
 
-export function AdminSettings({ initialSettings, initialRequests, isObserver = false }: AdminSettingsProps) {
-    const [limitWeek, setLimitWeek] = useState(initialSettings.limitAttendanceToCurrentWeek || false);
-    const [requests, setRequests] = useState<any[]>(initialRequests);
+export function AdminSettings({ initialSettings, isObserver = false }: AdminSettingsProps) {
+    const [allowPreviousWeeks, setAllowPreviousWeeks] = useState(!initialSettings.limitAttendanceToCurrentWeek);
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
             <div className="flex items-center justify-between">
@@ -85,22 +85,22 @@ export function AdminSettings({ initialSettings, initialRequests, isObserver = f
                             </div>
                             <div className="flex items-center justify-between border-t border-border/50 pt-4">
                                 <div className="space-y-0.5">
-                                    <Label htmlFor="limitAttendanceToCurrentWeek">Limitar registro a la semana actual</Label>
+                                    <Label htmlFor="limitAttendanceToCurrentWeek">Permitir edición de fechas anteriores</Label>
                                     <p className="text-[11px] text-muted-foreground">
-                                        Si está activo, el docente solo puede registrar/modificar asistencias de fechas que pertenezcan a la semana actual. Para modificar semanas anteriores, requerirá autorización del administrador.
+                                        Si está activo, los docentes pueden registrar/modificar asistencias de semanas anteriores libremente. Si está inactivo, el registro de asistencia estará limitado únicamente a la semana actual.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Switch
                                         id="limitAttendanceToCurrentWeek"
-                                        checked={limitWeek}
-                                        onCheckedChange={setLimitWeek}
+                                        checked={allowPreviousWeeks}
+                                        onCheckedChange={setAllowPreviousWeeks}
                                         disabled={isObserver}
                                     />
-                                    <input 
-                                        type="hidden" 
-                                        name="limitAttendanceToCurrentWeek" 
-                                        value={limitWeek ? "true" : "false"} 
+                                    <input
+                                        type="hidden"
+                                        name="limitAttendanceToCurrentWeek"
+                                        value={allowPreviousWeeks ? "false" : "true"}
                                     />
                                 </div>
                             </div>
@@ -113,88 +113,9 @@ export function AdminSettings({ initialSettings, initialRequests, isObserver = f
                     </CardContent>
                 </Card>
 
-                {/* Permission requests card */}
-                    <Card className="border border-border/50 shadow-lg mt-6">
-                        <CardHeader>
-                            <CardTitle>Solicitudes de Permiso de Edición</CardTitle>
-                            <CardDescription>
-                                Profesores que solicitan editar la asistencia de fechas pertenecientes a semanas anteriores.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {requests.length === 0 ? (
-                                <p className="text-xs text-muted-foreground py-4 text-center">
-                                    No hay solicitudes de permiso pendientes o registradas.
-                                </p>
-                            ) : (
-                                <div className="space-y-4">
-                                    {requests.map((req) => (
-                                        <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800 gap-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-bold text-foreground">{req.teacherName}</span>
-                                                    <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold">
-                                                        {req.groupName} • {req.courseName}
-                                                    </span>
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-                                                        req.status === "PENDING" 
-                                                            ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400"
-                                                            : req.status === "APPROVED"
-                                                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
-                                                                : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400"
-                                                    }`}>
-                                                        {req.status === "PENDING" ? "Pendiente" : req.status === "APPROVED" ? "Aprobado" : "Rechazado"}
-                                                    </span>
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground font-semibold">
-                                                    Fecha solicitada: <span className="text-foreground">{new Date(req.date).toLocaleDateString("es-CO", { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })}</span>
-                                                </p>
-                                                {req.reason && (
-                                                    <p className="text-[11px] bg-background border rounded-lg p-2 mt-1 text-muted-foreground">
-                                                        Motivo: <span className="text-foreground font-medium">{req.reason}</span>
-                                                    </p>
-                                                )}
-                                            </div>
-                                            
-                                            {!isObserver && req.status === "PENDING" && (
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="h-8 text-xs font-bold border-red-500/20 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-                                                        onClick={async () => {
-                                                            const { respondToAttendancePermissionRequestAction } = await import("@/features/teacher/actions/groupActions");
-                                                            const res = await respondToAttendancePermissionRequestAction(req.id, "REJECTED");
-                                                            if (res.success) {
-                                                                toast.success("Solicitud rechazada.");
-                                                                window.location.reload();
-                                                            }
-                                                        }}
-                                                    >
-                                                        Rechazar
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                                                        onClick={async () => {
-                                                            const { respondToAttendancePermissionRequestAction } = await import("@/features/teacher/actions/groupActions");
-                                                            const res = await respondToAttendancePermissionRequestAction(req.id, "APPROVED");
-                                                            if (res.success) {
-                                                                toast.success("Solicitud aprobada.");
-                                                                window.location.reload();
-                                                            }
-                                                        }}
-                                                    >
-                                                        Aprobar
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                <div className="mt-6">
+                    <PushTestCard />
+                </div>
             </div>
         </div>
     );

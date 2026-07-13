@@ -23,6 +23,7 @@ export {
     getAdminsAndObserversAction,
     createAdminOrObserverAction,
     updateAdminOrObserverAction,
-    deleteAdminOrObserverAction
+    deleteAdminOrObserverAction,
+    updateStudentNovedadAction
 } from "@/features/admin/actions/adminActions";
 

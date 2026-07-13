@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { sendPushNotification } from "@/lib/push-notifications";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -140,6 +141,20 @@ export async function upsertImprovementPlan(data: {
                     evidenceUrl: evidenceUrl || null,
                 }
             });
+
+            // Send push notification asynchronously
+            (async () => {
+                try {
+                    await sendPushNotification(studentId, {
+                        title: "Plan de Mejoramiento Modificado",
+                        body: `Se han registrado actualizaciones en tu plan de mejoramiento ${planNumber}.`,
+                        url: "/dashboard/student/records"
+                    });
+                } catch (err) {
+                    console.error("Error sending improvement plan update notification:", err);
+                }
+            })();
+
             return { success: true, data: updated };
         } else {
             // Create
@@ -159,6 +174,20 @@ export async function upsertImprovementPlan(data: {
                     evidenceUrl: evidenceUrl || null,
                 }
             });
+
+            // Send push notification asynchronously
+            (async () => {
+                try {
+                    await sendPushNotification(studentId, {
+                        title: "Nuevo Plan de Mejoramiento",
+                        body: `Se ha creado un nuevo plan de mejoramiento (${planNumber}) para ti.`,
+                        url: "/dashboard/student/records"
+                    });
+                } catch (err) {
+                    console.error("Error sending improvement plan create notification:", err);
+                }
+            })();
+
             return { success: true, data: created };
         }
     } catch (error: any) {
@@ -208,6 +237,22 @@ export async function submitSignedDocument(planId: string, signedDocUrl: string)
             where: { id: planId },
             data: { signedDocUrl }
         });
+
+        // Send push notification to teacher asynchronously
+        if (plan.teacherId) {
+            const studentName = session.user.name || "Un aprendiz";
+            (async () => {
+                try {
+                    await sendPushNotification(plan.teacherId, {
+                        title: "Plan de Mejoramiento Firmado",
+                        body: `El aprendiz ${studentName} ha firmado y cargado el Plan de Mejoramiento ${plan.planNumber}.`,
+                        url: "/dashboard/teacher"
+                    });
+                } catch (err) {
+                    console.error("Error sending push notification to teacher on plan signature:", err);
+                }
+            })();
+        }
 
         return { success: true, data: updated };
     } catch (error: any) {

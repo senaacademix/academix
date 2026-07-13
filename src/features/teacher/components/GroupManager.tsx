@@ -60,7 +60,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import * as htmlToImage from "html-to-image";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut } from "lucide-react";
+import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,7 +75,7 @@ import { formatName } from "@/lib/utils";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { formatCalendarDate } from "@/lib/dateUtils";
-import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction, deleteRemarkAction } from "../actions/groupActions";
+import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction, deleteRemarkAction, resetStudentDailyAttempts, notifyEmailSentBatchAction } from "../actions/groupActions";
 import { getRemarkTemplatesAction, createRemarkTemplateAction, updateRemarkTemplateAction, deleteRemarkTemplateAction } from "../actions/remarkActions";
 import { getGroupImprovementPlans, upsertImprovementPlan, deleteImprovementPlan, deleteSignedDocument, deleteTeacherSignedDoc, submitTeacherSignedDoc, markPlanViewed } from "@/features/student/actions/improvementPlanActions";
 import * as XLSX from "xlsx";
@@ -87,6 +87,7 @@ import { Roulette } from "./Roulette";
 import { GroupGenerator } from "./GroupGenerator";
 import { GroupAnalyticsPanel } from "@/components/analytics/GroupAnalyticsPanel";
 import { StudentRecords } from "@/features/student/components/StudentRecords";
+import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { GradeManagerPanel } from "./GradeManagerPanel";
 import {
@@ -456,6 +457,8 @@ export function GroupManager({ groups }: GroupManagerProps) {
         if (plan.observations) bodyText += `- Observaciones/Criterios: ${plan.observations}\n`;
         bodyText += `\nPor favor ingresa a la plataforma AcademiX para revisar el plan en detalle, firmarlo y cargar el documento firmado.\n\nAtentamente,\n${teacherName}`;
         window.location.href = `mailto:${studentEmail}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+        // Notify student via push
+        notifyEmailSentBatchAction([plan.studentId], "PLAN");
     };
 
     useEffect(() => {
@@ -1513,6 +1516,8 @@ const handleOpenAnalytics = async () => {
                     const subject = encodeURIComponent(remarkTitle);
                     const body = encodeURIComponent(getParsedDescription());
                     window.location.href = `mailto:${selectedEmails}?subject=${subject}&body=${body}`;
+                    // Notify students via push
+                    notifyEmailSentBatchAction(selectedStudents, "REMARK");
                 } else {
                     toast.warning("No hay correos registrados para los estudiantes seleccionados.");
                 }
@@ -1880,7 +1885,7 @@ const handleOpenAnalytics = async () => {
                                     </div>
                                 </div>
 
-                                <div className="rounded-xl border overflow-hidden">
+                                <div className="rounded-xl border overflow-x-auto">
                                     <Table>
                                         <TableHeader className="bg-muted/50">
                                             <TableRow>
@@ -1911,7 +1916,10 @@ const handleOpenAnalytics = async () => {
                                                                 <AvatarImage src={s.image} />
                                                                 <AvatarFallback>{s.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
                                                             </Avatar>
-                                                            <span className="font-semibold text-sm">{formatName(s.name, s.profile)}</span>
+                                                            <span className="font-semibold text-sm flex items-center gap-2">
+                                                                <span>{formatName(s.name, s.profile)}</span>
+                                                                <StudentNovedadBadge novedad={s.profile?.novedad} color={s.profile?.novedadColor} />
+                                                            </span>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="font-mono text-xs hidden md:table-cell">
@@ -1950,6 +1958,25 @@ const handleOpenAnalytics = async () => {
                                                                                                                         >
                                                                                                                             <Key className="w-4 h-4" />
                                                                                                                         </Button></TooltipTrigger><TooltipContent><p>Resetear Contraseña</p></TooltipContent></Tooltip>
+                                                            <Tooltip><TooltipTrigger asChild><Button 
+                                                                                                                            variant="ghost" 
+                                                                                                                            size="icon" 
+                                                                                                                            className="h-8 w-8 text-indigo-600 hover:bg-indigo-500/10"
+                                                                                                                            onClick={async () => {
+                                                                                                                                try {
+                                                                                                                                    const res = await resetStudentDailyAttempts(s.id);
+                                                                                                                                    if (res.success) {
+                                                                                                                                        toast.success("Intentos diarios del estudiante reiniciados.");
+                                                                                                                                    } else {
+                                                                                                                                        toast.error(res.error || "No se pudieron reiniciar los intentos.");
+                                                                                                                                    }
+                                                                                                                                } catch (e) {
+                                                                                                                                    toast.error("Error al conectar con el servidor.");
+                                                                                                                                }
+                                                                                                                            }}
+                                                                                                                        >
+                                                                                                                            <RefreshCw className="w-4 h-4" />
+                                                                                                                        </Button></TooltipTrigger><TooltipContent><p>Reiniciar intentos diarios</p></TooltipContent></Tooltip>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -2025,65 +2052,14 @@ const handleOpenAnalytics = async () => {
                             {/* TAB 2: ATTENDANCE */}
                             <TabsContent value="attendance" className="m-0 space-y-4 outline-none">
                                 {isDateLocked && (
-                                    <div className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300 ${
-                                        hasEditPermission 
-                                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-400" 
-                                            : permissionRequestStatus === "PENDING"
-                                                ? "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-400"
-                                                : permissionRequestStatus === "REJECTED"
-                                                    ? "bg-red-500/10 border-red-500/20 text-red-800 dark:text-red-400"
-                                                    : "bg-slate-500/10 border-slate-500/20 text-slate-800 dark:text-slate-400"
-                                    }`}>
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2 font-bold text-sm">
-                                                <Lock className="w-4 h-4" />
-                                                <span>
-                                                    {hasEditPermission 
-                                                        ? "Edición Autorizada (Semana Anterior)" 
-                                                        : "Fecha Bloqueada (Semana Anterior)"}
-                                                </span>
-                                            </div>
+                                    <div className="p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 bg-slate-500/10 border-slate-500/20 text-slate-800 dark:text-slate-400">
+                                        <Lock className="w-4 h-4 shrink-0" />
+                                        <div className="space-y-0.5">
+                                            <p className="font-bold text-sm">Fecha Bloqueada (Semana Anterior)</p>
                                             <p className="text-xs opacity-90">
-                                                {hasEditPermission 
-                                                    ? "El administrador ha aprobado tu solicitud de edición para esta fecha. Puedes registrar asistencia." 
-                                                    : permissionRequestStatus === "PENDING"
-                                                        ? "Has solicitado permiso para modificar la asistencia de esta fecha. Esperando aprobación del administrador."
-                                                        : permissionRequestStatus === "REJECTED"
-                                                            ? `Tu solicitud de edición fue rechazada. Motivo: ${permissionReason || "Sin justificación."}`
-                                                            : "Esta fecha pertenece a una semana anterior. Debes solicitar permiso al administrador para modificar la asistencia."}
+                                                Esta fecha pertenece a una semana anterior y el administrador ha deshabilitado su edición. Para habilitarla, el administrador debe activar la opción "Permitir edición de fechas anteriores" en la configuración del sistema.
                                             </p>
                                         </div>
-                                        
-                                        {!hasEditPermission && permissionRequestStatus !== "PENDING" && (
-                                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md w-full md:w-auto">
-                                                <Input 
-                                                    placeholder="Motivo del cambio..." 
-                                                    value={requestingPermissionReason}
-                                                    onChange={e => setRequestingPermissionReason(e.target.value)}
-                                                    className="h-8 text-xs bg-background text-foreground"
-                                                />
-                                                <Button 
-                                                    size="sm" 
-                                                    disabled={isRequestingPermission || !requestingPermissionReason.trim()}
-                                                    onClick={async () => {
-                                                        setIsRequestingPermission(true);
-                                                        const { requestAttendanceEditPermissionAction } = await import("../actions/groupActions");
-                                                        const res = await requestAttendanceEditPermissionAction(attCourseId, attDate, requestingPermissionReason);
-                                                        if (res.success) {
-                                                            toast.success("Solicitud de permiso enviada.");
-                                                            setRequestingPermissionReason("");
-                                                            checkEditPermission();
-                                                        } else {
-                                                            toast.error(res.error || "Error al enviar solicitud.");
-                                                        }
-                                                        setIsRequestingPermission(false);
-                                                    }}
-                                                    className="h-8 text-xs font-bold shrink-0"
-                                                >
-                                                    Solicitar Permiso
-                                                </Button>
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                                 {/* Dedicated Date Selection Bar */}
@@ -2372,7 +2348,10 @@ const handleOpenAnalytics = async () => {
                                                                     }`}
                                                                     title={formatName(s.name, s.profile)}
                                                                 >
-                                                                    {formatName(s.name, s.profile)}
+                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                        <span className="truncate">{formatName(s.name, s.profile)}</span>
+                                                                        <StudentNovedadBadge novedad={s.profile?.novedad} color={s.profile?.novedadColor} />
+                                                                    </div>
                                                                 </div>
                                                                 <div className="text-[10px] text-muted-foreground/80 font-mono mt-0.5">
                                                                     ID: {s.profile?.identificacion || s.id.substring(0, 8)}
@@ -2587,7 +2566,7 @@ const handleOpenAnalytics = async () => {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+                                            <div className="rounded-2xl border bg-card shadow-sm overflow-x-auto">
                                                 <Table>
                                                     <TableHeader className="bg-muted/30">
                                                         <TableRow>
@@ -2621,8 +2600,9 @@ const handleOpenAnalytics = async () => {
                                                                                     </AvatarFallback>
                                                                                 </Avatar>
                                                                                 <div className="min-w-0">
-                                                                                    <div className="font-semibold text-sm text-foreground truncate max-w-[280px]">
-                                                                                        {formatName(s.name, s.profile)}
+                                                                                    <div className="font-semibold text-sm text-foreground truncate max-w-[280px] flex items-center gap-1.5">
+                                                                                        <span>{formatName(s.name, s.profile)}</span>
+                                                                                        <StudentNovedadBadge novedad={s.profile?.novedad} color={s.profile?.novedadColor} />
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
@@ -3737,7 +3717,10 @@ const handleOpenAnalytics = async () => {
                                                                             <td className={`sticky left-0 z-10 px-4 py-2 font-semibold text-foreground border-r border-border/40 whitespace-nowrap transition-colors ${
                                                                                 i % 2 === 0 ? "bg-background" : "bg-neutral-50 dark:bg-zinc-900"
                                                                             } group-hover/row:bg-muted`}>
-                                                                                {formatName(s.name, s.profile)}
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span>{formatName(s.name, s.profile)}</span>
+                                                                                    <StudentNovedadBadge novedad={s.profile?.novedad} color={s.profile?.novedadColor} />
+                                                                                </div>
                                                                             </td>
                                                                             {displayedDays.map(d => {
                                                                                 const ds = toUTCDateStr(d);
@@ -4048,6 +4031,8 @@ const handleOpenAnalytics = async () => {
                                                             const subject = encodeURIComponent(remarkTitle || "Observación Académica/Disciplinaria");
                                                             const body = encodeURIComponent(getParsedDescription() || "");
                                                             window.location.href = `mailto:${selectedEmails}?subject=${subject}&body=${body}`;
+                                                            // Notify students via push
+                                                            notifyEmailSentBatchAction(selectedStudents, "REMARK");
                                                         } else {
                                                             toast.warning("No hay correos registrados para los estudiantes seleccionados.");
                                                         }

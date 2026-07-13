@@ -49,17 +49,18 @@ import {
 import {
     Search, Trash2, Eye, UserCog, Users as UsersIcon, UserPlus, ChevronLeft, ChevronRight,
     BookOpen, Calendar, MessageSquare, FileText, CheckCircle2, AlertCircle, X, GraduationCap,
-    Key
+    Key, RefreshCw, Bookmark
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction } from "@/app/admin-actions";
+import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction, updateStudentNovedadAction } from "@/app/admin-actions";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { formatName } from "@/lib/utils";
 import { StudentRecords } from "@/features/student/components/StudentRecords";
+import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 import { GroupAnalyticsPanel } from "@/components/analytics/GroupAnalyticsPanel";
-import { getGroupAttendanceHistory, getGroupRemarksHistory } from "@/features/teacher/actions/groupActions";
+import { getGroupAttendanceHistory, getGroupRemarksHistory, resetStudentDailyAttempts } from "@/features/teacher/actions/groupActions";
 
 interface User {
     id: string;
@@ -74,6 +75,8 @@ interface User {
         nombres: string | null;
         apellido: string | null;
         telefono: string | null;
+        novedad?: string | null;
+        novedadColor?: string | null;
         dataProcessingConsent?: boolean | null;
     } | null;
     group?: {
@@ -89,7 +92,7 @@ interface UserManagementProps {
     initialUsers: User[];
     totalCount: number;
     initialGroupId?: string;
-    initialGroups?: { id: string, name: string, programId?: string }[];
+    initialGroups?: { id: string, name: string, programId?: string, categoria?: string }[];
     initialPrograms?: { id: string, name: string }[];
     isObserver?: boolean;
 }
@@ -113,18 +116,21 @@ export function UserManagement({
         return initialPrograms[0]?.id || "none";
     });
     const [groupFilter, setGroupFilter] = useState<string>(() => {
-        if (initialGroupId && initialGroupId !== "all") {
+        if (initialGroupId && initialGroupId !== "all" && initialGroupId !== "none") {
             return initialGroupId;
         }
         const defaultProgramId = initialPrograms[0]?.id;
         if (defaultProgramId) {
-            const group = initialGroups.find(g => g.programId === defaultProgramId);
+            const group = initialGroups.find(g => g.programId === defaultProgramId && g.categoria === "LECTIVA");
             if (group) return group.id;
         }
-        return initialGroups[0]?.id || "none";
+        const firstLectivaGroup = initialGroups.find(g => g.categoria === "LECTIVA");
+        if (firstLectivaGroup) return firstLectivaGroup.id;
+        return "none";
     });
+    const [categoriaFilter, setCategoriaFilter] = useState<string>("LECTIVA");
     const [programsList, setProgramsList] = useState<{ id: string, name: string }[]>(initialPrograms);
-    const [groupsList, setGroupsList] = useState<{ id: string, name: string, programId?: string }[]>(initialGroups);
+    const [groupsList, setGroupsList] = useState<{ id: string, name: string, programId?: string, categoria?: string }[]>(initialGroups);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -133,6 +139,10 @@ export function UserManagement({
     const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
     const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [novedadDialogOpen, setNovedadDialogOpen] = useState(false);
+    const [userForNovedad, setUserForNovedad] = useState<User | null>(null);
+    const [novedadText, setNovedadText] = useState("");
+    const [novedadColorText, setNovedadColorText] = useState<string>("blue");
 
     
     // Group analytics state
@@ -210,22 +220,36 @@ export function UserManagement({
         }
     };
 
-    const onFilterChange = (type: 'role' | 'group' | 'program' | 'search', value: string) => {
+    const onFilterChange = (type: 'role' | 'group' | 'program' | 'search' | 'categoria', value: string) => {
         let currentRole = roleFilter;
         let currentGroup = groupFilter;
         let currentProgram = programFilter;
         let currentSearch = searchQuery;
+        let currentCategoria = categoriaFilter;
 
         if (type === 'role') {
             setRoleFilter(value);
             currentRole = value;
+        } else if (type === 'categoria') {
+            setCategoriaFilter(value);
+            currentCategoria = value;
+            const filteredGroups = groupsList.filter(g => 
+                (programFilter === "all" || g.programId === programFilter) &&
+                (value === "all" || g.categoria === value)
+            );
+            const defaultGroupForCategory = filteredGroups.length > 0 ? filteredGroups[0].id : "none";
+            setGroupFilter(defaultGroupForCategory);
+            currentGroup = defaultGroupForCategory;
         } else if (type === 'group') {
             setGroupFilter(value);
             currentGroup = value;
         } else if (type === 'program') {
             setProgramFilter(value);
             currentProgram = value;
-            const filteredGroups = groupsList.filter(g => g.programId === value);
+            const filteredGroups = groupsList.filter(g => 
+                (g.programId === value) &&
+                (categoriaFilter === "all" || g.categoria === categoriaFilter)
+            );
             const defaultGroupForProgram = filteredGroups.length > 0 ? filteredGroups[0].id : "none";
             setGroupFilter(defaultGroupForProgram);
             currentGroup = defaultGroupForProgram;
@@ -371,6 +395,50 @@ export function UserManagement({
         }
     };
 
+    const handleSaveNovedad = async () => {
+        if (!userForNovedad) return;
+
+        startTransition(async () => {
+            try {
+                await updateStudentNovedadAction(userForNovedad.id, novedadText, novedadColorText);
+                
+                setUsers(prev => prev.map(u => {
+                    if (u.id === userForNovedad.id) {
+                        return {
+                            ...u,
+                            profile: u.profile ? {
+                                ...u.profile,
+                                novedad: novedadText ? novedadText.trim() : null,
+                                novedadColor: novedadColorText ? novedadColorText.trim() : null
+                            } : {
+                                identificacion: "",
+                                nombres: "",
+                                apellido: "",
+                                telefono: null,
+                                novedad: novedadText ? novedadText.trim() : null,
+                                novedadColor: novedadColorText ? novedadColorText.trim() : null,
+                                dataProcessingConsent: false
+                            }
+                        };
+                    }
+                    return u;
+                }));
+
+                toast.success("Novedad actualizada", {
+                    description: `Se actualizó la novedad del estudiante.`
+                });
+                setNovedadDialogOpen(false);
+                setUserForNovedad(null);
+                setNovedadText("");
+                setNovedadColorText("blue");
+            } catch (error: any) {
+                toast.error("Error", {
+                    description: error.message || "No se pudo actualizar la novedad"
+                });
+            }
+        });
+    };
+
     const handleCreateUser = async () => {
         if (!newIdentificacion || !newNombres || !newApellido || !newUserEmail) {
             toast.error("Error", {
@@ -508,7 +576,7 @@ export function UserManagement({
                             />
                         </div>
                         <Select value={programFilter} onValueChange={(val) => onFilterChange('program', val)}>
-                            <SelectTrigger className="w-full md:w-[250px]">
+                            <SelectTrigger className="w-full md:w-[200px]">
                                 <SelectValue placeholder="Filtrar por programa" />
                             </SelectTrigger>
                             <SelectContent>
@@ -519,13 +587,26 @@ export function UserManagement({
                                 ))}
                             </SelectContent>
                         </Select>
+                        <Select value={categoriaFilter} onValueChange={(val) => onFilterChange('categoria', val)}>
+                            <SelectTrigger className="w-full md:w-[200px]">
+                                <SelectValue placeholder="Filtrar por etapa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="LECTIVA">Etapa Lectiva</SelectItem>
+                                <SelectItem value="PRODUCTIVA">Etapa Productiva</SelectItem>
+                                <SelectItem value="EGRESADOS">Egresados</SelectItem>
+                            </SelectContent>
+                        </Select>
                         <Select value={groupFilter} onValueChange={(val) => onFilterChange('group', val)}>
-                            <SelectTrigger className="w-full md:w-[250px]">
+                            <SelectTrigger className="w-full md:w-[200px]">
                                 <SelectValue placeholder="Filtrar por grupo" />
                             </SelectTrigger>
                             <SelectContent>
                                 {groupsList
-                                    .filter((g) => programFilter === "all" || g.programId === programFilter)
+                                    .filter((g) => 
+                                        (programFilter === "all" || g.programId === programFilter) &&
+                                        (categoriaFilter === "all" || g.categoria === categoriaFilter)
+                                    )
                                     .map((group) => (
                                         <SelectItem key={group.id} value={group.id}>
                                             {group.name}
@@ -632,7 +713,10 @@ export function UserManagement({
                                                         size="sm"
                                                     />
                                                     <div>
-                                                        <div className="font-medium">{formatName(user.name, user.profile)}</div>
+                                                        <div className="font-medium flex items-center gap-2">
+                                                            <span>{formatName(user.name, user.profile)}</span>
+                                                            <StudentNovedadBadge novedad={user.profile?.novedad} color={user.profile?.novedadColor} />
+                                                        </div>
                                                         {user.profile && (
                                                             <div className="text-xs text-muted-foreground">
                                                                 {user.profile.identificacion}
@@ -691,19 +775,63 @@ export function UserManagement({
                                                                                                             <Key className="h-4 w-4" />
                                                                                                         </Button></TooltipTrigger><TooltipContent><p>{user.profile?.identificacion ? "Restablecer contraseña al número de documento" : "Usuario sin documento registrado"}</p></TooltipContent></Tooltip>
                                                     {!isObserver && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => {
-                                                                setUserToDelete(user);
-                                                                setDeleteDialogOpen(true);
-                                                            }}
-                                                            disabled={isPending}
-                                                            className="text-destructive hover:text-destructive"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => {
+                                                                        setUserForNovedad(user);
+                                                                        setNovedadText(user.profile?.novedad || "");
+                                                                        setNovedadColorText(user.profile?.novedadColor || "blue");
+                                                                        setNovedadDialogOpen(true);
+                                                                    }}
+                                                                    disabled={isPending}
+                                                                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/50 dark:text-emerald-400 dark:hover:text-emerald-300"
+                                                                >
+                                                                    <Bookmark className="h-4 w-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                <p>Registrar Novedad</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
                                                     )}
+                                                    {!isObserver && (
+                                                         <Tooltip><TooltipTrigger asChild><Button
+                                                             variant="ghost"
+                                                             size="icon"
+                                                             onClick={async () => {
+                                                                 try {
+                                                                     const res = await resetStudentDailyAttempts(user.id);
+                                                                     if (res.success) {
+                                                                         toast.success("Intentos diarios reiniciados con éxito.");
+                                                                     } else {
+                                                                         toast.error(res.error || "No se pudieron reiniciar los intentos.");
+                                                                     }
+                                                                 } catch (error) {
+                                                                     toast.error("Error al conectar con el servidor.");
+                                                                 }
+                                                             }}
+                                                             className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+                                                         >
+                                                             <RefreshCw className="h-4 w-4" />
+                                                         </Button></TooltipTrigger><TooltipContent><p>Reiniciar intentos diarios</p></TooltipContent></Tooltip>
+                                                     )}
+                                                     {!isObserver && (
+                                                         <Button
+                                                             variant="ghost"
+                                                             size="icon"
+                                                             onClick={() => {
+                                                                 setUserToDelete(user);
+                                                                 setDeleteDialogOpen(true);
+                                                             }}
+                                                             disabled={isPending}
+                                                             className="text-destructive hover:text-destructive"
+                                                         >
+                                                             <Trash2 className="h-4 w-4" />
+                                                         </Button>
+                                                     )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -986,6 +1114,85 @@ export function UserManagement({
                     </DialogFooter>
                 </DialogContent>
             </Dialog >
+
+            {/* Novedad Dialog */}
+            <Dialog open={novedadDialogOpen} onOpenChange={(open) => {
+                setNovedadDialogOpen(open);
+                if (!open) {
+                    setUserForNovedad(null);
+                    setNovedadText("");
+                }
+            }}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Registrar Novedad de Estudiante</DialogTitle>
+                        <DialogDescription>
+                            Escribe la novedad o estado especial para {userForNovedad ? formatName(userForNovedad.name, userForNovedad.profile) : ""}. Esta novedad será visible para todos los roles.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="novedad">Detalle de la Novedad</Label>
+                            <Input
+                                id="novedad"
+                                placeholder="Ej: Condicionado, Matrícula de Honor, En observación..."
+                                value={novedadText}
+                                onChange={(e) => setNovedadText(e.target.value)}
+                                disabled={isPending}
+                            />
+                            <p className="text-[10px] text-muted-foreground">
+                                Deja el campo vacío para remover cualquier novedad anterior.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Color / Nivel de Estado</Label>
+                            <div className="flex items-center gap-2.5 pt-1">
+                                {[
+                                    { name: "blue", class: "bg-blue-500 hover:bg-blue-600 border-blue-200 dark:border-blue-800", label: "Azul (Información)" },
+                                    { name: "red", class: "bg-red-500 hover:bg-red-600 border-red-200 dark:border-red-800", label: "Rojo (Condicionado)" },
+                                    { name: "orange", class: "bg-orange-500 hover:bg-orange-600 border-orange-200 dark:border-orange-800", label: "Naranja (Alerta)" },
+                                    { name: "yellow", class: "bg-yellow-400 hover:bg-yellow-500 border-yellow-200 dark:border-yellow-800", label: "Amarillo (Atención)" },
+                                    { name: "green", class: "bg-emerald-500 hover:bg-emerald-600 border-emerald-200 dark:border-emerald-800", label: "Verde (Logro)" },
+                                    { name: "purple", class: "bg-purple-500 hover:bg-purple-600 border-purple-200 dark:border-purple-800", label: "Púrpura (Especial)" },
+                                    { name: "gray", class: "bg-slate-500 hover:bg-slate-600 border-slate-200 dark:border-slate-800", label: "Gris (Neutral)" }
+                                ].map((colorOpt) => (
+                                    <button
+                                        key={colorOpt.name}
+                                        type="button"
+                                        title={colorOpt.label}
+                                        onClick={() => setNovedadColorText(colorOpt.name)}
+                                        disabled={isPending}
+                                        className={`w-7 h-7 rounded-full transition-all duration-150 relative ${colorOpt.class} ${
+                                            novedadColorText === colorOpt.name 
+                                                ? "ring-2 ring-offset-2 ring-primary scale-110 shadow-md dark:ring-offset-background" 
+                                                : "opacity-80 hover:opacity-100 hover:scale-105"
+                                        }`}
+                                    >
+                                        {novedadColorText === colorOpt.name && (
+                                            <span className="absolute inset-0 flex items-center justify-center text-white text-[11px] font-black">✓</span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setNovedadDialogOpen(false)}
+                            disabled={isPending}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={handleSaveNovedad}
+                            disabled={isPending}
+                        >
+                            {isPending ? "Guardando..." : "Guardar Novedad"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div >
     );
 }

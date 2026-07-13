@@ -14,9 +14,11 @@ export default async function AdminUsersPage() {
 
     const groups = await getGroupsAction();
     const programs = await getProgramsAction();
-    const defaultGroupId = groups.length > 0 ? groups[0].id : "all";
+    const initialProgramId = programs.length > 0 ? programs[0].id : "none";
+    const initialLectivaGroup = groups.find(g => g.programId === initialProgramId && (g as any).categoria === "LECTIVA");
+    const defaultGroupId = initialLectivaGroup ? initialLectivaGroup.id : "none";
 
-    const { users, total } = await getAllUsersAction({ limit: 20, role: "student", groupId: defaultGroupId !== "all" ? defaultGroupId : undefined });
+    const { users, total } = await getAllUsersAction({ limit: 20, role: "student", groupId: defaultGroupId !== "none" ? defaultGroupId : "none" });
 
     return (
         <div className="p-4 sm:p-8">
@@ -24,7 +26,7 @@ export default async function AdminUsersPage() {
                 initialUsers={users} 
                 totalCount={total} 
                 initialGroupId={defaultGroupId} 
-                initialGroups={groups.map(g => ({id: g.id, name: g.name, programId: g.programId}))} 
+                initialGroups={groups.map(g => ({id: g.id, name: g.name, programId: g.programId, categoria: (g as any).categoria}))} 
                 initialPrograms={programs.map(p => ({id: p.id, name: p.name}))}
                 isObserver={session.user.role === "observer"}
             />

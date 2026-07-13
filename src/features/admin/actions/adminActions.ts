@@ -285,8 +285,8 @@ export async function createUserAction(data: {
                     nombres: data.nombres || data.name.split(" ")[0] || "",
                     apellido: data.apellido || data.name.split(" ").slice(1).join(" ") || "",
                     telefono: data.telefono || null,
-                    dataProcessingConsent: true,
-                    dataProcessingConsentDate: new Date(),
+                    dataProcessingConsent: data.role !== "student",
+                    dataProcessingConsentDate: data.role !== "student" ? new Date() : null,
                 }
             } : undefined,
             accounts: {
@@ -387,6 +387,55 @@ export async function updateUserRoleAction(userId: string, newRole: "teacher" | 
     revalidatePath("/dashboard/admin/users");
     return result;
 }
+
+export async function updateStudentNovedadAction(userId: string, novedad: string | null, novedadColor: string | null) {
+    const session = await requireAdmin();
+
+    const result = await prisma.profile.update({
+        where: { userId },
+        data: { 
+            novedad: novedad ? novedad.trim() : null,
+            novedadColor: novedadColor ? novedadColor.trim() : null
+        }
+    });
+
+    const { auditLogger } = await import("@/features/admin/services/auditLogger");
+    await auditLogger.log({
+        action: "UPDATE",
+        entity: "USER",
+        entityId: userId,
+        userId: session.user.id,
+        userName: session.user.name || "Admin",
+        userRole: "admin",
+        description: `Novedad de estudiante actualizada: ${novedad || "Sin novedad"} (Color: ${novedadColor || "por defecto"})`,
+        metadata: { userId, novedad, novedadColor },
+        success: true,
+    });
+
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        if (novedad) {
+            await sendPushNotification(userId, {
+                title: "Novedad Académica Registrada",
+                body: `Se ha registrado una novedad en tu perfil: "${novedad}"`,
+                url: "/dashboard/student"
+            });
+        } else {
+            await sendPushNotification(userId, {
+                title: "Novedad Académica Retirada",
+                body: "Se ha retirado la novedad de tu perfil académico.",
+                url: "/dashboard/student"
+            });
+        }
+    } catch (pushErr) {
+        console.error("Error al enviar notificación push de novedad:", pushErr);
+    }
+
+    revalidatePath("/dashboard/admin/users");
+    revalidatePath("/dashboard/admin/courses");
+    return result;
+}
+
 
 
 export async function toggleUserBanAction(userId: string, banned: boolean) {

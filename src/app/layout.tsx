@@ -7,11 +7,8 @@ import { ScrollRestorer } from "@/components/ScrollRestorer";
 import { ThemeInitializer } from "@/components/theme/ThemeInitializer";
 import NextTopLoader from "nextjs-toploader";
 import { NetworkStatus } from "@/components/NetworkStatus";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWARegister } from "@/components/PWARegister";
-
 
 export const metadata: Metadata = {
   title: "AcademiX",
@@ -23,8 +20,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth.api.getSession({ headers: await headers() });
-
   return (
     <html lang="es" suppressHydrationWarning>
       <head>

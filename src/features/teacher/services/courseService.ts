@@ -216,6 +216,8 @@ export const courseService = {
                                 nombres: true,
                                 apellido: true,
                                 telefono: true,
+                                novedad: true,
+                                novedadColor: true,
                             }
                         }
                     },
@@ -533,6 +535,8 @@ export const courseService = {
                                     apellido: true,
                                     telefono: true,
                                     dataProcessingConsent: true,
+                                    novedad: true,
+                                    novedadColor: true,
                                 },
                             },
                         },

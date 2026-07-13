@@ -14,6 +14,7 @@ import { formatName, cn } from "@/lib/utils";
 import { fromUTC } from "@/lib/dateUtils";
 import { getStudentRecords, justifyAttendanceAction, markRemarkViewed, getStudentDocumentation, deleteJustificationAction } from "../actions/studentActions";
 import { getStudentGrades, submitStudentSubmissionLink } from "@/features/teacher/actions/gradeActions";
+import { notifyEmailSentBatchAction } from "@/features/teacher/actions/groupActions";
 import {
     getImprovementPlans,
     upsertImprovementPlan,
@@ -259,8 +260,8 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
         let bodyText = `Hola, ${studentName}.\n\n`;
         bodyText += `Se ha registrado el Plan de Mejoramiento Académico N° ${plan.planNumber} en la plataforma AcademiX.\n\n`;
         bodyText += `Detalles del Plan:\n`;
-        bodyText += `- Fecha de Inicio: ${format(new Date(plan.startDate), "dd/MM/yyyy")}\n`;
-        bodyText += `- Fecha de Finalización: ${format(new Date(plan.endDate), "dd/MM/yyyy")}\n`;
+        bodyText += `- Fecha de Inicio: ${format(fromUTC(plan.startDate), "dd/MM/yyyy")}\n`;
+        bodyText += `- Fecha de Finalización: ${format(fromUTC(plan.endDate), "dd/MM/yyyy")}\n`;
         bodyText += `- Docente: ${teacherName}\n`;
         if (plan.teacherDocUrl) {
             bodyText += `- Documento del Plan: ${plan.teacherDocUrl}\n`;
@@ -276,6 +277,8 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
         
         // Open default system mail client
         window.location.href = `mailto:${studentEmail}?subject=${subject}&body=${body}`;
+        // Notify student via push
+        notifyEmailSentBatchAction([plan.studentId], "PLAN");
     };
 
     useEffect(() => {
@@ -1269,7 +1272,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                 return (
                                                                     <TableRow key={att.id}>
                                                                         <TableCell>
-                                                                            <div className="font-semibold">{format(new Date(att.date), "EEE d MMM yyyy", { locale: es })}</div>
+                                                                            <div className="font-semibold">{format(fromUTC(att.date), "EEE d MMM yyyy", { locale: es })}</div>
                                                                             {att.arrivalTime && <div className="text-xs text-muted-foreground mt-0.5">Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</div>}
                                                                             {att.departureTime && <div className="text-xs text-muted-foreground mt-0.5">Retiro: {format(new Date(att.departureTime), "HH:mm")}</div>}
                                                                         </TableCell>
@@ -1666,7 +1669,8 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                 </div>
                                             </CardHeader>
                                             <CardContent className="p-0">
-                                                <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
+                                                <div className="w-full overflow-x-auto scrollbar-none">
+                                                    <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
                                                     <TableHeader className="bg-muted/5">
                                                         <TableRow>
                                                             <TableHead className="w-[140px]">Tipo</TableHead>
@@ -1729,8 +1733,9 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                         ))}
                                                     </TableBody>
                                                 </Table>
-                                            </CardContent>
-                                        </Card>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
                                     );
                                 });
                             })()}
@@ -1783,13 +1788,13 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                         const step1Done = !!plan.teacherDocUrl;
                                         const step2Done = !!plan.signedDocUrl;
                                         const step3Done = !!(plan as any).teacherSignedDocUrl;
-                                        const isPastEnd = new Date() > new Date(plan.endDate);
+                                        const isPastEnd = new Date() > fromUTC(plan.endDate);
                                         const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
 
                                         // ── Date progress bar ──
                                         const nowMs = Date.now();
-                                        const startMs = new Date(plan.startDate).getTime();
-                                        const endMs = new Date(plan.endDate).getTime();
+                                        const startMs = fromUTC(plan.startDate).getTime();
+                                        const endMs = fromUTC(plan.endDate).getTime();
                                         const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
                                         const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
                                         const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
@@ -1824,8 +1829,8 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                 )}
                                                             </div>
                                                             <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-medium">
-                                                                <span><strong className="text-foreground font-semibold">Inicio:</strong> {format(new Date(plan.startDate), "dd MMM yyyy", { locale: es })}</span>
-                                                                <span><strong className="text-foreground font-semibold">Límite:</strong> {format(new Date(plan.endDate), "dd MMM yyyy", { locale: es })}</span>
+                                                                <span><strong className="text-foreground font-semibold">Inicio:</strong> {format(fromUTC(plan.startDate), "dd MMM yyyy", { locale: es })}</span>
+                                                                <span><strong className="text-foreground font-semibold">Límite:</strong> {format(fromUTC(plan.endDate), "dd MMM yyyy", { locale: es })}</span>
                                                                 <span><strong className="text-foreground font-semibold">Docente:</strong> {formatName(plan.teacher.name, plan.teacher.profile)}</span>
                                                             </div>
                                                         </div>

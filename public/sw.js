@@ -74,3 +74,64 @@ self.addEventListener("fetch", (event) => {
       })
   );
 });
+
+// Push Event: Handle background push notifications
+self.addEventListener("push", (event) => {
+  if (!event.data) {
+    console.log("[Service Worker] Push event received but had no data.");
+    return;
+  }
+
+  let payload = {
+    title: "Nueva Notificación",
+    body: "Tienes un mensaje nuevo.",
+    icon: "/logo.png",
+    url: "/dashboard",
+  };
+
+  try {
+    payload = event.data.json();
+  } catch (err) {
+    payload.body = event.data.text();
+  }
+
+  const options = {
+    body: payload.body,
+    icon: payload.icon || "/logo.png",
+    badge: payload.icon || "/logo.png",
+    data: {
+      url: payload.url || "/dashboard",
+    },
+    tag: "academix-push-tag",
+    renotify: true,
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, options)
+  );
+});
+
+// Notification Click Event: Handle action clicking on the notification
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || "/dashboard";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          const clientUrl = new URL(client.url);
+          const baseTargetUrl = new URL(targetUrl, self.location.origin);
+          if (clientUrl.pathname === baseTargetUrl.pathname && "focus" in client) {
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+      })
+  );
+});
+

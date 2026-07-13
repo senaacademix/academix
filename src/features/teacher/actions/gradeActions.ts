@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { sendPushNotification } from "@/lib/push-notifications";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -138,6 +139,32 @@ export async function submitStudentSubmissionLink(activityId: string, link: stri
             update: { submissionLink: link },
             create: { activityId, userId, score: 0, submissionLink: link }
         });
+
+        // Send push notification to teacher asynchronously
+        (async () => {
+            try {
+                const activity = await prisma.activity.findUnique({
+                    where: { id: activityId },
+                    include: {
+                        course: {
+                            select: { teacherId: true, title: true }
+                        }
+                    }
+                });
+
+                if (activity?.course?.teacherId) {
+                    const studentName = session.user.name || "Un aprendiz";
+                    await sendPushNotification(activity.course.teacherId, {
+                        title: "Nueva Entrega de Actividad",
+                        body: `El aprendiz ${studentName} ha subido su entrega para la actividad "${activity.title}" en la materia ${activity.course.title}.`,
+                        url: `/dashboard/teacher/courses/${activity.courseId}`
+                    });
+                }
+            } catch (err) {
+                console.error("Error sending push notification to teacher on submission:", err);
+            }
+        })();
+
         revalidatePath("/dashboard/student/records");
         return { success: true };
     } catch (error: any) {
@@ -194,6 +221,34 @@ export async function saveStudentGrades(activityId: string, grades: { userId: st
                 })
             )
         );
+
+        // Send push notifications asynchronously
+        (async () => {
+            try {
+                const activity = await prisma.activity.findUnique({
+                    where: { id: activityId },
+                    include: {
+                        course: {
+                            select: { title: true }
+                        }
+                    }
+                });
+                const activityTitle = activity?.title || "Actividad";
+                const courseTitle = activity?.course?.title || "Materia";
+
+                await Promise.all(
+                    grades.map(async (grade) => {
+                        await sendPushNotification(grade.userId, {
+                            title: "Nueva Calificación Registrada",
+                            body: `Tu nota para "${activityTitle}" en ${courseTitle} ha sido registrada/actualizada: ${grade.score.toFixed(1)}.`,
+                            url: "/dashboard/student/evaluations"
+                        });
+                    })
+                );
+            } catch (err) {
+                console.error("Error sending grade notifications:", err);
+            }
+        })();
 
         revalidatePath("/dashboard/teacher");
         return { success: true };

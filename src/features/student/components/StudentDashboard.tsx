@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useWebPush } from "@/hooks/useWebPush";
+import { Bell, BellOff, Loader2 } from "lucide-react";
 
 export function StudentDashboard({
     availableCourses,
@@ -37,6 +39,35 @@ export function StudentDashboard({
     const selectedCourse = searchParams.get("courseId") || "";
     const activeTab = searchParams.get("tab") || "activities";
     const isInsideCourse = !!selectedCourse;
+
+    const {
+        permission,
+        isSubscribed,
+        loading: pushLoading,
+        subscribe,
+        unsubscribe
+    } = useWebPush();
+
+    const handlePushToggle = async () => {
+        if (permission === "denied") {
+            toast.error("Permiso bloqueado: Por favor, activa las notificaciones en la barra de direcciones de tu navegador (icono del candado/configuración).", {
+                duration: 6000
+            });
+            return;
+        }
+
+        try {
+            if (isSubscribed) {
+                await unsubscribe();
+                toast.success("Notificaciones desactivadas.");
+            } else {
+                await subscribe();
+                toast.success("Notificaciones activadas con éxito.");
+            }
+        } catch (err: any) {
+            toast.error(err.message || "Error al cambiar estado de notificaciones");
+        }
+    };
 
     const [mounted, setMounted] = useState(false);
     
@@ -124,13 +155,46 @@ export function StudentDashboard({
         )}>
             {/* Header - Hidden when inside a course */}
             {!isInsideCourse && (
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-bold tracking-tight">
-                        ¡Hola, {studentName ? formatName(studentName) : 'Estudiante'}!
-                    </h1>
-                    <p className="text-sm text-muted-foreground capitalize">
-                        {formattedDate || (mounted ? new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')} — Aquí tienes un resumen de tu actividad académica en AcademiX.
-                    </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                            ¡Hola, {studentName ? formatName(studentName) : 'Estudiante'}!
+                        </h1>
+                        <p className="text-sm text-muted-foreground capitalize">
+                            {formattedDate || (mounted ? new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')} — Aquí tienes un resumen de tu actividad académica en AcademiX.
+                        </p>
+                    </div>
+                    {/* Botón de Notificaciones para el Estudiante */}
+                    {mounted && permission !== "unsupported" && (
+                        <div className="shrink-0">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handlePushToggle}
+                                disabled={pushLoading}
+                                className={cn(
+                                    "h-9 font-bold text-xs gap-2 rounded-2xl border border-border/50 shadow-md transition-all duration-200",
+                                    isSubscribed 
+                                        ? "text-emerald-600 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 border-emerald-500/20" 
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {pushLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : isSubscribed ? (
+                                    <>
+                                        <Bell className="h-4 w-4 fill-current text-emerald-500 animate-pulse" />
+                                        <span>Notificaciones Activas</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <BellOff className="h-4 w-4" />
+                                        <span>Activar Notificaciones</span>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
 

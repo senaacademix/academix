@@ -9,7 +9,7 @@ export function PWARegister() {
       "serviceWorker" in navigator &&
       (window as any).workbox === undefined
     ) {
-      window.addEventListener("load", () => {
+      const registerSW = () => {
         navigator.serviceWorker
           .register("/sw.js")
           .then((reg) => {
@@ -18,7 +18,14 @@ export function PWARegister() {
           .catch((err) => {
             console.warn("[Service Worker] Registration failed:", err);
           });
-      });
+      };
+
+      if (document.readyState === "complete") {
+        registerSW();
+      } else {
+        window.addEventListener("load", registerSW);
+        return () => window.removeEventListener("load", registerSW);
+      }
     }
   }, []);
 

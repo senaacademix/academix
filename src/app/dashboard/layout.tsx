@@ -8,6 +8,7 @@ import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { BackButton } from "@/components/navigation/BackButton";
+import { HeaderPushToggle } from "@/components/HeaderPushToggle";
 import { Footer } from "@/components/Footer";
 import { ProfileCompletionCheck } from "@/components/profile/ProfileCompletionCheck";
 import { getAvailableThemes } from "@/app/actions/themes";
@@ -15,7 +16,7 @@ import prisma from "@/lib/prisma";
 import { ExceededLimitScreen } from "@/components/auth/ExceededLimitScreen";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { HelpCircle, Bug } from "lucide-react";
+import { HelpCircle, Bug, AlertTriangle } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export default async function DashboardLayout({
@@ -65,23 +66,83 @@ export default async function DashboardLayout({
     if (currentCount >= dailyLimit) {
       hasExceededLimit = true;
     } else {
-      // Incrementar o crear registro de acceso diario
-      await prisma.studentAccessLog.upsert({
-        where: {
-          userId_date: {
+      // Throttle accesses: Only increment count if the last access was more than 15 minutes ago
+      const lastUpdated = currentLog ? new Date(currentLog.updatedAt).getTime() : 0;
+      const shouldIncrement = Date.now() - lastUpdated > 15 * 60 * 1000;
+
+      if (shouldIncrement) {
+        // Incrementar o crear registro de acceso diario
+        await prisma.studentAccessLog.upsert({
+          where: {
+            userId_date: {
+              userId: session.user.id,
+              date: todayStr
+            }
+          },
+          update: {
+            count: { increment: 1 }
+          },
+          create: {
             userId: session.user.id,
-            date: todayStr
+            date: todayStr,
+            count: 1
           }
-        },
-        update: {
-          count: { increment: 1 }
-        },
-        create: {
-          userId: session.user.id,
-          date: todayStr,
-          count: 1
-        }
-      });
+        });
+      } else {
+        // Actualizar el updatedAt sin incrementar para mantener la sesión de navegación activa
+        await prisma.studentAccessLog.update({
+          where: {
+            userId_date: {
+              userId: session.user.id,
+              date: todayStr
+            }
+          },
+          data: {
+            updatedAt: new Date()
+          }
+        });
+      }
+    }
+  }
+
+  let studentNovedad: string | null = null;
+  let studentNovedadColor: string | null = null;
+  let bannerClasses = "";
+
+  if (isStudent) {
+    const studentProfile = await prisma.profile.findUnique({
+      where: { userId: session.user.id },
+      select: { novedad: true, novedadColor: true }
+    });
+    studentNovedad = studentProfile?.novedad ?? null;
+    studentNovedadColor = studentProfile?.novedadColor ?? null;
+
+    if (studentNovedad) {
+      const activeColor = studentNovedadColor || "blue";
+      switch (activeColor) {
+        case "red":
+          bannerClasses = "bg-red-600 text-white border-red-700 dark:bg-red-800 dark:border-red-900";
+          break;
+        case "orange":
+          bannerClasses = "bg-orange-500 text-white border-orange-600 dark:bg-orange-700 dark:border-orange-800";
+          break;
+        case "yellow":
+          bannerClasses = "bg-yellow-400 text-amber-950 border-yellow-500";
+          break;
+        case "green":
+          bannerClasses = "bg-emerald-600 text-white border-emerald-700 dark:bg-emerald-800 dark:border-emerald-900";
+          break;
+        case "purple":
+          bannerClasses = "bg-purple-600 text-white border-purple-700 dark:bg-purple-800 dark:border-purple-900";
+          break;
+        case "gray":
+          bannerClasses = "bg-slate-600 text-white border-slate-700 dark:bg-slate-800 dark:border-slate-900";
+          break;
+        case "blue":
+        default:
+          bannerClasses = "bg-blue-600 text-white border-blue-700 dark:bg-blue-800 dark:border-blue-900";
+          break;
+      }
     }
   }
 
@@ -99,15 +160,21 @@ export default async function DashboardLayout({
     <SidebarProvider defaultOpen={false}>
       <ProfileCompletionCheck />
       <AppSidebar />
-      <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-40 flex h-16 w-full items-center gap-2 bg-background text-foreground border-b group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all">
+      <SidebarInset className={`min-w-0 ${studentNovedad ? "md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:rounded-t-none" : ""}`}>
+        {studentNovedad && (
+          <div className={`sticky top-0 z-50 w-full py-2 px-4 flex items-center justify-center gap-2 text-[11px] font-black border-b uppercase tracking-wider select-none animate-pulse shrink-0 ${bannerClasses}`}>
+            <AlertTriangle className="h-4 h-4 shrink-0" />
+            <span>Novedad: {studentNovedad}</span>
+          </div>
+        )}
+        <header className={`sticky z-40 flex h-16 w-full items-center gap-2 bg-background text-foreground border-b group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all ${studentNovedad ? "top-[33px]" : "top-0"}`}>
           <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 w-full">
             <SidebarTrigger className="-ml-1" />
             <div className="flex items-center gap-2">
               <BackButton />
             </div>
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
-
+              <HeaderPushToggle />
               {showThemeSelector && <ThemeSelector themes={themes} />}
               {showModeToggle && <ModeToggle />}
               {showLicenseModal && <LicenseModal />}
