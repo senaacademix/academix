@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function TeacherSchedulePage() {
     return (
-        <div className="flex flex-col gap-6 p-6 min-h-screen">
+        <div className="flex flex-col gap-4 sm:gap-6 p-4 sm:p-6 min-h-screen">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Horario y Configuración Académica</h1>
                 <p className="text-muted-foreground text-sm mt-1">

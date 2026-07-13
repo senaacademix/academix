@@ -119,13 +119,13 @@ export function StudentAnalyticsPanel({ attendances, remarks, studentName }: Stu
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-2 sm:p-4 rounded-xl">
       {/* Header Profile */}
-      <div className="flex items-center gap-4 mb-6 bg-white dark:bg-slate-900 p-6 rounded-xl border shadow-sm shrink-0">
-        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center border-2 border-primary/20">
+      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-6 bg-white dark:bg-slate-900 p-6 rounded-xl border shadow-sm shrink-0 text-center sm:text-left">
+        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center border-2 border-primary/20 shrink-0">
           <User className="w-8 h-8 text-primary" />
         </div>
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">{studentName}</h2>
-          <p className="text-muted-foreground flex items-center gap-2 mt-1">
+          <p className="text-muted-foreground flex items-center gap-2 mt-1 justify-center sm:justify-start">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             Reporte Individual de Rendimiento y Conducta
           </p>
@@ -147,7 +147,7 @@ export function StudentAnalyticsPanel({ attendances, remarks, studentName }: Stu
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-6 p-4">
-                <div className="flex gap-4 w-full">
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
                   <div className="p-4 flex-1 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900 flex items-center justify-between">
                     <span className="font-medium text-red-700 dark:text-red-400">Ausencias</span>
                     <Badge variant="secondary" className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300 text-lg">{attendanceData.counts.absent}</Badge>
@@ -202,9 +202,9 @@ export function StudentAnalyticsPanel({ attendances, remarks, studentName }: Stu
                 <CardTitle className="text-sm font-semibold">Historial de Faltas y Retardos</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
-                <div className="h-[250px] w-full overflow-y-auto">
+                <div className="h-[250px] w-full overflow-auto scrollbar-thin">
                   {sortedAttendances.filter(a => a.status !== "PRESENT").length > 0 ? (
-                    <Table>
+                    <Table className="min-w-[400px]">
                       <TableHeader className="bg-muted/50 sticky top-0">
                         <TableRow>
                           <TableHead>Fecha</TableHead>
@@ -290,9 +290,9 @@ export function StudentAnalyticsPanel({ attendances, remarks, studentName }: Stu
                 <CardTitle className="text-sm font-semibold">Historial de Observaciones</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
-                <div className="h-[250px] w-full overflow-y-auto">
+                <div className="h-[250px] w-full overflow-auto scrollbar-thin">
                   {sortedRemarks.length > 0 ? (
-                    <Table>
+                    <Table className="min-w-[480px]">
                       <TableHeader className="bg-muted/50 sticky top-0">
                         <TableRow>
                           <TableHead>Fecha</TableHead>

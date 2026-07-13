@@ -88,8 +88,8 @@ export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
                 </div>
             </div>
 
-            <div className="rounded-md border">
-                <Table>
+            <div className="rounded-md border overflow-x-auto scrollbar-none">
+                <Table className="min-w-[650px]">
                     <TableHeader>
                         <TableRow>
                             <TableHead>Fecha</TableHead>

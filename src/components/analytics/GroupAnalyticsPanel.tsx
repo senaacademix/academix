@@ -727,11 +727,11 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                             </Card>
 
                              <Tabs defaultValue="rendimiento" className="w-full mt-6">
-                                <TabsList className="grid w-full sm:w-[750px] grid-cols-4 mb-6 mx-auto">
-                                    <TabsTrigger value="rendimiento">Rendimiento</TabsTrigger>
-                                    <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
-                                    <TabsTrigger value="disciplina">Disciplina</TabsTrigger>
-                                    <TabsTrigger value="mejoramiento">Planes de Mejoramiento</TabsTrigger>
+                                <TabsList className="flex w-full sm:w-[750px] overflow-x-auto justify-start sm:justify-center p-1 bg-muted/60 rounded-xl mb-6 mx-auto scrollbar-none h-auto gap-1">
+                                    <TabsTrigger value="rendimiento" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Rendimiento</TabsTrigger>
+                                    <TabsTrigger value="asistencia" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Asistencia</TabsTrigger>
+                                    <TabsTrigger value="disciplina" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Disciplina</TabsTrigger>
+                                    <TabsTrigger value="mejoramiento" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Planes de Mejoramiento</TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="rendimiento" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
@@ -740,16 +740,16 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                 {rankedStudentsData.length > 0 && (
                                 <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
                                     <CardHeader>
-                                        <CardTitle className="flex items-center justify-between gap-2">
+                                        <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                             <span className="flex items-center gap-2">
-                                                <GraduationCap className="w-5 h-5 text-indigo-500" />
-                                                Ranking de Estudiantes (Rendimiento Integral)
+                                                <GraduationCap className="w-5 h-5 text-indigo-500 shrink-0" />
+                                                <span className="text-base sm:text-lg font-black leading-tight">Ranking de Estudiantes (Rendimiento Integral)</span>
                                             </span>
                                             <Button 
                                                 variant="ghost" 
                                                 size="sm" 
                                                 onClick={() => setShowWeightsConfig(!showWeightsConfig)}
-                                                className="text-xs text-indigo-600 hover:text-indigo-700 font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
+                                                className="text-xs text-indigo-600 hover:text-indigo-700 font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/20 w-full sm:w-auto justify-center sm:justify-start"
                                             >
                                                 <Settings className="w-3.5 h-3.5 mr-1" />
                                                 {showWeightsConfig ? "Ocultar Configuración" : "Configurar Ponderación"}

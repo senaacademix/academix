@@ -4155,7 +4155,7 @@ const handleOpenAnalytics = async () => {
                             {/* TAB: PLANES DE MEJORAMIENTO */}
                             <TabsContent value="improvement" className="m-0 space-y-6 outline-none">
                                 {/* Header */}
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold">Planes de Mejoramiento</h2>
                                         <p className="text-sm text-muted-foreground">Gestión y seguimiento de compromisos académicos de superación.</p>
@@ -4173,7 +4173,7 @@ const handleOpenAnalytics = async () => {
                                             finalGrade: "",
                                             evidenceUrl: "",
                                         })}
-                                        className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
+                                        className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 w-full sm:w-auto justify-center font-bold"
                                     >
                                         <FileText className="w-4 h-4" />
                                         Crear Plan de Mejoramiento
@@ -4204,17 +4204,19 @@ const handleOpenAnalytics = async () => {
                                             {Object.values(byStudent).map(({ student, plans: sPlans }) => (
                                                 <div key={student?.id} className="border border-border/60 rounded-2xl overflow-hidden">
                                                     {/* Student header */}
-                                                    <div className="flex items-center gap-3 bg-muted/30 px-5 py-3 border-b border-border/60">
-                                                        <GraduationCap className="w-5 h-5 text-primary shrink-0" />
-                                                        <div>
-                                                            <p className="font-semibold text-sm">{formatName(student?.name, student?.profile)}</p>
-                                                            <p className="text-xs text-muted-foreground">{sPlans.length} plan{sPlans.length !== 1 ? "es" : ""} de mejoramiento</p>
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/30 px-5 py-3 border-b border-border/60">
+                                                        <div className="flex items-center gap-3">
+                                                            <GraduationCap className="w-5 h-5 text-primary shrink-0" />
+                                                            <div>
+                                                                <p className="font-semibold text-sm">{formatName(student?.name, student?.profile)}</p>
+                                                                <p className="text-xs text-muted-foreground">{sPlans.length} plan{sPlans.length !== 1 ? "es" : ""} de mejoramiento</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="ml-auto">
+                                                        <div className="w-full sm:w-auto mt-1 sm:mt-0">
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
-                                                                className="text-xs h-8 gap-1"
+                                                                className="text-xs h-8 gap-1 w-full sm:w-auto justify-center font-bold"
                                                                 onClick={() => setImpPlanFormDialog({
                                                                     open: true,
                                                                     studentId: student?.id || "",
@@ -4262,7 +4264,7 @@ const handleOpenAnalytics = async () => {
                                                             return (
                                                                 <div key={plan.id} className="p-5 hover:bg-muted/10 transition-colors space-y-4">
                                                                     {/* Plan title + actions row */}
-                                                                    <div className="flex items-start justify-between gap-3">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b sm:border-none pb-3 sm:pb-0">
                                                                         <div className="flex-1 min-w-0">
                                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                                 <span className="font-bold text-sm">Plan N° {plan.planNumber}</span>
@@ -4279,11 +4281,11 @@ const handleOpenAnalytics = async () => {
                                                                                 {format(new Date(plan.startDate), "dd/MM/yyyy")} → {format(new Date(plan.endDate), "dd/MM/yyyy")}
                                                                             </div>
                                                                         </div>
-                                                                        <div className="flex items-center gap-1 shrink-0">
+                                                                        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-start sm:justify-end">
                                                                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" title="Enviar correo" onClick={() => handleImpEmail(plan)}><Mail className="w-3.5 h-3.5" /></Button>
-                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewGroupPlanDetail(plan)}><Eye className="w-3 h-3" />Ver</Button>
-                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setImpPlanFormDialog({ open: true, id: plan.id, studentId: plan.studentId, planNumber: plan.planNumber, teacherDocUrl: plan.teacherDocUrl || "", startDate: format(new Date(plan.startDate), "yyyy-MM-dd"), endDate: format(new Date(plan.endDate), "yyyy-MM-dd"), observations: plan.observations || "", planScore: plan.planScore !== null && plan.planScore !== undefined ? plan.planScore : "", finalGrade: plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade : "", evidenceUrl: plan.evidenceUrl || "" })}><FileText className="w-3 h-3" />Editar</Button>
-                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => setImpDeleteConfirm(plan.id)}><Trash2 className="w-3 h-3" />Eliminar</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setViewGroupPlanDetail(plan)}><Eye className="w-3 h-3" />Ver</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setImpPlanFormDialog({ open: true, id: plan.id, studentId: plan.studentId, planNumber: plan.planNumber, teacherDocUrl: plan.teacherDocUrl || "", startDate: format(new Date(plan.startDate), "yyyy-MM-dd"), endDate: format(new Date(plan.endDate), "yyyy-MM-dd"), observations: plan.observations || "", planScore: plan.planScore !== null && plan.planScore !== undefined ? plan.planScore : "", finalGrade: plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade : "", evidenceUrl: plan.evidenceUrl || "" })}><FileText className="w-3 h-3" />Editar</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive border border-destructive/20 bg-background sm:border-none" onClick={() => setImpDeleteConfirm(plan.id)}><Trash2 className="w-3 h-3" />Eliminar</Button>
                                                                         </div>
                                                                     </div>
 
@@ -4327,7 +4329,7 @@ const handleOpenAnalytics = async () => {
                                                                                 </div>
                                                                                 <div className="text-center">
                                                                                     <p className={`text-[10px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
-                                                                                    <p className="text-[9px] text-muted-foreground">{step.sub}</p>
+                                                                                    <p className="text-[9px] text-muted-foreground hidden sm:block">{step.sub}</p>
                                                                                 </div>
                                                                             </div>
                                                                         ))}

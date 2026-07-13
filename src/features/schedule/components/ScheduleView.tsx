@@ -394,7 +394,7 @@ export function ScheduleView() {
             <div className="flex-1 flex flex-col gap-4 mt-2 focus-visible:outline-none">
                 {/* Toolbar */}
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <Button variant="outline" size="sm" onClick={goBack} disabled={!canGoBack}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -404,10 +404,10 @@ export function ScheduleView() {
                     <Button variant="outline" size="sm" onClick={goForward} disabled={!canGoForward}>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
-                    <span className="text-sm font-semibold capitalize ml-2">{headerLabel}</span>
+                    <span className="text-sm font-semibold capitalize ml-1 sm:ml-2">{headerLabel}</span>
 
                     {activeTab === "events" && sortedEvents.length > 0 && (
-                        <div className="ml-4 flex items-center gap-1 border rounded-md p-0.5 bg-background shadow-sm">
+                        <div className="flex items-center gap-1 border rounded-md p-0.5 bg-background shadow-sm ml-0 sm:ml-4">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goPrevEvent} disabled={currentEventIndex === 0}>
                                 <ChevronLeft className="h-4 w-4" />
                             </Button>
@@ -418,7 +418,7 @@ export function ScheduleView() {
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
                     {globalDates.title && (
                         <div className="text-xs text-primary-foreground bg-primary px-3 py-1.5 rounded-md font-bold shadow-sm">
                             {globalDates.title}
@@ -435,15 +435,15 @@ export function ScheduleView() {
                     {session?.user?.role === "teacher" && (
                         <div className="text-xs text-muted-foreground bg-muted/40 px-2.5 py-1.5 rounded-md border font-medium flex items-center gap-2 shadow-sm">
                             <Clock className="w-3.5 h-3.5 text-primary" />
-                            <span><span className="opacity-70">{execWeeklyStr}h/</span>{weeklyHoursStr}h Semanal</span>
+                            <span><span className="opacity-70">{execWeeklyStr}h/</span>{weeklyHoursStr}h <span className="hidden xs:inline">Semanal</span><span className="xs:hidden">Sem.</span></span>
                             <span className="text-muted-foreground/30">|</span>
                             <span><span className="opacity-70">{execPeriodStr}h/</span>{periodHoursStr}h Total</span>
                         </div>
                     )}
-                    <Tabs value={view} onValueChange={(v) => setView(v as "week" | "month")}>
-                        <TabsList>
-                            <TabsTrigger value="week">Semana</TabsTrigger>
-                            <TabsTrigger value="month">Mes</TabsTrigger>
+                    <Tabs value={view} onValueChange={(v) => setView(v as "week" | "month")} className="w-full sm:w-auto">
+                        <TabsList className="w-full sm:w-auto">
+                            <TabsTrigger value="week" className="flex-1 sm:flex-none">Semana</TabsTrigger>
+                            <TabsTrigger value="month" className="flex-1 sm:flex-none">Mes</TabsTrigger>
                         </TabsList>
                     </Tabs>
                 </div>
@@ -493,10 +493,19 @@ export function ScheduleView() {
                 </div>
             )}
 
+            {/* Scroll Indicator for mobile */}
+            {!noSchedules && (
+                <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] font-semibold md:hidden bg-muted/40 px-3 py-2 rounded-xl border border-border/50 w-fit select-none animate-pulse">
+                    <Info className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span>Desliza horizontalmente para ver el horario completo.</span>
+                </div>
+            )}
+
             {/* Week View */}
             {!noSchedules && view === "week" && (
-                <div className="flex-1 border rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-8 divide-x border-b bg-muted/30">
+                <div className="flex-1 border rounded-xl overflow-hidden overflow-x-auto scrollbar-thin">
+                    <div className="min-w-[800px] md:min-w-0 flex flex-col">
+                        <div className="grid grid-cols-8 divide-x border-b bg-muted/30">
                         <div className="py-2 px-2 text-xs text-muted-foreground text-center" />
                         {weekDays.map((day, i) => {
                             const allDbEventsForDay = scheduleEvents.filter(e => {
@@ -686,13 +695,15 @@ export function ScheduleView() {
                             );
                         })}
                     </div>
+                    </div>
                 </div>
             )}
 
             {/* Month View */}
             {!noSchedules && view === "month" && (
-                <div className="flex-1 border rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-7 divide-x border-b bg-muted/30">
+                <div className="flex-1 border rounded-xl overflow-hidden overflow-x-auto scrollbar-thin">
+                    <div className="min-w-[700px] md:min-w-0 flex flex-col">
+                        <div className="grid grid-cols-7 divide-x border-b bg-muted/30">
                         {DAY_NAMES_ES.map(d => (
                             <div key={d} className="py-2 text-center text-xs font-semibold text-muted-foreground">{d}</div>
                         ))}
@@ -826,6 +837,7 @@ export function ScheduleView() {
                                 </div>
                             );
                         })}
+                    </div>
                     </div>
                 </div>
             )}

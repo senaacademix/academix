@@ -1252,115 +1252,117 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                 </div>
                                             </CardHeader>
                                             <CardContent className="p-0">
-                                                <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
-                                                    <TableHeader className="bg-muted/5">
-                                                        <TableRow>
-                                                            <TableHead>Fecha</TableHead>
-                                                            <TableHead className="w-[120px] text-center">Estado</TableHead>
-                                                            <TableHead className="w-[130px] text-center">Justificación</TableHead>
-                                                            <TableHead className="w-[120px] text-center">Acción</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {entries.map(att => {
-                                                            const isJustified = !!att.justification;
-                                                            const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE' || att.status === 'LEAVE_EARLY') && currentUserRole === "student";
-                                                            return (
-                                                                <TableRow key={att.id}>
-                                                                    <TableCell>
-                                                                        <div className="font-semibold">{format(new Date(att.date), "EEE d MMM yyyy", { locale: es })}</div>
-                                                                        {att.arrivalTime && <div className="text-xs text-muted-foreground mt-0.5">Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</div>}
-                                                                        {att.departureTime && <div className="text-xs text-muted-foreground mt-0.5">Retiro: {format(new Date(att.departureTime), "HH:mm")}</div>}
-                                                                    </TableCell>
-                                                                    <TableCell className="text-center">
-                                                                        <Badge variant="outline" className={`text-xs font-bold w-28 h-6 inline-flex items-center justify-center ${
-                                                                            att.status === 'LATE' 
-                                                                                ? 'text-amber-600 border-amber-200 bg-amber-50' 
-                                                                                : att.status === 'LEAVE_EARLY'
-                                                                                    ? 'text-blue-600 border-blue-200 bg-blue-50'
-                                                                                    : 'text-red-600 border-red-200 bg-red-50'
-                                                                        }`}>
-                                                                            {att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}
-                                                                        </Badge>
-                                                                    </TableCell>
-                                                                    <TableCell className="text-center">
-                                                                        {isJustified ? (
-                                                                            <div className="flex flex-col items-center gap-1">
-                                                                                <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 gap-1 w-28 h-6 inline-flex items-center justify-center">
-                                                                                    <CheckCircle2 className="w-3 h-3" /> Justificado
-                                                                                </Badge>
-                                                                                {att.justificationUrl && (
-                                                                                    <a href={att.justificationUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                                                                                        <LinkIcon className="w-3 h-3" /> Soporte
-                                                                                    </a>
-                                                                                )}
-                                                                            </div>
-                                                                        ) : (
-                                                                            <span className="text-xs text-muted-foreground">Sin justificar</span>
-                                                                        )}
-                                                                    </TableCell>
-                                                                    <TableCell className="text-center">
-                                                                        {canJustify ? (
-                                                                            <Dialog open={justifyingId === att.id} onOpenChange={(open) => {
-                                                                                if (open) { setJustifyingId(att.id); setJustificationText(""); setJustificationUrl(""); }
-                                                                                else setJustifyingId(null);
-                                                                            }}>
-                                                                                <DialogTrigger asChild>
-                                                                                    <Button size="sm" variant="outline" className="h-7 text-xs font-semibold">Justificar</Button>
-                                                                                </DialogTrigger>
-                                                                                <DialogContent>
-                                                                                    <DialogHeader>
-                                                                                        <DialogTitle>Justificar {att.status === 'LATE' ? 'Retardo' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}</DialogTitle>
-                                                                                        <DialogDescription>Explica el motivo y adjunta un enlace a tu soporte. Una vez enviada, no podrás modificarla.</DialogDescription>
-                                                                                    </DialogHeader>
-                                                                                    <div className="space-y-4 py-4">
-                                                                                        <div className="space-y-2">
-                                                                                            <Label>Motivo *</Label>
-                                                                                            <Textarea placeholder="Explica el motivo..." value={justificationText} onChange={e => setJustificationText(e.target.value)} />
+                                                <div className="w-full overflow-x-auto scrollbar-none">
+                                                    <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 min-w-[550px]">
+                                                        <TableHeader className="bg-muted/5">
+                                                            <TableRow>
+                                                                <TableHead>Fecha</TableHead>
+                                                                <TableHead className="w-[120px] text-center">Estado</TableHead>
+                                                                <TableHead className="w-[130px] text-center">Justificación</TableHead>
+                                                                <TableHead className="w-[120px] text-center">Acción</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {entries.map(att => {
+                                                                const isJustified = !!att.justification;
+                                                                const canJustify = !isJustified && (att.status === 'ABSENT' || att.status === 'LATE' || att.status === 'LEAVE_EARLY') && currentUserRole === "student";
+                                                                return (
+                                                                    <TableRow key={att.id}>
+                                                                        <TableCell>
+                                                                            <div className="font-semibold">{format(new Date(att.date), "EEE d MMM yyyy", { locale: es })}</div>
+                                                                            {att.arrivalTime && <div className="text-xs text-muted-foreground mt-0.5">Llegada: {format(new Date(att.arrivalTime), "HH:mm")}</div>}
+                                                                            {att.departureTime && <div className="text-xs text-muted-foreground mt-0.5">Retiro: {format(new Date(att.departureTime), "HH:mm")}</div>}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            <Badge variant="outline" className={`text-xs font-bold w-28 h-6 inline-flex items-center justify-center ${
+                                                                                att.status === 'LATE' 
+                                                                                    ? 'text-amber-600 border-amber-200 bg-amber-50' 
+                                                                                    : att.status === 'LEAVE_EARLY'
+                                                                                        ? 'text-blue-600 border-blue-200 bg-blue-50'
+                                                                                        : 'text-red-600 border-red-200 bg-red-50'
+                                                                            }`}>
+                                                                                {att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}
+                                                                            </Badge>
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            {isJustified ? (
+                                                                                <div className="flex flex-col items-center gap-1">
+                                                                                    <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 gap-1 w-28 h-6 inline-flex items-center justify-center">
+                                                                                        <CheckCircle2 className="w-3 h-3" /> Justificado
+                                                                                    </Badge>
+                                                                                    {att.justificationUrl && (
+                                                                                        <a href={att.justificationUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                                                                            <LinkIcon className="w-3 h-3" /> Soporte
+                                                                                        </a>
+                                                                                    )}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <span className="text-xs text-muted-foreground">Sin justificar</span>
+                                                                            )}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            {canJustify ? (
+                                                                                <Dialog open={justifyingId === att.id} onOpenChange={(open) => {
+                                                                                    if (open) { setJustifyingId(att.id); setJustificationText(""); setJustificationUrl(""); }
+                                                                                    else setJustifyingId(null);
+                                                                                }}>
+                                                                                    <DialogTrigger asChild>
+                                                                                        <Button size="sm" variant="outline" className="h-7 text-xs font-semibold">Justificar</Button>
+                                                                                    </DialogTrigger>
+                                                                                    <DialogContent>
+                                                                                        <DialogHeader>
+                                                                                            <DialogTitle>Justificar {att.status === 'LATE' ? 'Retardo' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}</DialogTitle>
+                                                                                            <DialogDescription>Explica el motivo y adjunta un enlace a tu soporte. Una vez enviada, no podrás modificarla.</DialogDescription>
+                                                                                        </DialogHeader>
+                                                                                        <div className="space-y-4 py-4">
+                                                                                            <div className="space-y-2">
+                                                                                                <Label>Motivo *</Label>
+                                                                                                <Textarea placeholder="Explica el motivo..." value={justificationText} onChange={e => setJustificationText(e.target.value)} />
+                                                                                            </div>
+                                                                                            <div className="space-y-2">
+                                                                                                <Label>Enlace al soporte (Opcional)</Label>
+                                                                                                <Input placeholder="https://drive.google.com/..." type="url" value={justificationUrl} onChange={e => setJustificationUrl(e.target.value)} />
+                                                                                            </div>
                                                                                         </div>
-                                                                                        <div className="space-y-2">
-                                                                                            <Label>Enlace al soporte (Opcional)</Label>
-                                                                                            <Input placeholder="https://drive.google.com/..." type="url" value={justificationUrl} onChange={e => setJustificationUrl(e.target.value)} />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <DialogFooter>
-                                                                                        <Button variant="outline" onClick={() => setJustifyingId(null)} disabled={isPending}>Cancelar</Button>
-                                                                                        <Button onClick={handleJustifySubmit} disabled={isPending}>{isPending ? "Enviando..." : "Enviar Justificación"}</Button>
-                                                                                    </DialogFooter>
-                                                                                </DialogContent>
-                                                                            </Dialog>
-                                                                        ) : isJustified ? (
-                                                                            <div className="flex items-center justify-center gap-1.5">
-                                                                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                                                                    onClick={() => setViewingJustification({
-                                                                                        justification: att.justification || "",
-                                                                                        url: att.justificationUrl,
-                                                                                        date: att.date,
-                                                                                        statusName: att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'
-                                                                                    })}
-                                                                                >
-                                                                                    <FileText className="w-3 h-3" /> Ver
-                                                                                </Button>
-                                                                                {(currentUserRole === "teacher" || currentUserRole === "admin") && (
-                                                                                    <Button 
-                                                                                        size="sm" 
-                                                                                        variant="destructive" 
-                                                                                        onClick={() => triggerDeleteJustification(att.id)}
-                                                                                        className="h-7 text-xs font-semibold"
+                                                                                        <DialogFooter>
+                                                                                            <Button variant="outline" onClick={() => setJustifyingId(null)} disabled={isPending}>Cancelar</Button>
+                                                                                            <Button onClick={handleJustifySubmit} disabled={isPending}>{isPending ? "Enviando..." : "Enviar Justificación"}</Button>
+                                                                                        </DialogFooter>
+                                                                                    </DialogContent>
+                                                                                </Dialog>
+                                                                            ) : isJustified ? (
+                                                                                <div className="flex items-center justify-center gap-1.5">
+                                                                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                                                                        onClick={() => setViewingJustification({
+                                                                                            justification: att.justification || "",
+                                                                                            url: att.justificationUrl,
+                                                                                            date: att.date,
+                                                                                            statusName: att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'
+                                                                                        })}
                                                                                     >
-                                                                                        Eliminar
+                                                                                        <FileText className="w-3 h-3" /> Ver
                                                                                     </Button>
-                                                                                )}
-                                                                            </div>
-                                                                        ) : (
-                                                                            <span className="text-muted-foreground text-xs">—</span>
-                                                                        )}
-                                                                    </TableCell>
-                                                                </TableRow>
-                                                            );
-                                                        })}
-                                                    </TableBody>
-                                                </Table>
+                                                                                    {(currentUserRole === "teacher" || currentUserRole === "admin") && (
+                                                                                        <Button 
+                                                                                            size="sm" 
+                                                                                            variant="destructive" 
+                                                                                            onClick={() => triggerDeleteJustification(att.id)}
+                                                                                            className="h-7 text-xs font-semibold"
+                                                                                        >
+                                                                                            Eliminar
+                                                                                        </Button>
+                                                                                    )}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <span className="text-muted-foreground text-xs">—</span>
+                                                                            )}
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
                                             </CardContent>
                                         </Card>
                                     );
@@ -1443,94 +1445,96 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                         El profesor aún no ha asignado actividades evaluativas en esta materia.
                                                     </div>
                                                 ) : (
-                                                    <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
-                                                        <TableHeader className="bg-muted/5">
-                                                            <TableRow>
-                                                                <TableHead>Actividad</TableHead>
-                                                                <TableHead className="w-[80px] text-center">Peso</TableHead>
-                                                                <TableHead className="w-[100px] text-center">Nota</TableHead>
-                                                                <TableHead className="w-[150px] text-center">Entrega</TableHead>
-                                                                <TableHead className="w-[110px] text-center">Detalle</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {course.activities.map((act: any) => {
-                                                                const grade = act.grades[0];
-                                                                return (
-                                                                    <TableRow key={act.id}>
-                                                                        {/* Actividad */}
-                                                                        <TableCell>
-                                                                            <div className="font-semibold">{act.title}</div>
-                                                                            {act.allowSubmissionLink && (
-                                                                                <Badge variant="outline" className="mt-1 text-[10px] text-primary border-primary/30 bg-primary/5 gap-1">
-                                                                                    <Link2 className="w-2.5 h-2.5" />Acepta entrega
-                                                                                </Badge>
-                                                                            )}
-                                                                        </TableCell>
+                                                    <div className="w-full overflow-x-auto scrollbar-none">
+                                                        <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 min-w-[550px]">
+                                                            <TableHeader className="bg-muted/5">
+                                                                <TableRow>
+                                                                    <TableHead>Actividad</TableHead>
+                                                                    <TableHead className="w-[80px] text-center">Peso</TableHead>
+                                                                    <TableHead className="w-[100px] text-center">Nota</TableHead>
+                                                                    <TableHead className="w-[150px] text-center">Entrega</TableHead>
+                                                                    <TableHead className="w-[110px] text-center">Detalle</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {course.activities.map((act: any) => {
+                                                                    const grade = act.grades[0];
+                                                                    return (
+                                                                        <TableRow key={act.id}>
+                                                                            {/* Actividad */}
+                                                                            <TableCell>
+                                                                                <div className="font-semibold">{act.title}</div>
+                                                                                {act.allowSubmissionLink && (
+                                                                                    <Badge variant="outline" className="mt-1 text-[10px] text-primary border-primary/30 bg-primary/5 gap-1">
+                                                                                        <Link2 className="w-2.5 h-2.5" />Acepta entrega
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </TableCell>
 
-                                                                        {/* Peso */}
-                                                                        <TableCell className="text-center text-muted-foreground font-medium">
-                                                                            {act.weight}%
-                                                                        </TableCell>
+                                                                            {/* Peso */}
+                                                                            <TableCell className="text-center text-muted-foreground font-medium">
+                                                                                {act.weight}%
+                                                                            </TableCell>
 
-                                                                        {/* Nota */}
-                                                                        <TableCell className="text-center">
-                                                                            {grade && grade.score > 0 ? (
-                                                                                <Badge variant="outline" className={grade.score < 3.0 ? "text-red-600 bg-red-50 border-red-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"}>
-                                                                                    {grade.score.toFixed(1)}
-                                                                                </Badge>
-                                                                            ) : (
-                                                                                <span className="text-muted-foreground text-xs italic">Pendiente</span>
-                                                                            )}
-                                                                        </TableCell>
-
-                                                                        {/* Entrega */}
-                                                                        <TableCell className="text-center">
-                                                                            {act.allowSubmissionLink ? (
-                                                                                grade?.submissionLink ? (
-                                                                                    <div className="flex flex-col items-center gap-1">
-                                                                                        <a href={grade.submissionLink} target="_blank" rel="noopener noreferrer" className="text-primary text-xs hover:underline flex items-center gap-1 font-medium">
-                                                                                            <ExternalLink className="w-3 h-3" /> Ver entrega
-                                                                                        </a>
-                                                                                        <Button size="sm" variant="ghost" className="h-6 text-xs px-2 text-muted-foreground"
-                                                                                            onClick={() => { setSubmissionLinkInput(grade.submissionLink); setSubmissionDialog({ open: true, activityId: act.id, activityTitle: act.title, currentLink: grade.submissionLink }); }}>
-                                                                                            Editar
-                                                                                        </Button>
-                                                                                    </div>
+                                                                            {/* Nota */}
+                                                                            <TableCell className="text-center">
+                                                                                {grade && grade.score > 0 ? (
+                                                                                    <Badge variant="outline" className={grade.score < 3.0 ? "text-red-600 bg-red-50 border-red-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"}>
+                                                                                        {grade.score.toFixed(1)}
+                                                                                    </Badge>
                                                                                 ) : (
-                                                                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-primary/50 text-primary hover:bg-primary/5"
-                                                                                        onClick={() => { setSubmissionLinkInput(""); setSubmissionDialog({ open: true, activityId: act.id, activityTitle: act.title, currentLink: "" }); }}>
-                                                                                        <Link2 className="w-3 h-3" /> Enviar
-                                                                                    </Button>
-                                                                                )
-                                                                            ) : (
-                                                                                <span className="text-muted-foreground text-xs">—</span>
-                                                                            )}
-                                                                        </TableCell>
+                                                                                    <span className="text-muted-foreground text-xs italic">Pendiente</span>
+                                                                                )}
+                                                                            </TableCell>
 
-                                                                        {/* Detalle */}
-                                                                        <TableCell className="text-center">
-                                                                            <Button
-                                                                                size="sm"
-                                                                                variant="outline"
-                                                                                className="h-7 text-xs gap-1.5"
-                                                                                onClick={() => setActivityDetail({
-                                                                                    title: act.title,
-                                                                                    description: act.description || "",
-                                                                                    allowSubmissionLink: act.allowSubmissionLink ?? false,
-                                                                                    activityId: act.id,
-                                                                                    grade: grade ?? null
-                                                                                })}
-                                                                            >
-                                                                                <FileText className="w-3 h-3" />
-                                                                                Ver
-                                                                            </Button>
-                                                                        </TableCell>
-                                                                    </TableRow>
-                                                                );
-                                                            })}
-                                                        </TableBody>
-                                                    </Table>
+                                                                            {/* Entrega */}
+                                                                            <TableCell className="text-center">
+                                                                                {act.allowSubmissionLink ? (
+                                                                                    grade?.submissionLink ? (
+                                                                                        <div className="flex flex-col items-center gap-1">
+                                                                                            <a href={grade.submissionLink} target="_blank" rel="noopener noreferrer" className="text-primary text-xs hover:underline flex items-center gap-1 font-medium">
+                                                                                                <ExternalLink className="w-3 h-3" /> Ver entrega
+                                                                                            </a>
+                                                                                            <Button size="sm" variant="ghost" className="h-6 text-xs px-2 text-muted-foreground"
+                                                                                                onClick={() => { setSubmissionLinkInput(grade.submissionLink); setSubmissionDialog({ open: true, activityId: act.id, activityTitle: act.title, currentLink: grade.submissionLink }); }}>
+                                                                                                Editar
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-primary/50 text-primary hover:bg-primary/5"
+                                                                                            onClick={() => { setSubmissionLinkInput(""); setSubmissionDialog({ open: true, activityId: act.id, activityTitle: act.title, currentLink: "" }); }}>
+                                                                                            <Link2 className="w-3 h-3" /> Enviar
+                                                                                        </Button>
+                                                                                    )
+                                                                                ) : (
+                                                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                                                )}
+                                                                            </TableCell>
+
+                                                                            {/* Detalle */}
+                                                                            <TableCell className="text-center">
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    className="h-7 text-xs gap-1.5"
+                                                                                    onClick={() => setActivityDetail({
+                                                                                        title: act.title,
+                                                                                        description: act.description || "",
+                                                                                        allowSubmissionLink: act.allowSubmissionLink ?? false,
+                                                                                        activityId: act.id,
+                                                                                        grade: grade ?? null
+                                                                                    })}
+                                                                                >
+                                                                                    <FileText className="w-3 h-3" />
+                                                                                    Ver
+                                                                                </Button>
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    );
+                                                                })}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
                                                 )}
                                             </CardContent>
                                         </Card>
@@ -1800,7 +1804,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                         return (
                                             <Card key={plan.id} className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-shadow">
                                                 <CardHeader className="bg-muted/10 border-b p-5 pb-4">
-                                                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <h4 className="text-base font-black text-foreground">Plan N° {plan.planNumber}</h4>
@@ -1825,12 +1829,12 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                 <span><strong className="text-foreground font-semibold">Docente:</strong> {formatName(plan.teacher.name, plan.teacher.profile)}</span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex gap-2 shrink-0">
+                                                        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0 justify-start sm:justify-end">
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline" 
                                                                 onClick={() => handleViewPlan(plan)}
-                                                                className="h-8 text-xs font-bold gap-1 cursor-pointer"
+                                                                className="h-8 text-xs font-bold gap-1 cursor-pointer w-full sm:w-auto justify-center"
                                                             >
                                                                 <Eye className="w-3.5 h-3.5" /> Ver Detalle
                                                             </Button>
@@ -1839,7 +1843,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                     size="sm" 
                                                                     variant="outline" 
                                                                     onClick={() => handleEmailPlan(plan)}
-                                                                    className="h-8 text-xs font-bold gap-1 text-sky-600 border-sky-200 hover:bg-sky-50 hover:text-sky-700 cursor-pointer"
+                                                                    className="h-8 text-xs font-bold gap-1 text-sky-600 border-sky-200 hover:bg-sky-50 hover:text-sky-700 cursor-pointer w-full sm:w-auto justify-center"
                                                                 >
                                                                     <Mail className="w-3.5 h-3.5" /> Enviar Correo
                                                                 </Button>
@@ -1849,7 +1853,7 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                     size="sm" 
                                                                     variant="outline" 
                                                                     onClick={() => handleDeletePlan(plan.id)}
-                                                                    className="h-8 text-xs font-bold gap-1 text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive cursor-pointer"
+                                                                    className="h-8 text-xs font-bold gap-1 text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive cursor-pointer w-full sm:w-auto justify-center"
                                                                 >
                                                                     Eliminar
                                                                 </Button>
