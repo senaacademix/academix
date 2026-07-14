@@ -109,6 +109,19 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
 
     // Improvement Plans State
     const [improvementPlans, setImprovementPlans] = useState<any[]>([]);
+    const plansByTeacher = useMemo(() => {
+        const groups: Record<string, { teacherName: string; plans: any[] }> = {};
+        const sortedPlans = [...improvementPlans].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        sortedPlans.forEach((plan) => {
+            const teacherId = plan.teacher?.id || "unknown";
+            const teacherName = plan.teacher ? formatName(plan.teacher.name, plan.teacher.profile) : "Docente no asignado";
+            if (!groups[teacherId]) {
+                groups[teacherId] = { teacherName, plans: [] };
+            }
+            groups[teacherId].plans.push(plan);
+        });
+        return Object.values(groups).sort((a, b) => a.teacherName.localeCompare(b.teacherName));
+    }, [improvementPlans]);
     const [improvementLoading, setImprovementLoading] = useState(true);
     
     // Improvement Plan Dialogs
@@ -1782,249 +1795,264 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                     <p className="text-sm text-center mt-1">No se registran planes de mejoramiento asignados para este estudiante.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
-                                    {improvementPlans.map((plan) => {
-                                        // ── Compute step completion ──
-                                        const step1Done = !!plan.teacherDocUrl;
-                                        const step2Done = !!plan.signedDocUrl;
-                                        const step3Done = !!(plan as any).teacherSignedDocUrl;
-                                        const isPastEnd = new Date() > fromUTC(plan.endDate);
-                                        const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
+                                <div className="space-y-8">
+                                    {plansByTeacher.map(({ teacherName, plans }) => (
+                                        <div key={teacherName} className="space-y-4">
+                                            <div className="flex items-center gap-2 pb-2 border-b">
+                                                <GraduationCap className="w-5 h-5 text-primary" />
+                                                <h3 className="text-sm font-bold text-foreground">
+                                                    Docente: {teacherName}
+                                                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                                        ({plans.length} {plans.length === 1 ? "plan de mejoramiento" : "planes de mejoramiento"})
+                                                    </span>
+                                                </h3>
+                                            </div>
+                                            <div className="space-y-4">
+                                                {plans.map((plan) => {
+                                                    // ── Compute step completion ──
+                                                    const step1Done = !!plan.teacherDocUrl;
+                                                    const step2Done = !!plan.signedDocUrl;
+                                                    const step3Done = !!(plan as any).teacherSignedDocUrl;
+                                                    const isPastEnd = new Date() > fromUTC(plan.endDate);
+                                                    const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
 
-                                        // ── Date progress bar ──
-                                        const nowMs = Date.now();
-                                        const startMs = fromUTC(plan.startDate).getTime();
-                                        const endMs = fromUTC(plan.endDate).getTime();
-                                        const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
-                                        const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
-                                        const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
+                                                    // ── Date progress bar ──
+                                                    const nowMs = Date.now();
+                                                    const startMs = fromUTC(plan.startDate).getTime();
+                                                    const endMs = fromUTC(plan.endDate).getTime();
+                                                    const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
+                                                    const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
+                                                    const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
 
-                                        const steps = [
-                                            { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
-                                            { label: "Mi firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
-                                            { label: "Prof. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
-                                            { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
-                                        ];
+                                                    const steps = [
+                                                        { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
+                                                        { label: "Mi firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
+                                                        { label: "Prof. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
+                                                        { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
+                                                    ];
 
-                                        return (
-                                            <Card key={plan.id} className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-shadow">
-                                                <CardHeader className="bg-muted/10 border-b p-5 pb-4">
-                                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <h4 className="text-base font-black text-foreground">Plan N° {plan.planNumber}</h4>
-                                                                {plan.viewedAt ? (
-                                                                    <Badge variant="outline" className="text-[10px] py-0 px-2 text-emerald-700 border-emerald-200 bg-emerald-50 gap-0.5 font-bold" title={`Revisado el ${format(new Date(plan.viewedAt), "dd/MM/yyyy HH:mm")}`}>
-                                                                        <Eye className="w-3 h-3" /> Revisado
-                                                                    </Badge>
-                                                                ) : (
-                                                                    <Badge variant="outline" className="text-[10px] py-0 px-2 text-amber-700 border-amber-200 bg-amber-50 gap-0.5 font-bold">
-                                                                        <EyeOff className="w-3 h-3" /> No revisado
-                                                                    </Badge>
-                                                                )}
-                                                                {plan.finalGrade !== null && plan.finalGrade !== undefined && (
-                                                                    <Badge variant="outline" className="text-[10px] py-0 px-2 text-blue-700 border-blue-200 bg-blue-50 font-extrabold">
-                                                                        Nota Final: {plan.finalGrade.toFixed(1)}
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                            <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-medium">
-                                                                <span><strong className="text-foreground font-semibold">Inicio:</strong> {format(fromUTC(plan.startDate), "dd MMM yyyy", { locale: es })}</span>
-                                                                <span><strong className="text-foreground font-semibold">Límite:</strong> {format(fromUTC(plan.endDate), "dd MMM yyyy", { locale: es })}</span>
-                                                                <span><strong className="text-foreground font-semibold">Docente:</strong> {formatName(plan.teacher.name, plan.teacher.profile)}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0 justify-start sm:justify-end">
-                                                            <Button 
-                                                                size="sm" 
-                                                                variant="outline" 
-                                                                onClick={() => handleViewPlan(plan)}
-                                                                className="h-8 text-xs font-bold gap-1 cursor-pointer w-full sm:w-auto justify-center"
-                                                            >
-                                                                <Eye className="w-3.5 h-3.5" /> Ver Detalle
-                                                            </Button>
-                                                            {(currentUserRole === "teacher" || currentUserRole === "admin") && (
-                                                                <Button 
-                                                                    size="sm" 
-                                                                    variant="outline" 
-                                                                    onClick={() => handleEmailPlan(plan)}
-                                                                    className="h-8 text-xs font-bold gap-1 text-sky-600 border-sky-200 hover:bg-sky-50 hover:text-sky-700 cursor-pointer w-full sm:w-auto justify-center"
-                                                                >
-                                                                    <Mail className="w-3.5 h-3.5" /> Enviar Correo
-                                                                </Button>
-                                                            )}
-                                                            {(currentUserRole === "teacher" || currentUserRole === "admin") && (
-                                                                <Button 
-                                                                    size="sm" 
-                                                                    variant="outline" 
-                                                                    onClick={() => handleDeletePlan(plan.id)}
-                                                                    className="h-8 text-xs font-bold gap-1 text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive cursor-pointer w-full sm:w-auto justify-center"
-                                                                >
-                                                                    Eliminar
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </CardHeader>
-
-                                                <CardContent className="p-5 space-y-4">
-                                                    {plan.observations && (
-                                                        <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/20 border border-muted p-3.5 rounded-xl text-left">
-                                                            <strong className="text-foreground block font-bold mb-1">Observaciones del compromiso:</strong>
-                                                            {plan.observations}
-                                                        </div>
-                                                    )}
-
-                                                    {/* ── Temporal progress bar ── */}
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium">
-                                                            <span>Progreso temporal del plan</span>
-                                                            <span className={datePct >= 100 ? "text-red-500 font-bold" : "text-primary font-semibold"}>
-                                                                {datePct}% · {Math.min(daysPassed, daysTotal)}/{daysTotal} días
-                                                            </span>
-                                                        </div>
-                                                        <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
-                                                            <div
-                                                                className={`h-full rounded-full transition-all duration-700 ${datePct >= 100 ? "bg-red-500" : datePct >= 75 ? "bg-amber-500" : "bg-primary"}`}
-                                                                style={{ width: `${datePct}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* ── 4-Step Stepper ── */}
-                                                    <div className="relative grid grid-cols-4 gap-2 py-2">
-                                                        <div className="absolute top-6 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
-                                                        {steps.map((step, idx) => (
-                                                            <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10">
-                                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all shadow-sm ${
-                                                                    step.done
-                                                                        ? "bg-emerald-500 border-emerald-500 text-white"
-                                                                        : step.locked
-                                                                            ? "bg-muted border-border text-muted-foreground"
-                                                                            : step.active
-                                                                                ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
-                                                                                : "bg-background border-muted text-muted-foreground"
-                                                                }`}>
-                                                                    {step.done ? (
-                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                                    ) : step.locked ? (
-                                                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
-                                                                    ) : (
-                                                                        <span>{idx + 1}</span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    <p className={`text-[10px] font-semibold leading-tight ${
-                                                                        step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"
-                                                                    }`}>{step.label}</p>
-                                                                    <p className="text-[9px] text-muted-foreground">{step.sub}</p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* ── Step action areas ── */}
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                        {/* Documento del plan (Step 1) */}
-                                                        <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
-                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 1 — Documento del Plan</span>
-                                                            {plan.teacherDocUrl ? (
-                                                                <a href={plan.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-bold flex items-center gap-1 mt-1">
-                                                                    <ExternalLink className="w-3.5 h-3.5" /> Descargar y Firmar
-                                                                </a>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground italic mt-1">Sin documento cargado</span>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Firma estudiante (Step 2) */}
-                                                        <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
-                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 2 — Mi Firma</span>
-                                                            {plan.signedDocUrl ? (
-                                                                <div className="flex items-center justify-between gap-2 mt-1">
-                                                                    <a href={plan.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline font-bold flex items-center gap-1 truncate">
-                                                                        <ExternalLink className="w-3.5 h-3.5 shrink-0" /> Ver Documento Firmado
-                                                                    </a>
-                                                                    {currentUserRole === "teacher" && (
-                                                                        <Button 
-                                                                            variant="ghost" 
-                                                                            size="icon" 
-                                                                            onClick={() => handleDeleteSignedDoc(plan.id)}
-                                                                            className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md shrink-0 cursor-pointer"
-                                                                            title="Eliminar firma del estudiante"
-                                                                        >
-                                                                            <UserX className="w-3.5 h-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex flex-col gap-1 mt-1">
-                                                                    <span className="text-xs text-muted-foreground italic">Pendiente de firma del aprendiz</span>
-                                                                    {currentUserRole === "student" && (
+                                                    return (
+                                                        <Card key={plan.id} className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-shadow">
+                                                            <CardHeader className="bg-muted/10 border-b p-5 pb-4">
+                                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <h4 className="text-base font-black text-foreground">Plan N° {plan.planNumber}</h4>
+                                                                            {plan.viewedAt ? (
+                                                                                <Badge variant="outline" className="text-[10px] py-0 px-2 text-emerald-700 border-emerald-200 bg-emerald-50 gap-0.5 font-bold" title={`Revisado el ${format(new Date(plan.viewedAt), "dd/MM/yyyy HH:mm")}`}>
+                                                                                    <Eye className="w-3 h-3" /> Revisado
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge variant="outline" className="text-[10px] py-0 px-2 text-amber-700 border-amber-200 bg-amber-50 gap-0.5 font-bold">
+                                                                                    <EyeOff className="w-3 h-3" /> No revisado
+                                                                                </Badge>
+                                                                            )}
+                                                                            {plan.finalGrade !== null && plan.finalGrade !== undefined && (
+                                                                                <Badge variant="outline" className="text-[10px] py-0 px-2 text-blue-700 border-blue-200 bg-blue-50 font-extrabold">
+                                                                                    Nota Final: {plan.finalGrade.toFixed(1)}
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-medium">
+                                                                            <span><strong className="text-foreground font-semibold">Inicio:</strong> {format(fromUTC(plan.startDate), "dd MMM yyyy", { locale: es })}</span>
+                                                                            <span><strong className="text-foreground font-semibold">Límite:</strong> {format(fromUTC(plan.endDate), "dd MMM yyyy", { locale: es })}</span>
+                                                                            <span><strong className="text-foreground font-semibold">Docente:</strong> {formatName(plan.teacher.name, plan.teacher.profile)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0 justify-start sm:justify-end">
                                                                         <Button 
                                                                             size="sm" 
                                                                             variant="outline" 
-                                                                            onClick={() => setSignedDocDialog({ open: true, planId: plan.id, signedDocUrl: "" })}
-                                                                            className="h-7 text-[10px] font-bold mt-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
+                                                                            onClick={() => handleViewPlan(plan)}
+                                                                            className="h-8 text-xs font-bold gap-1 cursor-pointer w-full sm:w-auto justify-center"
                                                                         >
-                                                                            Subir Firma
+                                                                            <Eye className="w-3.5 h-3.5" /> Ver Detalle
                                                                         </Button>
-                                                                    )}
+                                                                        {(currentUserRole === "teacher" || currentUserRole === "admin") && (
+                                                                            <Button 
+                                                                                size="sm" 
+                                                                                variant="outline" 
+                                                                                onClick={() => handleEmailPlan(plan)}
+                                                                                className="h-8 text-xs font-bold gap-1 text-sky-600 border-sky-200 hover:bg-sky-50 hover:text-sky-700 cursor-pointer w-full sm:w-auto justify-center"
+                                                                            >
+                                                                                <Mail className="w-3.5 h-3.5" /> Enviar Correo
+                                                                            </Button>
+                                                                        )}
+                                                                        {(currentUserRole === "teacher" || currentUserRole === "admin") && (
+                                                                            <Button 
+                                                                                size="sm" 
+                                                                                variant="outline" 
+                                                                                onClick={() => handleDeletePlan(plan.id)}
+                                                                                className="h-8 text-xs font-bold gap-1 text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive cursor-pointer w-full sm:w-auto justify-center"
+                                                                            >
+                                                                                Eliminar
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                            )}
-                                                        </div>
+                                                            </CardHeader>
 
-                                                        {/* Evidencias evaluación (Step 4) */}
-                                                        <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
-                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 4 — Evidencias</span>
-                                                            {plan.evidenceUrl ? (
-                                                                <a href={plan.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-bold flex items-center gap-1 mt-1">
-                                                                    <ExternalLink className="w-3.5 h-3.5" /> Ver Evidencias
-                                                                </a>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground italic mt-1">{isPastEnd ? "Sin evidencias registradas" : "Disponible al vencer el plan"}</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                                            <CardContent className="p-5 space-y-4">
+                                                                {plan.observations && (
+                                                                    <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/20 border border-muted p-3.5 rounded-xl text-left">
+                                                                        <strong className="text-foreground block font-bold mb-1">Observaciones del compromiso:</strong>
+                                                                        {plan.observations}
+                                                                    </div>
+                                                                )}
 
-                                                    {/* Paso 3 — Firma del docente (read-only display) */}
-                                                    {step2Done && (
-                                                        <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${
-                                                            step3Done
-                                                                ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200"
-                                                                : "bg-blue-50/50 dark:bg-blue-950/10 border-blue-200"
-                                                        }`}>
-                                                            <FileText className={`w-4 h-4 shrink-0 ${step3Done ? "text-emerald-600" : "text-blue-600"}`} />
-                                                            {step3Done ? (
-                                                                <a href={(plan as any).teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 hover:underline font-semibold flex-1 truncate">
-                                                                    Paso 3 — Docente firmó. Ver documento
-                                                                </a>
-                                                            ) : (
-                                                                <p className="text-xs text-blue-700 dark:text-blue-400">Paso 3 — Esperando firma del docente...</p>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                {/* ── Temporal progress bar ── */}
+                                                                <div className="space-y-1">
+                                                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                                                                        <span>Progreso temporal del plan</span>
+                                                                        <span className={datePct >= 100 ? "text-red-500 font-bold" : "text-primary font-semibold"}>
+                                                                            {datePct}% · {Math.min(daysPassed, daysTotal)}/{daysTotal} días
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full rounded-full transition-all duration-700 ${datePct >= 100 ? "bg-red-500" : datePct >= 75 ? "bg-amber-500" : "bg-primary"}`}
+                                                                            style={{ width: `${datePct}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
 
-                                                    {(plan.planScore !== null || plan.finalGrade !== null) && (
-                                                        <div className="border-t pt-4 mt-2 grid grid-cols-2 gap-4">
-                                                            <div className="space-y-1 bg-primary/5 p-3 rounded-xl border border-primary/20">
-                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Calificación Plan</span>
-                                                                <span className="text-lg font-black text-primary">
-                                                                    {plan.planScore !== null && plan.planScore !== undefined ? plan.planScore.toFixed(1) : "N/D"}
-                                                                </span>
-                                                            </div>
-                                                            <div className="space-y-1 bg-blue-50/50 p-3 rounded-xl border border-blue-200">
-                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Nota Final</span>
-                                                                <span className="text-lg font-black text-blue-700">
-                                                                    {plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade.toFixed(1) : "N/D"}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        );
-                                    })}
+                                                                {/* ── 4-Step Stepper ── */}
+                                                                <div className="relative grid grid-cols-4 gap-2 py-2">
+                                                                    <div className="absolute top-6 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
+                                                                    {steps.map((step, idx) => (
+                                                                        <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10">
+                                                                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all shadow-sm ${
+                                                                                step.done
+                                                                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                                    : step.locked
+                                                                                        ? "bg-muted border-border text-muted-foreground"
+                                                                                        : step.active
+                                                                                            ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
+                                                                                            : "bg-background border-muted text-muted-foreground"
+                                                                            }`}>
+                                                                                {step.done ? (
+                                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                                                ) : step.locked ? (
+                                                                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                                                ) : (
+                                                                                    <span>{idx + 1}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <p className={`text-[10px] font-semibold leading-tight ${
+                                                                                    step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"
+                                                                                }`}>{step.label}</p>
+                                                                                <p className="text-[9px] text-muted-foreground">{step.sub}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                {/* ── Step action areas ── */}
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                                    {/* Documento del plan (Step 1) */}
+                                                                    <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
+                                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 1 — Documento del Plan</span>
+                                                                        {plan.teacherDocUrl ? (
+                                                                            <a href={plan.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-bold flex items-center gap-1 mt-1">
+                                                                                <ExternalLink className="w-3.5 h-3.5" /> Descargar y Firmar
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground italic mt-1">Sin documento cargado</span>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Firma estudiante (Step 2) */}
+                                                                    <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
+                                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 2 — Mi Firma</span>
+                                                                        {plan.signedDocUrl ? (
+                                                                            <div className="flex items-center justify-between gap-2 mt-1">
+                                                                                <a href={plan.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline font-bold flex items-center gap-1 truncate">
+                                                                                    <ExternalLink className="w-3.5 h-3.5 shrink-0" /> Ver Documento Firmado
+                                                                                </a>
+                                                                                {currentUserRole === "teacher" && (
+                                                                                    <Button 
+                                                                                        variant="ghost" 
+                                                                                        size="icon" 
+                                                                                        onClick={() => handleDeleteSignedDoc(plan.id)}
+                                                                                        className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md shrink-0 cursor-pointer"
+                                                                                        title="Eliminar firma del estudiante"
+                                                                                    >
+                                                                                        <UserX className="w-3.5 h-3.5" />
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="flex flex-col gap-1 mt-1">
+                                                                                <span className="text-xs text-muted-foreground italic">Pendiente de firma del aprendiz</span>
+                                                                                {currentUserRole === "student" && (
+                                                                                    <Button 
+                                                                                        size="sm" 
+                                                                                        variant="outline" 
+                                                                                        onClick={() => setSignedDocDialog({ open: true, planId: plan.id, signedDocUrl: "" })}
+                                                                                        className="h-7 text-[10px] font-bold mt-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
+                                                                                    >
+                                                                                        Subir Firma
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Evidencias evaluación (Step 4) */}
+                                                                    <div className="p-3 bg-background border rounded-xl flex flex-col gap-1 text-left">
+                                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paso 4 — Evidencias</span>
+                                                                        {plan.evidenceUrl ? (
+                                                                            <a href={plan.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-bold flex items-center gap-1 mt-1">
+                                                                                <ExternalLink className="w-3.5 h-3.5" /> Ver Evidencias
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground italic mt-1">{isPastEnd ? "Sin evidencias registradas" : "Disponible al vencer el plan"}</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Paso 3 — Firma del docente (read-only display) */}
+                                                                {step2Done && (
+                                                                    <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${
+                                                                        step3Done
+                                                                            ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200"
+                                                                            : "bg-blue-50/50 dark:bg-blue-950/10 border-blue-200"
+                                                                    }`}>
+                                                                        <FileText className={`w-4 h-4 shrink-0 ${step3Done ? "text-emerald-600" : "text-blue-600"}`} />
+                                                                        {step3Done ? (
+                                                                            <a href={(plan as any).teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 hover:underline font-semibold flex-1 truncate">
+                                                                                Paso 3 — Docente firmó. Ver documento
+                                                                            </a>
+                                                                        ) : (
+                                                                            <p className="text-xs text-blue-700 dark:text-blue-400">Paso 3 — Esperando firma del docente...</p>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {(plan.planScore !== null || plan.finalGrade !== null) && (
+                                                                    <div className="border-t pt-4 mt-2 grid grid-cols-2 gap-4">
+                                                                        <div className="space-y-1 bg-primary/5 p-3 rounded-xl border border-primary/20">
+                                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Calificación Plan</span>
+                                                                            <span className="text-lg font-black text-primary">
+                                                                                {plan.planScore !== null && plan.planScore !== undefined ? plan.planScore.toFixed(1) : "N/D"}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 bg-blue-50/50 p-3 rounded-xl border border-blue-200">
+                                                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Nota Final</span>
+                                                                            <span className="text-lg font-black text-blue-700">
+                                                                                {plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade.toFixed(1) : "N/D"}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </CardContent>
+                                                        </Card>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </motion.div>

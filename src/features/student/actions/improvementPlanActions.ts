@@ -25,7 +25,10 @@ export async function getImprovementPlans(targetStudentId?: string) {
 
     try {
         const plans = await prisma.improvementPlan.findMany({
-            where: { studentId },
+            where: { 
+                studentId,
+                ...(session.user.role === "teacher" ? { teacherId: session.user.id } : {})
+            },
             include: {
                 student: {
                     select: {
@@ -61,7 +64,8 @@ export async function getGroupImprovementPlans(groupId: string) {
     try {
         const plans = await prisma.improvementPlan.findMany({
             where: {
-                student: { groupId }
+                student: { groupId },
+                ...(session.user.role === "teacher" ? { teacherId: session.user.id } : {})
             },
             include: {
                 student: {
@@ -125,6 +129,14 @@ export async function upsertImprovementPlan(data: {
     try {
         if (id) {
             // Update
+            const existing = await prisma.improvementPlan.findUnique({
+                where: { id },
+                select: { teacherId: true }
+            });
+            if (!existing || existing.teacherId !== session.user.id) {
+                throw new Error("No autorizado a modificar este plan");
+            }
+
             const updated = await prisma.improvementPlan.update({
                 where: { id },
                 data: {
@@ -203,6 +215,16 @@ export async function deleteImprovementPlan(id: string) {
     }
 
     try {
+        if (session.user.role === "teacher") {
+            const plan = await prisma.improvementPlan.findUnique({
+                where: { id },
+                select: { teacherId: true }
+            });
+            if (!plan || plan.teacherId !== session.user.id) {
+                throw new Error("No autorizado a eliminar este plan");
+            }
+        }
+
         await prisma.improvementPlan.delete({
             where: { id }
         });
@@ -268,6 +290,12 @@ export async function deleteSignedDocument(planId: string) {
     }
 
     try {
+        const plan = await prisma.improvementPlan.findUnique({ where: { id: planId } });
+        if (!plan) throw new Error("Plan no encontrado");
+        if (session.user.role === "teacher" && plan.teacherId !== session.user.id) {
+            throw new Error("No autorizado");
+        }
+
         const updated = await prisma.improvementPlan.update({
             where: { id: planId },
             data: { signedDocUrl: null }
@@ -308,6 +336,12 @@ export async function deleteTeacherSignedDoc(planId: string) {
     }
 
     try {
+        const plan = await prisma.improvementPlan.findUnique({ where: { id: planId } });
+        if (!plan) throw new Error("Plan no encontrado");
+        if (session.user.role === "teacher" && plan.teacherId !== session.user.id) {
+            throw new Error("No autorizado");
+        }
+
         const updated = await prisma.improvementPlan.update({
             where: { id: planId },
             data: { teacherSignedDocUrl: null }
