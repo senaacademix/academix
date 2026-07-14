@@ -223,6 +223,7 @@ interface Period {
     programId: string;
     createdAt: Date;
     courses: Course[];
+    esEspecial?: boolean;
 }
 
 interface Group {
@@ -648,6 +649,8 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
     const [periodToEdit, setPeriodToEdit] = useState<Period | null>(null);
     const [periodName, setPeriodName] = useState("");
     const [periodDescription, setPeriodDescription] = useState("");
+    const [periodTab, setPeriodTab] = useState<"normal" | "special">("normal");
+    const [periodEsEspecial, setPeriodEsEspecial] = useState(false);
 
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
     const [groupToEdit, setGroupToEdit] = useState<Group | null>(null);
@@ -1225,6 +1228,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
         setPeriodToEdit(null);
         setPeriodName("");
         setPeriodDescription("");
+        setPeriodEsEspecial(false);
         setPeriodDialogOpen(true);
     };
 
@@ -1232,6 +1236,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
         setPeriodToEdit(period);
         setPeriodName(period.name);
         setPeriodDescription(period.description || "");
+        setPeriodEsEspecial(period.esEspecial || false);
         setPeriodDialogOpen(true);
     };
 
@@ -1247,14 +1252,16 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 if (periodToEdit) {
                     await updatePeriodAction(periodToEdit.id, {
                         name: periodName,
-                        description: periodDescription
+                        description: periodDescription,
+                        esEspecial: periodEsEspecial
                     });
                     toast.success("Periodo académico actualizado");
                 } else {
                     await createPeriodAction({
                         name: periodName,
                         description: periodDescription,
-                        programId: selectedProgram.id
+                        programId: selectedProgram.id,
+                        esEspecial: periodEsEspecial
                     });
                     toast.success("Periodo académico agregado");
                 }
@@ -2271,43 +2278,83 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                 )}
                             </div>
 
-                            {selectedProgram.periods.length === 0 ? (
-                                <div className="text-center py-16 bg-muted/10 rounded-2xl border border-dashed border-muted/50">
-                                    <Calendar className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                                    <h4 className="font-semibold">Sin Periodos Académicos</h4>
-                                    <p className="text-muted-foreground text-sm mt-1 max-w-xs mx-auto">
-                                        Crea el primer periodo académico para este programa para empezar a crear materias.
-                                    </p>
-                                    {!isObserver && (
-                                        <Button onClick={openCreatePeriod} className="mt-4" size="sm">
-                                            <Plus className="mr-1.5 h-4 w-4" /> Crear Periodo
-                                        </Button>
+                            {/* Sub-pestañas para clasificar los periodos */}
+                            <div className="flex border-b border-muted/30 pb-px gap-6 mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setPeriodTab("normal")}
+                                    className={cn(
+                                        "pb-2.5 text-sm font-semibold transition-all relative outline-none",
+                                        periodTab === "normal"
+                                            ? "text-primary border-b-2 border-primary"
+                                            : "text-muted-foreground hover:text-foreground"
                                     )}
-                                </div>
-                            ) : (
-                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePeriodDragEnd}>
-                                    <SortableContext items={selectedProgram.periods.map(p => p.id)} strategy={rectSortingStrategy}>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {selectedProgram.periods.map(period => (
-                                                <SortablePeriodCard
-                                                    key={period.id}
-                                                    period={period}
-                                                    openEditPeriod={openEditPeriod}
-                                                    triggerDelete={triggerDelete}
-                                                    openCreateCourseForPeriod={openCreateCourseForPeriod}
-                                                    openEditCourse={openEditCourse}
-                                                    setSelectedCourseForDesc={setSelectedCourseForDesc}
-                                                    setDescriptionDialogOpen={setDescriptionDialogOpen}
-                                                    formatWeeklyHours={formatWeeklyHours}
-                                                    BADGE_COLORS={BADGE_COLORS}
-                                                    sensors={sensors}
-                                                    handleDragEnd={handleDragEnd}
-                                                />
-                                            ))}
+                                >
+                                    Periodos Normales
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPeriodTab("special")}
+                                    className={cn(
+                                        "pb-2.5 text-sm font-semibold transition-all relative outline-none",
+                                        periodTab === "special"
+                                            ? "text-primary border-b-2 border-primary"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Periodos Especiales
+                                </button>
+                            </div>
+
+                            {(() => {
+                                const normalPeriods = selectedProgram.periods.filter(p => !p.esEspecial);
+                                const specialPeriods = selectedProgram.periods.filter(p => p.esEspecial);
+                                const filteredPeriods = periodTab === "normal" ? normalPeriods : specialPeriods;
+
+                                if (filteredPeriods.length === 0) {
+                                    return (
+                                        <div className="text-center py-16 bg-muted/5 rounded-2xl border border-dashed border-muted/30 animate-in fade-in duration-200">
+                                            <Calendar className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
+                                            <h4 className="font-semibold text-sm">Sin Periodos {periodTab === "normal" ? "Normales" : "Especiales"}</h4>
+                                            <p className="text-muted-foreground text-xs mt-1 max-w-xs mx-auto">
+                                                {periodTab === "normal"
+                                                    ? "Aún no hay periodos académicos normales creados para este programa."
+                                                    : "Aún no hay periodos académicos especiales creados para este programa."}
+                                            </p>
+                                            {!isObserver && (
+                                                <Button onClick={openCreatePeriod} className="mt-4 h-9 text-xs" size="sm">
+                                                    <Plus className="mr-1.5 h-4 w-4" /> Crear Periodo
+                                                </Button>
+                                            )}
                                         </div>
-                                    </SortableContext>
-                                </DndContext>
-                            )}
+                                    );
+                                }
+
+                                return (
+                                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePeriodDragEnd}>
+                                        <SortableContext items={filteredPeriods.map(p => p.id)} strategy={rectSortingStrategy}>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {filteredPeriods.map(period => (
+                                                    <SortablePeriodCard
+                                                        key={period.id}
+                                                        period={period}
+                                                        openEditPeriod={openEditPeriod}
+                                                        triggerDelete={triggerDelete}
+                                                        openCreateCourseForPeriod={openCreateCourseForPeriod}
+                                                        openEditCourse={openEditCourse}
+                                                        setSelectedCourseForDesc={setSelectedCourseForDesc}
+                                                        setDescriptionDialogOpen={setDescriptionDialogOpen}
+                                                        formatWeeklyHours={formatWeeklyHours}
+                                                        BADGE_COLORS={BADGE_COLORS}
+                                                        sensors={sensors}
+                                                        handleDragEnd={handleDragEnd}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </SortableContext>
+                                    </DndContext>
+                                );
+                            })()}
                         </TabsContent>
 
                         {/* SUB-TAB: GROUPS & STUDENTS */}
@@ -2864,6 +2911,16 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                 onChange={(e) => setPeriodDescription(e.target.value)}
                                 rows={2}
                             />
+                        </div>
+                        <div className="flex items-center space-x-2 pt-2">
+                            <Checkbox 
+                                id="perEsEspecial" 
+                                checked={periodEsEspecial} 
+                                onCheckedChange={(checked) => setPeriodEsEspecial(checked === true)} 
+                            />
+                            <Label htmlFor="perEsEspecial" className="text-xs font-semibold cursor-pointer select-none">
+                                ¿Es un periodo especial? (Semilleros, inducción, etc.)
+                            </Label>
                         </div>
                     </div>
                     <DialogFooter>

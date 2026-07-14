@@ -234,7 +234,7 @@ export async function deleteProgramAction(id: string) {
 
 // ============ PERIOD CRUD ============
 
-export async function createPeriodAction(data: { name: string; description?: string; programId: string }) {
+export async function createPeriodAction(data: { name: string; description?: string; programId: string; esEspecial?: boolean }) {
     const session = await requireAdmin();
     if (!data.name || data.name.trim().length < 2) {
         throw new Error("El nombre del periodo debe tener al menos 2 caracteres");
@@ -248,6 +248,7 @@ export async function createPeriodAction(data: { name: string; description?: str
             name: data.name,
             description: data.description || null,
             programId: data.programId,
+            esEspecial: data.esEspecial ?? false,
         }
     });
 
@@ -268,7 +269,7 @@ export async function createPeriodAction(data: { name: string; description?: str
     return period;
 }
 
-export async function updatePeriodAction(id: string, data: { name: string; description?: string }) {
+export async function updatePeriodAction(id: string, data: { name: string; description?: string; esEspecial?: boolean }) {
     const session = await requireAdmin();
     if (!data.name || data.name.trim().length < 2) {
         throw new Error("El nombre del periodo debe tener al menos 2 caracteres");
@@ -279,6 +280,7 @@ export async function updatePeriodAction(id: string, data: { name: string; descr
         data: {
             name: data.name,
             description: data.description || null,
+            esEspecial: data.esEspecial ?? false,
         }
     });
 

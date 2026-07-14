@@ -422,6 +422,7 @@ model Period {
   name        String
   description String?
   order       Int        @default(0)
+  esEspecial  Boolean    @default(false)
   programId   String
   program     Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
   courses     Course[]
