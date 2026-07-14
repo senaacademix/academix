@@ -858,23 +858,29 @@ const handleOpenAnalytics = async () => {
 
     const filteredStudents = useMemo(() => {
         if (!selectedGroup?.students) return [];
-        if (!searchQuery) return selectedGroup.students;
-        const q = searchQuery.toLowerCase();
-        return selectedGroup.students.filter((s: any) => 
-            s.name.toLowerCase().includes(q) || 
-            s.email.toLowerCase().includes(q) ||
-            s.profile?.identificacion?.toLowerCase().includes(q)
-        );
+        let list = selectedGroup.students;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            list = list.filter((s: any) => 
+                s.name.toLowerCase().includes(q) || 
+                s.email.toLowerCase().includes(q) ||
+                s.profile?.identificacion?.toLowerCase().includes(q)
+            );
+        }
+        return [...list].sort((a: any, b: any) => a.name.localeCompare(b.name));
     }, [selectedGroup, searchQuery]);
 
     const filteredStudentsForRemark = useMemo(() => {
         if (!selectedGroup?.students) return [];
-        if (!remarkStudentSearch) return selectedGroup.students;
-        const q = remarkStudentSearch.toLowerCase();
-        return selectedGroup.students.filter((s: any) => 
-            s.name.toLowerCase().includes(q) || 
-            s.profile?.identificacion?.toLowerCase().includes(q)
-        );
+        let list = selectedGroup.students;
+        if (remarkStudentSearch) {
+            const q = remarkStudentSearch.toLowerCase();
+            list = list.filter((s: any) => 
+                s.name.toLowerCase().includes(q) || 
+                s.profile?.identificacion?.toLowerCase().includes(q)
+            );
+        }
+        return [...list].sort((a: any, b: any) => a.name.localeCompare(b.name));
     }, [selectedGroup, remarkStudentSearch]);
 
     const isCurrentDateValid = useMemo(() => {
@@ -1125,7 +1131,7 @@ const handleOpenAnalytics = async () => {
         if (!selectedGroup || !attCourseId) return null;
         const history = attendanceHistory.filter((r: any) => r.courseId === attCourseId);
         const allDates = [...new Set(history.map((r: any) => r.date as string))].sort();
-        const students = selectedGroup.students ?? [];
+        const students = [...(selectedGroup.students ?? [])].sort((a: any, b: any) => a.name.localeCompare(b.name));
 
         const rows = students.map((s: any) => {
             const row: Record<string, string> = {

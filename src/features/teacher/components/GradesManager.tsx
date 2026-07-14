@@ -497,7 +497,7 @@ export function GradesManager({ courseId, courseTitle = "Materia", initialData }
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {students.map((student: any) => {
+                                {[...students].sort((a, b) => formatName(a.name, a.profile).localeCompare(formatName(b.name, b.profile))).map((student: any) => {
                                     const finalGrade = calculateFinalGrade(student.id);
                                     return (
                                         <TableRow key={student.id}>

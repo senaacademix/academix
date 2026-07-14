@@ -137,7 +137,7 @@ export const adminService = {
                 where,
                 take: filters?.limit || 50,
                 skip: filters?.offset || 0,
-                orderBy: { createdAt: 'desc' },
+                orderBy: { name: 'asc' },
                 include: {
                     profile: true,
                     group: {

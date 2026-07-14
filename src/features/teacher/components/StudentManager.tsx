@@ -464,7 +464,7 @@ export function StudentManager({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredStudents.map((enrollment) => (
+                        {[...filteredStudents].sort((a, b) => formatName(a.user.name, a.user.profile).localeCompare(formatName(b.user.name, b.user.profile))).map((enrollment) => (
                             <TableRow key={enrollment.user.id}>
                                 <TableCell>
                                     <Avatar className="h-8 w-8 text-[10px]">

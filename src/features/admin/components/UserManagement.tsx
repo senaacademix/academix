@@ -688,7 +688,7 @@ export function UserManagement({
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    users.map((user) => (
+                                    [...users].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((user) => (
                                         <TableRow key={user.id}>
                                             
                                             <TableCell>

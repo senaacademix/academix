@@ -2695,7 +2695,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                                 </TableRow>
                                                             </TableHeader>
                                                             <TableBody>
-                                                                {managingGroup.students.map((student) => (
+                                                                {[...managingGroup.students].sort((a, b) => a.name.localeCompare(b.name)).map((student) => (
                                                                     <TableRow key={student.id} className="hover:bg-muted/5">
                                                                         <TableCell className="py-3 text-xs font-mono">
                                                                             {student.profile?.identificacion || "S/D"}
@@ -2925,7 +2925,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
-                                                    {selectedProgram.teachers.map(teacher => {
+                                                    {[...selectedProgram.teachers].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(teacher => {
                                                         const isTeacherSelected = selectedTeacherIds.includes(teacher.id);
                                                         return (
                                                             <TableRow key={teacher.id} className={cn("hover:bg-muted/5 group", isTeacherSelected && "bg-primary/5 hover:bg-primary/5")}>
