@@ -49,7 +49,8 @@ import {
     Search, Trash2, Edit, Plus, Folder, BookOpen, Users, Calendar, 
     ChevronRight, Layers, Clock, X, Info, GraduationCap, ArrowLeft, ArrowUpRight, GripVertical,
     AlertCircle, Building, Code, Database, Binary, MessageSquare, Terminal,
-    ShieldCheck, Cloud, Rocket, NotebookTabs, Lock as LockIcon, Download
+    ShieldCheck, Cloud, Rocket, NotebookTabs, Lock as LockIcon, Download,
+    Activity
 } from "lucide-react";
 import {
     DndContext,
@@ -123,7 +124,6 @@ import { TeacherAvailabilityView } from "@/features/schedule/components/TeacherA
 import { TeacherQualificationsView } from "@/features/teacher/components/TeacherQualificationsView";
 import { DayOfWeek } from "@/generated/prisma/client";
 import { EnvironmentManagement, TrainingEnvironment } from "@/features/admin/components/EnvironmentManagement";
-import { AdminAttendanceView } from "@/features/admin/components/AdminAttendanceView";
 import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 
 const DAYS_OF_WEEK_ORDERED: { value: DayOfWeek; label: string }[] = [
@@ -239,6 +239,7 @@ interface Group {
     endDate: Date | null;
     startTime: string;
     endTime: string;
+    categoria?: string;
     periodId?: string | null;
     period?: {
         id: string;
@@ -618,7 +619,6 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
     }, [programIdParam, programs]);
 
     const [selectedSchedulePeriodId, setSelectedSchedulePeriodId] = useState<string>("");
-    const [groupSubTab, setGroupSubTab] = useState<"students" | "attendance">("students");
 
     useEffect(() => {
         if (managingGroup) {
@@ -629,7 +629,6 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
             } else {
                 setSelectedSchedulePeriodId("");
             }
-            setGroupSubTab("students");
         } else {
             setSelectedSchedulePeriodId("");
         }
@@ -1561,7 +1560,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 await refreshAll();
                 await fetchSystemStudents();
             } catch (error: any) {
-                toast.error(error.message || "Error al registrar estudiante");
+                const msg = isObserver 
+                    ? "El rol de observador no tiene permiso para realizar esta operación" 
+                    : (error.message || "Error al registrar estudiante");
+                toast.error(msg);
             }
         });
     };
@@ -1724,7 +1726,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 await refreshAll();
                 await fetchSystemStudents();
             } catch (error: any) {
-                toast.error(error.message || "Error durante la importación masiva");
+                const msg = isObserver 
+                    ? "El rol de observador no tiene permiso para realizar esta operación" 
+                    : (error.message || "Error durante la importación masiva");
+                toast.error(msg);
             }
         });
     };
@@ -2218,52 +2223,330 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
 
                         {/* SUB-TAB: OVERVIEW */}
                         <TabsContent value="overview" className="space-y-6 mt-0">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <Card className="bg-muted/10 border-none">
-                                    <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Periodos Académicos</CardTitle>
-                                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent className="p-4 pt-0">
-                                        <div className="text-2xl font-bold">{selectedProgram.periods.length}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">Periodos creados</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="bg-muted/10 border-none">
-                                    <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Materias Totales</CardTitle>
-                                        <BookOpen className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent className="p-4 pt-0">
-                                        <div className="text-2xl font-bold">
-                                            {selectedProgram.periods.reduce((acc, p) => acc + p.courses.length, 0)}
+                            {(() => {
+                                // 1. Calculate Period types
+                                const normalPeriods = selectedProgram.periods.filter(p => !p.esEspecial);
+                                const specialPeriods = selectedProgram.periods.filter(p => p.esEspecial);
+                                
+                                // 2. Calculate Group types
+                                const lectivaGroups = selectedProgram.groups.filter(g => g.categoria === "LECTIVA");
+                                const productivaGroups = selectedProgram.groups.filter(g => g.categoria === "PRODUCTIVA");
+                                const egresadosGroups = selectedProgram.groups.filter(g => g.categoria === "EGRESADOS");
+                                
+                                // 3. Find Largest Group
+                                let largestGroup: typeof selectedProgram.groups[0] | null = null;
+                                for (const g of selectedProgram.groups) {
+                                    if (!largestGroup || g.students.length > largestGroup.students.length) {
+                                        largestGroup = g;
+                                    }
+                                }
+                                
+                                // 4. Find Course with most hours
+                                let maxHoursCourse: { title: string; hours: number; periodName: string } | null = null;
+                                for (const p of selectedProgram.periods) {
+                                    for (const c of p.courses) {
+                                        const h = c.weeklyHours || 0;
+                                        if (h > 0 && (!maxHoursCourse || h > maxHoursCourse.hours)) {
+                                            maxHoursCourse = {
+                                                title: c.title,
+                                                hours: h,
+                                                periodName: p.name
+                                            };
+                                        }
+                                    }
+                                }
+
+                                // 5. Program time progress
+                                const startDate = selectedProgram.startDate ? new Date(selectedProgram.startDate) : null;
+                                const endDate = selectedProgram.endDate ? new Date(selectedProgram.endDate) : null;
+                                const now = new Date();
+                                let progressPercent = 0;
+                                let statusText = "No definido";
+                                let statusColor = "text-muted-foreground bg-muted/10 border-muted-foreground/20";
+                                
+                                if (startDate && endDate) {
+                                    const totalTime = endDate.getTime() - startDate.getTime();
+                                    const elapsed = now.getTime() - startDate.getTime();
+                                    if (now < startDate) {
+                                        statusText = "Próximamente / No iniciado";
+                                        statusColor = "text-amber-500 bg-amber-500/10 border-amber-500/20";
+                                        progressPercent = 0;
+                                    } else if (now > endDate) {
+                                        statusText = "Finalizado / Completado";
+                                        statusColor = "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
+                                        progressPercent = 100;
+                                    } else {
+                                        statusText = "En curso / Activo";
+                                        statusColor = "text-primary bg-primary/10 border-primary/20";
+                                        progressPercent = totalTime > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / totalTime) * 100))) : 0;
+                                    }
+                                }
+
+                                return (
+                                    <div className="space-y-6 animate-in fade-in-50 duration-200">
+                                        {/* Fila de Tarjetas de Métricas */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            <Card className="bg-background relative overflow-hidden transition-all duration-300 hover:shadow-md">
+                                                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+                                                <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
+                                                    <CardTitle className="text-sm font-semibold tracking-tight">Periodos Académicos</CardTitle>
+                                                    <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg shrink-0">
+                                                        <Calendar className="h-4 w-4" />
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="p-4 pt-0">
+                                                    <div className="text-3xl font-extrabold tracking-tight">{selectedProgram.periods.length}</div>
+                                                    <div className="flex gap-2 mt-1.5 text-xs text-muted-foreground">
+                                                        <span>{normalPeriods.length} normales</span>
+                                                        <span>•</span>
+                                                        <span>{specialPeriods.length} especiales</span>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card className="bg-background relative overflow-hidden transition-all duration-300 hover:shadow-md">
+                                                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+                                                <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
+                                                    <CardTitle className="text-sm font-semibold tracking-tight">Materias Totales</CardTitle>
+                                                    <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg shrink-0">
+                                                        <BookOpen className="h-4 w-4" />
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="p-4 pt-0">
+                                                    <div className="text-3xl font-extrabold tracking-tight">
+                                                        {selectedProgram.periods.reduce((acc, p) => acc + p.courses.length, 0)}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground mt-1.5">Materias curriculares registradas</p>
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card className="bg-background relative overflow-hidden transition-all duration-300 hover:shadow-md">
+                                                <div className="absolute top-0 left-0 w-1 h-full bg-violet-500" />
+                                                <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
+                                                    <CardTitle className="text-sm font-semibold tracking-tight">Total Estudiantes</CardTitle>
+                                                    <div className="p-2 bg-violet-500/10 text-violet-500 rounded-lg shrink-0">
+                                                        <Users className="h-4 w-4" />
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="p-4 pt-0">
+                                                    <div className="text-3xl font-extrabold tracking-tight">
+                                                        {selectedProgram.groups.reduce((acc, g) => acc + g.students.length, 0)}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground mt-1.5">Alumnos matriculados en grupos</p>
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card className="bg-background relative overflow-hidden transition-all duration-300 hover:shadow-md">
+                                                <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+                                                <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
+                                                    <CardTitle className="text-sm font-semibold tracking-tight">Docentes Vinculados</CardTitle>
+                                                    <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg shrink-0">
+                                                        <GraduationCap className="h-4 w-4" />
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="p-4 pt-0">
+                                                    <div className="text-3xl font-extrabold tracking-tight">{selectedProgram.teachers?.length || 0}</div>
+                                                    <p className="text-xs text-muted-foreground mt-1.5">Profesores autorizados</p>
+                                                </CardContent>
+                                            </Card>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">Materias creadas</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="bg-muted/10 border-none">
-                                    <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Total Estudiantes</CardTitle>
-                                        <Users className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent className="p-4 pt-0">
-                                        <div className="text-2xl font-bold">
-                                            {selectedProgram.groups.reduce((acc, g) => acc + g.students.length, 0)}
+
+                                        {/* Distribución en 2 Columnas */}
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                            {/* Columna Izquierda: Información de Programa y Línea de Tiempo */}
+                                            <div className="lg:col-span-2 space-y-6">
+                                                {/* Card: Línea de tiempo & Información general */}
+                                                <Card className="bg-background">
+                                                    <CardHeader className="pb-3 border-b border-muted/20">
+                                                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                                                            <Activity className="h-5 w-5 text-primary" />
+                                                            Línea de Tiempo e Información de {selectedProgram.name}
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="p-6 space-y-5">
+                                                        {startDate && endDate ? (
+                                                            <div className="space-y-3">
+                                                                <div className="flex justify-between items-center text-sm">
+                                                                    <span className="font-semibold text-muted-foreground">Progreso del Programa</span>
+                                                                    <Badge className={cn("text-[10px] font-bold border", statusColor)}>
+                                                                        {statusText}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="w-full bg-muted/60 rounded-full h-3 overflow-hidden border border-muted/30">
+                                                                    <div 
+                                                                        className="bg-primary h-full rounded-full transition-all duration-500" 
+                                                                        style={{ width: `${progressPercent}%` }}
+                                                                    />
+                                                                </div>
+                                                                <div className="flex justify-between text-xs text-muted-foreground font-medium pt-1">
+                                                                    <span>Inicio: {format(startDate, "dd/MM/yyyy")}</span>
+                                                                    <span className="text-primary font-semibold">{progressPercent}% transcurrido</span>
+                                                                    <span>Fin: {format(endDate, "dd/MM/yyyy")}</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-4 bg-muted/10 rounded-xl border border-dashed border-muted/30 text-center text-xs text-muted-foreground">
+                                                                Fechas de inicio y fin no configuradas en el programa. Edita el programa para habilitar el seguimiento del progreso.
+                                                            </div>
+                                                        )}
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-muted/20 text-sm">
+                                                            <div className="flex flex-col gap-1 p-3 rounded-xl bg-muted/5 border border-muted/20">
+                                                                <span className="text-xs text-muted-foreground font-medium">Título del Horario</span>
+                                                                <span className="font-bold text-foreground/90">{selectedProgram.scheduleTitle || "No asignado"}</span>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 p-3 rounded-xl bg-muted/5 border border-muted/20">
+                                                                <span className="text-xs text-muted-foreground font-medium">Horas Máximas por Docente</span>
+                                                                <span className="font-bold text-foreground/90">{selectedProgram.maxTeacherHours || 40} horas semanales</span>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+
+                                                {/* Card: Desglose de Periodos */}
+                                                <Card className="bg-background">
+                                                    <CardHeader className="pb-3 border-b border-muted/20">
+                                                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                                                            <Calendar className="h-5 w-5 text-primary" />
+                                                            Desglose de Periodos Académicos
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="p-6">
+                                                        {selectedProgram.periods.length === 0 ? (
+                                                            <p className="text-sm text-muted-foreground text-center py-4">No hay periodos creados aún.</p>
+                                                        ) : (
+                                                            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+                                                                {selectedProgram.periods.map(per => {
+                                                                    const totalHours = per.courses.reduce((sum, c) => sum + (c.weeklyHours || 0), 0);
+                                                                    return (
+                                                                        <div key={per.id} className="flex justify-between items-center p-3 rounded-xl bg-muted/5 border border-muted/20 hover:border-muted/40 hover:bg-muted/10 transition-colors duration-200">
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="font-semibold text-sm">{per.name}</span>
+                                                                                    <Badge className={cn("text-[9px] py-0 px-1 border font-bold shrink-0", per.esEspecial ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20")}>
+                                                                                        {per.esEspecial ? "Especial" : "Normal"}
+                                                                                    </Badge>
+                                                                                </div>
+                                                                                <p className="text-xs text-muted-foreground truncate max-w-[250px] sm:max-w-[350px]">
+                                                                                    {per.description || "Sin descripción adicional."}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="text-right shrink-0">
+                                                                                <div className="text-xs font-bold text-foreground/90">{per.courses.length} materias</div>
+                                                                                <div className="text-[10px] text-muted-foreground font-semibold mt-0.5">{totalHours}h semanales</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
+
+                                            {/* Columna Derecha: Distribución de Grupos y Récords */}
+                                            <div className="space-y-6">
+                                                {/* Card: Distribución de Grupos */}
+                                                <Card className="bg-background">
+                                                    <CardHeader className="pb-3 border-b border-muted/20">
+                                                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                                                            <Layers className="h-5 w-5 text-primary" />
+                                                            Grupos por Etapa
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="p-6 space-y-4">
+                                                        <div className="space-y-2">
+                                                            <div className="flex justify-between text-xs font-bold">
+                                                                <span>Etapa Lectiva</span>
+                                                                <span>{lectivaGroups.length}</span>
+                                                            </div>
+                                                            <div className="w-full bg-muted/40 rounded-full h-2">
+                                                                <div 
+                                                                    className="bg-blue-500 h-full rounded-full" 
+                                                                    style={{ width: `${selectedProgram.groups.length > 0 ? (lectivaGroups.length / selectedProgram.groups.length) * 100 : 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            <div className="flex justify-between text-xs font-bold">
+                                                                <span>Etapa Productiva</span>
+                                                                <span>{productivaGroups.length}</span>
+                                                            </div>
+                                                            <div className="w-full bg-muted/40 rounded-full h-2">
+                                                                <div 
+                                                                    className="bg-emerald-500 h-full rounded-full" 
+                                                                    style={{ width: `${selectedProgram.groups.length > 0 ? (productivaGroups.length / selectedProgram.groups.length) * 100 : 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            <div className="flex justify-between text-xs font-bold">
+                                                                <span>Egresados</span>
+                                                                <span>{egresadosGroups.length}</span>
+                                                            </div>
+                                                            <div className="w-full bg-muted/40 rounded-full h-2">
+                                                                <div 
+                                                                    className="bg-purple-500 h-full rounded-full" 
+                                                                    style={{ width: `${selectedProgram.groups.length > 0 ? (egresadosGroups.length / selectedProgram.groups.length) * 100 : 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+
+                                                {/* Card: Datos Destacados / Récords */}
+                                                <Card className="bg-background">
+                                                    <CardHeader className="pb-3 border-b border-muted/20">
+                                                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                                                            <Info className="h-5 w-5 text-primary" />
+                                                            Datos Clave del Programa
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="p-6 space-y-4 text-xs">
+                                                        <div className="p-3 bg-muted/5 border border-muted/20 rounded-xl space-y-1">
+                                                            <div className="text-muted-foreground font-semibold">Grupo Más Grande</div>
+                                                            {largestGroup ? (
+                                                                <div>
+                                                                    <span className="font-bold text-foreground text-sm">{largestGroup.name}</span>
+                                                                    <span className="text-muted-foreground font-medium ml-1.5">({largestGroup.students.length} estudiantes)</span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-muted-foreground font-medium">Ninguno registrado</span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="p-3 bg-muted/5 border border-muted/20 rounded-xl space-y-1">
+                                                            <div className="text-muted-foreground font-semibold">Materia con Mayor Carga Horaria</div>
+                                                            {maxHoursCourse ? (
+                                                                <div>
+                                                                    <div className="font-bold text-foreground text-sm truncate">{maxHoursCourse.title}</div>
+                                                                    <div className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                                                                        {maxHoursCourse.hours}h semanales • {maxHoursCourse.periodName}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-muted-foreground font-medium">Ninguna registrada</span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="p-3 bg-muted/5 border border-muted/20 rounded-xl space-y-1">
+                                                            <div className="text-muted-foreground font-semibold">Ambientes Asignados</div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Building className="h-4 w-4 text-primary shrink-0" />
+                                                                <span className="font-bold text-foreground text-sm">
+                                                                    {selectedProgram.environments?.length || 0} ambientes
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">Alumnos asignados</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="bg-muted/10 border-none">
-                                    <CardHeader className="p-4 flex flex-row items-center justify-between pb-2 space-y-0">
-                                        <CardTitle className="text-sm font-medium">Profesores Asociados</CardTitle>
-                                        <GraduationCap className="h-4.5 w-4.5 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent className="p-4 pt-0">
-                                        <div className="text-2xl font-bold">{selectedProgram.teachers?.length || 0}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">Docentes vinculados</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
+                                    </div>
+                                );
+                            })()}
                         </TabsContent>
 
                         {/* SUB-TAB: PERIODS & COURSES */}
@@ -2387,105 +2670,76 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                     </div>
 
                                     {/* Segmented sub-tab controller for Students vs Attendance */}
-                                    <div className="flex items-center p-0.5 bg-muted/60 rounded-lg gap-0.5 self-start w-fit">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setGroupSubTab("students")}
-                                            className={`h-8 px-4 rounded-md text-xs font-bold transition-all ${
-                                                groupSubTab === "students"
-                                                    ? "bg-background shadow-sm text-foreground hover:bg-background"
-                                                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-                                            }`}
-                                        >
-                                            <Users className="w-3.5 h-3.5 mr-1.5" />
-                                            <span>Estudiantes</span>
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setGroupSubTab("attendance")}
-                                            className={`h-8 px-4 rounded-md text-xs font-bold transition-all ${
-                                                groupSubTab === "attendance"
-                                                    ? "bg-background shadow-sm text-foreground hover:bg-background"
-                                                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-                                            }`}
-                                        >
-                                            <Clock className="w-3.5 h-3.5 mr-1.5" />
-                                            <span>Asistencia (Solo Lectura)</span>
-                                        </Button>
-                                    </div>
-
-                                    <div className="space-y-6">
-                                        {groupSubTab === "students" ? (
-                                            <div className="space-y-4 mt-0">
-                                                <div className="flex justify-between items-center">
-                                                    <h5 className="text-sm font-semibold text-muted-foreground">Listado de Estudiantes ({managingGroup.students.length})</h5>
-                                                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openAssignStudents(managingGroup)}>
-                                                        <Plus className="h-3 w-3 mr-1.5" />
-                                                        Asociar Estudiantes
-                                                    </Button>
-                                                </div>
-                                                <Card className="border-none shadow-sm bg-background">
-                                                    <CardContent className="p-5">
-                                                        {managingGroup.students.length === 0 ? (
-                                                            <div className="text-center py-16 text-muted-foreground text-sm bg-muted/5 border border-dashed border-muted/50 rounded-xl">
-                                                                No hay estudiantes asignados en este grupo.
+                                    <div className="space-y-4 mt-0">
+                                        <div className="flex justify-between items-center">
+                                            <h5 className="text-sm font-semibold text-muted-foreground">Listado de Estudiantes ({managingGroup.students.length})</h5>
+                                            {!isObserver && (
+                                                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openAssignStudents(managingGroup)}>
+                                                    <Plus className="h-3 w-3 mr-1.5" />
+                                                    Asociar Estudiantes
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <Card className="border-none shadow-sm bg-background">
+                                            <CardContent className="p-5">
+                                                {managingGroup.students.length === 0 ? (
+                                                    <div className="text-center py-16 text-muted-foreground text-sm bg-muted/5 border border-dashed border-muted/50 rounded-xl">
+                                                        No hay estudiantes asignados en este grupo.
+                                                        {!isObserver && (
+                                                            <>
                                                                 <br />
                                                                 <Button size="sm" variant="outline" className="mt-4 text-xs" onClick={() => openAssignStudents(managingGroup)}>
                                                                     <Plus className="h-3.5 w-3.5 mr-1.5" /> Asociar Estudiantes
                                                                 </Button>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="border border-muted/40 rounded-xl overflow-x-auto">
-                                                                <Table>
-                                                                    <TableHeader className="bg-muted/10">
-                                                                        <TableRow>
-                                                                            <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
-                                                                            <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
-                                                                            <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
-                                                                            <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
-                                                                            <TableHead className="py-3 text-xs font-semibold text-right">Acción</TableHead>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    <TableBody>
-                                                                        {managingGroup.students.map((student) => (
-                                                                            <TableRow key={student.id} className="hover:bg-muted/5">
-                                                                                <TableCell className="py-3 text-xs font-mono">
-                                                                                    {student.profile?.identificacion || "S/D"}
-                                                                                </TableCell>
-                                                                                <TableCell className="py-3 text-xs font-medium flex items-center gap-2">
-                                                                                    <span>{student.name}</span>
-                                                                                    <StudentNovedadBadge novedad={student.profile?.novedad} color={student.profile?.novedadColor} />
-                                                                                </TableCell>
-                                                                                <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
-                                                                                <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
-                                                                                <TableCell className="py-3 text-right">
-                                                                                    <div className="flex items-center justify-end gap-1.5">
-                                                                                        <Tooltip><TooltipTrigger asChild><Button
-                                                                                            size="icon"
-                                                                                            variant="ghost"
-                                                                                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                                                                            onClick={() => triggerDelete("student", student.id, student.name)}
-                                                                                        >
-                                                                                            <Trash2 className="h-4 w-4" />
-                                                                                        </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
-                                                                                    </div>
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            </div>
+                                                            </>
                                                         )}
-                                                    </CardContent>
-                                                </Card>
-                                            </div>
-                                        ) : (
-                                            <div className="mt-0">
-                                                <AdminAttendanceView group={managingGroup} />
-                                            </div>
-                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="border border-muted/40 rounded-xl overflow-x-auto">
+                                                        <Table>
+                                                            <TableHeader className="bg-muted/10">
+                                                                <TableRow>
+                                                                    <TableHead className="py-3 text-xs font-semibold">Identificación</TableHead>
+                                                                    <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
+                                                                    <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
+                                                                    <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
+                                                                    {!isObserver && <TableHead className="py-3 text-xs font-semibold text-right">Acción</TableHead>}
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {managingGroup.students.map((student) => (
+                                                                    <TableRow key={student.id} className="hover:bg-muted/5">
+                                                                        <TableCell className="py-3 text-xs font-mono">
+                                                                            {student.profile?.identificacion || "S/D"}
+                                                                        </TableCell>
+                                                                        <TableCell className="py-3 text-xs font-medium flex items-center gap-2">
+                                                                            <span>{student.name}</span>
+                                                                            <StudentNovedadBadge novedad={student.profile?.novedad} color={student.profile?.novedadColor} />
+                                                                        </TableCell>
+                                                                        <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
+                                                                        <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
+                                                                        {!isObserver && (
+                                                                            <TableCell className="py-3 text-right">
+                                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                                    <Tooltip><TooltipTrigger asChild><Button
+                                                                                        size="icon"
+                                                                                        variant="ghost"
+                                                                                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                                                                        onClick={() => triggerDelete("student", student.id, student.name)}
+                                                                                    >
+                                                                                        <Trash2 className="h-4 w-4" />
+                                                                                    </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
+                                                                                </div>
+                                                                            </TableCell>
+                                                                        )}
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
                                     </div>
                                 </div>
                             ) : (

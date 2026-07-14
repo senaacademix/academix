@@ -13,8 +13,14 @@ async function getSession() {
 // Middleware to check admin role
 async function requireAdmin() {
     const session = await getSession();
-    if (!session || session.user.role !== "admin") {
-        throw new Error("Unauthorized: Admin access required");
+    if (!session) {
+        throw new Error("No hay sesión activa");
+    }
+    if (session.user.role === "observer") {
+        throw new Error("El rol de observador no tiene permiso para realizar esta operación");
+    }
+    if (session.user.role !== "admin") {
+        throw new Error("No autorizado: Se requiere acceso de administrador");
     }
     return session;
 }
