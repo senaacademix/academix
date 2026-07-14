@@ -721,7 +721,7 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                         <AlertDialogTitle>Restablecer contraseña</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Desea restablecer la contraseña de{" "}
-                            <strong className="text-foreground">{userToReset?.name}</strong>? La contraseña volverá a ser su número de identificación registrado (documento).
+                            <strong className="text-foreground">{userToReset?.name}</strong>? La contraseña volverá a ser: <strong className="text-foreground">{userToReset?.profile?.identificacion}</strong>.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
