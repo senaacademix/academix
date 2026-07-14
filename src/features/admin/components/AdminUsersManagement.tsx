@@ -84,7 +84,6 @@ interface AdminUsersManagementProps {
 export function AdminUsersManagement({ initialUsers, programs, currentUserId }: AdminUsersManagementProps) {
     const [users, setUsers] = useState<AdminUser[]>(initialUsers);
     const [searchQuery, setSearchQuery] = useState("");
-    const [roleFilter, setRoleFilter] = useState<string>("all");
     const [isPending, startTransition] = useTransition();
 
     // Dialogs state
@@ -100,7 +99,7 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
 
     // Form states
     const [email, setEmail] = useState("");
-    const [role, setRole] = useState<"admin" | "observer">("observer");
+    const [role, setRole] = useState<"admin" | "observer">("admin");
     const [identificacion, setIdentificacion] = useState("");
     const [nombres, setNombres] = useState("");
     const [apellido, setApellido] = useState("");
@@ -111,7 +110,7 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
     // Reset Form fields
     const resetForm = () => {
         setEmail("");
-        setRole("observer");
+        setRole("admin");
         setIdentificacion("");
         setNombres("");
         setApellido("");
@@ -129,7 +128,7 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
     const handleOpenEdit = (user: AdminUser) => {
         setSelectedUser(user);
         setEmail(user.email);
-        setRole((user.role === "admin" ? "admin" : "observer") as "admin" | "observer");
+        setRole("admin");
         setIdentificacion(user.profile?.identificacion || "");
         setNombres(user.profile?.nombres || "");
         setApellido(user.profile?.apellido || "");
@@ -260,14 +259,11 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
     };
 
     const filteredUsers = users.filter(user => {
-        const matchesSearch = 
+        return (
             user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            user.profile?.identificacion.includes(searchQuery);
-        
-        const matchesRole = roleFilter === "all" || user.role === roleFilter;
-
-        return matchesSearch && matchesRole;
+            user.profile?.identificacion.includes(searchQuery)
+        );
     });
 
     return (
@@ -275,11 +271,11 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">Gestión de Administradores</h1>
-                    <p className="text-muted-foreground text-sm">Administra los accesos de administradores y observadores del sistema.</p>
+                    <p className="text-muted-foreground text-sm">Administra los accesos de administradores del sistema.</p>
                 </div>
                 <Button onClick={handleOpenCreate} className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-2">
                     <UserPlus className="h-4 w-4" />
-                    Crear Administrador/Observador
+                    Crear Administrador
                 </Button>
             </div>
 
@@ -296,18 +292,6 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                                 className="pl-9"
                             />
                         </div>
-                        <div className="w-full md:w-48">
-                            <Select value={roleFilter} onValueChange={setRoleFilter}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Rol" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todos los roles</SelectItem>
-                                    <SelectItem value="admin">Administrador</SelectItem>
-                                    <SelectItem value="observer">Observador</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -315,8 +299,8 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
             {/* Listado de usuarios */}
             <Card className="border-border bg-card shadow-sm overflow-hidden">
                 <CardHeader className="pb-3 border-b">
-                    <CardTitle className="text-lg">Usuarios Administrativos ({filteredUsers.length})</CardTitle>
-                    <CardDescription>Lista de administradores y supervisores de solo vista.</CardDescription>
+                    <CardTitle className="text-lg">Administradores de la Plataforma ({filteredUsers.length})</CardTitle>
+                    <CardDescription>Lista de usuarios con acceso administrativo al sistema.</CardDescription>
                 </CardHeader>
                 <div className="overflow-x-auto">
                     <Table>
@@ -325,14 +309,13 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                                 <TableHead className="w-[280px]">Usuario</TableHead>
                                 <TableHead className="w-[180px]">Identificación</TableHead>
                                 <TableHead className="w-[150px]">Rol</TableHead>
-                                <TableHead>Programas Asignados (Observadores)</TableHead>
                                 <TableHead className="w-[150px] text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredUsers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                                    <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
                                         No se encontraron usuarios.
                                     </TableCell>
                                 </TableRow>
@@ -363,34 +346,9 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {user.role === "admin" ? (
-                                                <Badge variant="destructive" className="gap-1">
-                                                    <Shield className="h-3.5 w-3.5" /> Administrador
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="secondary" className="gap-1">
-                                                    <Eye className="h-3.5 w-3.5" /> Observador (Vista)
-                                                </Badge>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.role === "observer" ? (
-                                                user.programs.length === 0 ? (
-                                                    <span className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 dark:text-amber-400 px-2.5 py-1 rounded-full border border-amber-200/50">
-                                                        Ninguno asignado (Sin acceso)
-                                                    </span>
-                                                ) : (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {user.programs.map((prog) => (
-                                                            <Badge key={prog.id} variant="outline" className="text-xs bg-muted/30">
-                                                                {prog.name}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                )
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">Acceso total (Todo el sistema)</span>
-                                            )}
+                                            <Badge variant="destructive" className="gap-1">
+                                                <Shield className="h-3.5 w-3.5" /> Administrador
+                                            </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -439,40 +397,26 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
 
             {/* Dialogo: Crear Usuario */}
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-                <DialogContent className="sm:max-w-3xl w-full">
+                <DialogContent className="sm:max-w-lg w-full">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <UserCog className="h-5 w-5 text-emerald-600" />
-                            Crear Administrador/Observador
+                            Crear Administrador
                         </DialogTitle>
                         <DialogDescription>Registra un nuevo usuario con permisos de administración.</DialogDescription>
                     </DialogHeader>
 
-                    <div className={cn("grid gap-5 py-2", role === "observer" ? "grid-cols-1 md:grid-cols-12" : "grid-cols-1")}>
+                    <div className="grid grid-cols-1 gap-5 py-2">
                         {/* Columna de Datos de Usuario */}
-                        <div className={cn("space-y-4", role === "observer" ? "md:col-span-7" : "w-full")}>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                    <Label htmlFor="identificacion" className="text-xs font-semibold">Identificación *</Label>
-                                    <Input
-                                        id="identificacion"
-                                        placeholder="Cédula/Documento"
-                                        value={identificacion}
-                                        onChange={(e) => setIdentificacion(e.target.value)}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="role" className="text-xs font-semibold">Rol de Acceso</Label>
-                                    <Select value={role} onValueChange={(val: "admin" | "observer") => setRole(val)}>
-                                        <SelectTrigger id="role">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="observer">Observador</SelectItem>
-                                            <SelectItem value="admin">Administrador</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                        <div className="space-y-4 w-full">
+                            <div className="space-y-1">
+                                <Label htmlFor="identificacion" className="text-xs font-semibold">Identificación *</Label>
+                                <Input
+                                    id="identificacion"
+                                    placeholder="Cédula/Documento"
+                                    value={identificacion}
+                                    onChange={(e) => setIdentificacion(e.target.value)}
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
@@ -529,36 +473,6 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                                 </div>
                             </div>
                         </div>
-
-                        {/* Columna de Selección de Programas */}
-                        {role === "observer" && (
-                            <div className="md:col-span-5 space-y-2 flex flex-col h-full min-h-[220px]">
-                                <Label className="text-xs font-semibold text-foreground">Asignar Programas de Formación</Label>
-                                <ScrollArea className="flex-1 rounded-xl border p-3.5 bg-muted/10 h-[280px]">
-                                    {programs.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground p-2">No hay programas registrados.</p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {programs.map((p) => (
-                                                <div key={p.id} className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                        id={`create-prog-${p.id}`}
-                                                        checked={selectedProgramIds.includes(p.id)}
-                                                        onCheckedChange={() => handleProgramToggle(p.id)}
-                                                    />
-                                                    <label
-                                                        htmlFor={`create-prog-${p.id}`}
-                                                        className="text-xs text-foreground cursor-pointer select-none"
-                                                    >
-                                                        {p.name}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </ScrollArea>
-                            </div>
-                        )}
                     </div>
 
                     <DialogFooter>
@@ -574,40 +488,26 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
 
             {/* Dialogo: Editar Usuario */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent className="sm:max-w-3xl w-full">
+                <DialogContent className="sm:max-w-lg w-full">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <UserCog className="h-5 w-5 text-emerald-600" />
-                            Editar Administrador/Observador
+                            Editar Administrador
                         </DialogTitle>
                         <DialogDescription>Modifica los datos del usuario administrativo.</DialogDescription>
                     </DialogHeader>
 
-                    <div className={cn("grid gap-5 py-2", role === "observer" ? "grid-cols-1 md:grid-cols-12" : "grid-cols-1")}>
+                    <div className="grid grid-cols-1 gap-5 py-2">
                         {/* Columna de Datos de Usuario */}
-                        <div className={cn("space-y-4", role === "observer" ? "md:col-span-7" : "w-full")}>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                    <Label htmlFor="edit-identificacion" className="text-xs font-semibold">Identificación *</Label>
-                                    <Input
-                                        id="edit-identificacion"
-                                        placeholder="Cédula/Documento"
-                                        value={identificacion}
-                                        onChange={(e) => setIdentificacion(e.target.value)}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="edit-role" className="text-xs font-semibold">Rol de Acceso</Label>
-                                    <Select value={role} onValueChange={(val: "admin" | "observer") => setRole(val)}>
-                                        <SelectTrigger id="edit-role">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="observer">Observador</SelectItem>
-                                            <SelectItem value="admin">Administrador</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                        <div className="space-y-4 w-full">
+                            <div className="space-y-1">
+                                <Label htmlFor="edit-identificacion" className="text-xs font-semibold">Identificación *</Label>
+                                <Input
+                                    id="edit-identificacion"
+                                    placeholder="Cédula/Documento"
+                                    value={identificacion}
+                                    onChange={(e) => setIdentificacion(e.target.value)}
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
@@ -652,36 +552,6 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                                 />
                             </div>
                         </div>
-
-                        {/* Columna de Selección de Programas */}
-                        {role === "observer" && (
-                            <div className="md:col-span-5 space-y-2 flex flex-col h-full min-h-[220px]">
-                                <Label className="text-xs font-semibold text-foreground">Asignar Programas de Formación</Label>
-                                <ScrollArea className="flex-1 rounded-xl border p-3.5 bg-muted/10 h-[220px]">
-                                    {programs.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground p-2">No hay programas registrados.</p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {programs.map((p) => (
-                                                <div key={p.id} className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                        id={`edit-prog-${p.id}`}
-                                                        checked={selectedProgramIds.includes(p.id)}
-                                                        onCheckedChange={() => handleProgramToggle(p.id)}
-                                                    />
-                                                    <label
-                                                        htmlFor={`edit-prog-${p.id}`}
-                                                        className="text-xs text-foreground cursor-pointer select-none"
-                                                    >
-                                                        {p.name}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </ScrollArea>
-                            </div>
-                        )}
                     </div>
 
                     <DialogFooter>
@@ -701,7 +571,7 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Esta acción eliminará la cuenta del administrador/observador{" "}
+                            Esta acción eliminará la cuenta del administrador{" "}
                             <strong className="text-foreground">{userToDelete?.name}</strong> de forma permanente del sistema y todos sus datos asociados.
                         </AlertDialogDescription>
                     </AlertDialogHeader>

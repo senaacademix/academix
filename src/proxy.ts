@@ -29,7 +29,7 @@ export async function proxy(request: NextRequest) {
 
     // Define role-based access control
     const allowed: Record<string, string[]> = {
-        "/dashboard/admin": ["admin", "observer"],
+        "/dashboard/admin": ["admin"],
         "/dashboard/teacher": ["teacher"],
         "/dashboard/student": ["student"],
     };

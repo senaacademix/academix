@@ -14,7 +14,7 @@ export const metadata = {
 export default async function AdminEventsPage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
-    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
+    if (!session || session.user.role !== "admin") {
         redirect("/dashboard/student");
     }
 
@@ -22,7 +22,7 @@ export default async function AdminEventsPage() {
 
     return (
         <div className="absolute inset-0 overflow-hidden bg-background z-20">
-            <ScheduleEventManagement isObserver={session.user.role === "observer"} />
+            <ScheduleEventManagement isObserver={false} />
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import { authClient } from "@/lib/auth-client";
 
-type Role = "admin" | "teacher" | "student" | "observer";
+type Role = "admin" | "teacher" | "student";
 
 export function getRoleFromUser(user: unknown): Role | null {
   const u = user as { role?: string; roles?: string[] } | null | undefined;
@@ -9,7 +9,6 @@ export function getRoleFromUser(user: unknown): Role | null {
   // Check if admin role exists anywhere in roles array or is the role property
   const roles = Array.isArray(u.roles) ? u.roles : [];
   if (u.role === "admin" || roles.includes("admin")) return "admin";
-  if (u.role === "observer" || roles.includes("observer")) return "observer";
   if (u.role === "teacher" || roles.includes("teacher")) return "teacher";
   if (u.role === "student" || roles.includes("student")) return "student";
   
@@ -20,7 +19,7 @@ export function getRedirectForSession(session: unknown): string | null {
   const s = session as { user?: unknown } | null | undefined;
   if (!s?.user) return null;
   const role = getRoleFromUser(s.user);
-  if (role === "admin" || role === "observer") return "/dashboard/admin";
+  if (role === "admin") return "/dashboard/admin";
   if (role === "teacher") return "/dashboard/teacher";
   return "/dashboard/student";
 }

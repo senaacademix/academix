@@ -19,8 +19,8 @@ async function requireAdmin() {
 
 async function requireAdminOrObserver() {
     const session = await getSession();
-    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
-        throw new Error("Unauthorized: Admin or Observer access required");
+    if (!session || session.user.role !== "admin") {
+        throw new Error("Unauthorized: Admin access required");
     }
     return session;
 }
@@ -29,7 +29,7 @@ async function requireAdminOrObserver() {
 
 export async function getEnvironmentsAction(programId?: string) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     
     const whereClause: any = {};
     if (programId) {

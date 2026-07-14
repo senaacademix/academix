@@ -13,22 +13,16 @@ async function getSession() {
 // Middleware to check admin role
 async function requireAdmin() {
     const session = await getSession();
-    if (!session) {
-        throw new Error("No hay sesión activa");
-    }
-    if (session.user.role === "observer") {
-        throw new Error("El rol de observador no tiene permiso para realizar esta operación");
-    }
-    if (session.user.role !== "admin") {
-        throw new Error("No autorizado: Se requiere acceso de administrador");
+    if (!session || session.user.role !== "admin") {
+        throw new Error("Unauthorized: Admin access required");
     }
     return session;
 }
 
 async function requireAdminOrObserver() {
     const session = await getSession();
-    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
-        throw new Error("Unauthorized: Admin or Observer access required");
+    if (!session || session.user.role !== "admin") {
+        throw new Error("Unauthorized: Admin access required");
     }
     return session;
 }
@@ -36,7 +30,7 @@ async function requireAdminOrObserver() {
 // ============ DASHBOARD ============
 export async function getAdminDashboardStatsAction() {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     if (isObserver) {
         // Fetch observer metrics
         const [
@@ -128,7 +122,7 @@ export async function getAllUsersAction(filters?: {
     observerUserId?: string;
 }) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     const finalFilters = { ...filters };
     if (isObserver) {
         finalFilters.observerUserId = session.user.id;
@@ -144,7 +138,7 @@ export async function getAllFilteredUserIdsAction(filters?: {
     programId?: string;
 }) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     const where: any = {};
     const andConditions: any[] = [];
 
@@ -224,7 +218,7 @@ export async function getUserEmailsAction(userIds: string[]) {
 
 export async function getAllCoursesForFilterAction() {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     if (isObserver) {
         return await prisma.course.findMany({
             where: {
@@ -336,7 +330,7 @@ export async function createUserAction(data: {
 
 export async function getUserDetailsAction(userId: string) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     const user = await adminService.getUserDetails(userId);
     if (isObserver && user) {
         if (user.role === "student") {
@@ -514,7 +508,7 @@ export async function getAllCoursesAdminAction(filters?: {
     observerUserId?: string;
 }) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     const finalFilters = { ...filters };
     if (isObserver) {
         finalFilters.observerUserId = session.user.id;
@@ -524,7 +518,7 @@ export async function getAllCoursesAdminAction(filters?: {
 
 export async function getCourseDetailsAdminAction(courseId: string) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
     const course = await adminService.getCourseDetailsAdmin(courseId);
     if (isObserver && course) {
         const isAssociated = await prisma.course.findFirst({
@@ -1047,7 +1041,7 @@ export async function getStudentBehaviorAnalyticsAction(filters?: {
     groupId?: string;
 }) {
     const session = await requireAdminOrObserver();
-    const isObserver = session.user.role === "observer";
+    const isObserver = false;
 
     const whereClause: any = {
         role: "student"

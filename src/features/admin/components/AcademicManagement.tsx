@@ -1560,10 +1560,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 await refreshAll();
                 await fetchSystemStudents();
             } catch (error: any) {
-                const msg = isObserver 
-                    ? "El rol de observador no tiene permiso para realizar esta operación" 
-                    : (error.message || "Error al registrar estudiante");
-                toast.error(msg);
+                toast.error(error.message || "Error al registrar estudiante");
             }
         });
     };
@@ -1726,10 +1723,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 await refreshAll();
                 await fetchSystemStudents();
             } catch (error: any) {
-                const msg = isObserver 
-                    ? "El rol de observador no tiene permiso para realizar esta operación" 
-                    : (error.message || "Error durante la importación masiva");
-                toast.error(msg);
+                toast.error(error.message || "Error durante la importación masiva");
             }
         });
     };
@@ -2673,26 +2667,20 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                     <div className="space-y-4 mt-0">
                                         <div className="flex justify-between items-center">
                                             <h5 className="text-sm font-semibold text-muted-foreground">Listado de Estudiantes ({managingGroup.students.length})</h5>
-                                            {!isObserver && (
-                                                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openAssignStudents(managingGroup)}>
-                                                    <Plus className="h-3 w-3 mr-1.5" />
-                                                    Asociar Estudiantes
-                                                </Button>
-                                            )}
+                                            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => openAssignStudents(managingGroup)}>
+                                                <Plus className="h-3 w-3 mr-1.5" />
+                                                Asociar Estudiantes
+                                            </Button>
                                         </div>
                                         <Card className="border-none shadow-sm bg-background">
                                             <CardContent className="p-5">
                                                 {managingGroup.students.length === 0 ? (
                                                     <div className="text-center py-16 text-muted-foreground text-sm bg-muted/5 border border-dashed border-muted/50 rounded-xl">
                                                         No hay estudiantes asignados en este grupo.
-                                                        {!isObserver && (
-                                                            <>
-                                                                <br />
-                                                                <Button size="sm" variant="outline" className="mt-4 text-xs" onClick={() => openAssignStudents(managingGroup)}>
-                                                                    <Plus className="h-3.5 w-3.5 mr-1.5" /> Asociar Estudiantes
-                                                                </Button>
-                                                            </>
-                                                        )}
+                                                        <br />
+                                                        <Button size="sm" variant="outline" className="mt-4 text-xs" onClick={() => openAssignStudents(managingGroup)}>
+                                                            <Plus className="h-3.5 w-3.5 mr-1.5" /> Asociar Estudiantes
+                                                        </Button>
                                                     </div>
                                                 ) : (
                                                     <div className="border border-muted/40 rounded-xl overflow-x-auto">
@@ -2703,7 +2691,7 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                                     <TableHead className="py-3 text-xs font-semibold">Nombre Completo</TableHead>
                                                                     <TableHead className="py-3 text-xs font-semibold">Correo Electrónico</TableHead>
                                                                     <TableHead className="py-3 text-xs font-semibold">Teléfono</TableHead>
-                                                                    {!isObserver && <TableHead className="py-3 text-xs font-semibold text-right">Acción</TableHead>}
+                                                                    <TableHead className="py-3 text-xs font-semibold text-right">Acción</TableHead>
                                                                 </TableRow>
                                                             </TableHeader>
                                                             <TableBody>
@@ -2718,20 +2706,18 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                                         </TableCell>
                                                                         <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.email}</TableCell>
                                                                         <TableCell className="py-3 text-xs text-muted-foreground font-sans">{student.profile?.telefono || "—"}</TableCell>
-                                                                        {!isObserver && (
-                                                                            <TableCell className="py-3 text-right">
-                                                                                <div className="flex items-center justify-end gap-1.5">
-                                                                                    <Tooltip><TooltipTrigger asChild><Button
-                                                                                        size="icon"
-                                                                                        variant="ghost"
-                                                                                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                                                                        onClick={() => triggerDelete("student", student.id, student.name)}
-                                                                                    >
-                                                                                        <Trash2 className="h-4 w-4" />
-                                                                                    </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
-                                                                                </div>
-                                                                            </TableCell>
-                                                                        )}
+                                                                        <TableCell className="py-3 text-right">
+                                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                                <Tooltip><TooltipTrigger asChild><Button
+                                                                                    size="icon"
+                                                                                    variant="ghost"
+                                                                                    className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                                                                    onClick={() => triggerDelete("student", student.id, student.name)}
+                                                                                >
+                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                </Button></TooltipTrigger><TooltipContent><p>Eliminar estudiante del sistema</p></TooltipContent></Tooltip>
+                                                                            </div>
+                                                                        </TableCell>
                                                                     </TableRow>
                                                                 ))}
                                                             </TableBody>

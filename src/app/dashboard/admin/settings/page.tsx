@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 export default async function SettingsPage() {
     const session = await auth.api.getSession({ headers: await headers() });
 
-    if (!session || (session.user.role !== "admin" && session.user.role !== "observer")) {
+    if (!session || session.user.role !== "admin") {
         redirect("/dashboard/student");
     }
 
@@ -21,7 +21,7 @@ export default async function SettingsPage() {
             <AdminSettings 
                 initialSettings={settings as any} 
                 initialRequests={requests || []} 
-                isObserver={session.user.role === "observer"}
+                isObserver={false}
             />
         </div>
     );

@@ -57,7 +57,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const navMain =
-    role === "admin" || role === "observer"
+    role === "admin"
       ? [
         {
           title: "Inicio",
