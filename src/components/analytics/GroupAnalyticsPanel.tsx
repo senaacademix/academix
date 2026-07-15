@@ -49,6 +49,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
 import { getGroupImprovementPlans, deleteImprovementPlan } from "@/features/student/actions/improvementPlanActions";
+import { fromUTC } from "@/lib/dateUtils";
 
 interface GroupAnalyticsPanelProps {
     open?: boolean;
@@ -1674,12 +1675,12 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                                 const step1Done = !!plan.teacherDocUrl;
                                                                 const step2Done = !!plan.signedDocUrl;
                                                                 const step3Done = !!plan.teacherSignedDocUrl;
-                                                                const isPastEnd = new Date() > new Date(plan.endDate);
+                                                                const isPastEnd = new Date() > fromUTC(plan.endDate);
                                                                 const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
 
                                                                 const nowMs = Date.now();
-                                                                const startMs = new Date(plan.startDate).getTime();
-                                                                const endMs = new Date(plan.endDate).getTime();
+                                                                const startMs = fromUTC(plan.startDate).getTime();
+                                                                const endMs = fromUTC(plan.endDate).getTime();
                                                                 const datePct = Math.min(100, Math.max(0, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
                                                                 const daysTotal = Math.max(1, Math.round((endMs - startMs) / 86400000));
                                                                 const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
@@ -1707,7 +1708,7 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                                                     )}
                                                                                 </div>
                                                                                 <div className="text-[10px] text-muted-foreground mt-0.5">
-                                                                                    {format(new Date(plan.startDate), "dd/MM/yyyy")} → {format(new Date(plan.endDate), "dd/MM/yyyy")} · Docente: {formatName(plan.teacher?.name, plan.teacher?.profile)}
+                                                                                    {format(fromUTC(plan.startDate), "dd/MM/yyyy")} → {format(fromUTC(plan.endDate), "dd/MM/yyyy")} · Docente: {formatName(plan.teacher?.name, plan.teacher?.profile)}
                                                                                 </div>
                                                                             </div>
                                                                             <div className="flex items-center gap-1 shrink-0">
@@ -1820,11 +1821,11 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Fecha Inicio</p>
-                                    <p className="font-medium text-sm">{format(new Date(viewPlanDetail.startDate), "dd/MM/yyyy")}</p>
+                                    <p className="font-medium text-sm">{format(fromUTC(viewPlanDetail.startDate), "dd/MM/yyyy")}</p>
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Fecha Fin</p>
-                                    <p className="font-medium text-sm">{format(new Date(viewPlanDetail.endDate), "dd/MM/yyyy")}</p>
+                                    <p className="font-medium text-sm">{format(fromUTC(viewPlanDetail.endDate), "dd/MM/yyyy")}</p>
                                 </div>
                             </div>
                             {viewPlanDetail.observations && (
