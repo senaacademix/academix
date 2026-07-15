@@ -60,7 +60,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import * as htmlToImage from "html-to-image";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw } from "lucide-react";
+import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ import { authClient } from "@/lib/auth-client";
 import { formatCalendarDate } from "@/lib/dateUtils";
 import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction, deleteRemarkAction, resetStudentDailyAttempts, notifyEmailSentBatchAction } from "../actions/groupActions";
 import { getRemarkTemplatesAction, createRemarkTemplateAction, updateRemarkTemplateAction, deleteRemarkTemplateAction } from "../actions/remarkActions";
-import { getGroupImprovementPlans, upsertImprovementPlan, deleteImprovementPlan, deleteSignedDocument, deleteTeacherSignedDoc, submitTeacherSignedDoc, markPlanViewed } from "@/features/student/actions/improvementPlanActions";
+import { getGroupImprovementPlans, upsertImprovementPlan, deleteImprovementPlan, deleteSignedDocument, deleteTeacherSignedDoc, submitTeacherSignedDoc, markPlanViewed, resetPlanToStep, gradeImprovementPlan } from "@/features/student/actions/improvementPlanActions";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -347,6 +347,8 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const [viewGroupPlanDetail, setViewGroupPlanDetail] = useState<any | null>(null);
     const [impDeleteConfirm, setImpDeleteConfirm] = useState<string | null>(null); // planId to delete
     const [impTeacherSignDialog, setImpTeacherSignDialog] = useState<{ planId: string; url: string } | null>(null);
+    const [resetPlanDialog, setResetPlanDialog] = useState<{ open: boolean; planId: string; stepNumber: number; reason: string } | null>(null);
+    const [gradePlanDialog, setGradePlanDialog] = useState<{ open: boolean; planId: string; grade: string } | null>(null);
 
     const loadGroupPlans = async (gId?: string) => {
         const id = gId || selectedGroupId;
@@ -439,6 +441,47 @@ export function GroupManager({ groups }: GroupManagerProps) {
             loadGroupPlans();
         } else {
             toast.error(res.error || "Error al guardar", { id: toastId });
+        }
+    };
+    const handleResetPlanSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!resetPlanDialog) return;
+        if (resetPlanDialog.stepNumber < 1 || resetPlanDialog.stepNumber > 5) {
+            toast.error("Paso inválido");
+            return;
+        }
+
+        const toastId = toast.loading("Restableciendo plan...");
+        const res = await resetPlanToStep(
+            resetPlanDialog.planId,
+            resetPlanDialog.stepNumber,
+            resetPlanDialog.reason.trim() || undefined
+        );
+        if (res.success) {
+            toast.success("Plan devuelto correctamente y aprendiz notificado", { id: toastId });
+            setResetPlanDialog(null);
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al devolver el plan", { id: toastId });
+        }
+    };
+    const handleGradePlanSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!gradePlanDialog) return;
+        const gradeVal = parseFloat(gradePlanDialog.grade);
+        if (isNaN(gradeVal) || gradeVal < 0 || gradeVal > 5) {
+            toast.error("La calificación debe ser un número entre 0 y 5.0");
+            return;
+        }
+
+        const toastId = toast.loading("Registrando calificación...");
+        const res = await gradeImprovementPlan(gradePlanDialog.planId, gradeVal);
+        if (res.success) {
+            toast.success("Calificación asignada con éxito", { id: toastId });
+            setGradePlanDialog(null);
+            loadGroupPlans();
+        } else {
+            toast.error(res.error || "Error al calificar el plan", { id: toastId });
         }
     };
 
@@ -4150,6 +4193,14 @@ const handleOpenAnalytics = async () => {
                                     <div>
                                         <h2 className="text-lg font-bold">Planes de Mejoramiento</h2>
                                         <p className="text-sm text-muted-foreground">Gestión y seguimiento de compromisos académicos de superación.</p>
+                                        <div className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400">
+                                            <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <p className="leading-relaxed">
+                                                <strong>Información Importante:</strong> Los planes de mejoramiento no afectan de forma automática la analítica de rendimiento académico del estudiante en la plataforma. Es responsabilidad exclusiva del profesor/instructor pasar y registrar los resultados definitivos en el módulo de calificaciones de forma manual.
+                                            </p>
+                                        </div>
                                     </div>
                                     <Button
                                         onClick={() => setImpPlanFormDialog({
@@ -4234,8 +4285,8 @@ const handleOpenAnalytics = async () => {
                                                             const step1Done = !!plan.teacherDocUrl;
                                                             const step2Done = !!plan.signedDocUrl;
                                                             const step3Done = !!plan.teacherSignedDocUrl;
-                                                            const isPastEnd = new Date() > new Date(plan.endDate);
-                                                            const step4Done = isPastEnd && (plan.planScore !== null || plan.finalGrade !== null || !!plan.evidenceUrl);
+                                                            const step4Done = !!plan.evidenceUrl;
+                                                            const step5Done = plan.planScore !== null || plan.finalGrade !== null;
 
                                                             // ── Date progress bar ──
                                                             const nowMs = Date.now();
@@ -4246,26 +4297,59 @@ const handleOpenAnalytics = async () => {
                                                             const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
 
                                                             const steps = [
-                                                                { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
-                                                                { label: "Est. firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
-                                                                { label: "Doc. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
-                                                                { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
+                                                                { 
+                                                                    label: "Plan creado", 
+                                                                    sub: "Docente", 
+                                                                    done: step1Done, 
+                                                                    active: !step1Done, 
+                                                                    locked: false,
+                                                                    desc: "El instructor crea el plan de mejoramiento académico detallando compromisos, fechas y subiendo el documento inicial."
+                                                                },
+                                                                { 
+                                                                    label: "Est. firma", 
+                                                                    sub: "Aprendiz", 
+                                                                    done: step2Done, 
+                                                                    active: step1Done && !step2Done, 
+                                                                    locked: !step1Done,
+                                                                    desc: "El aprendiz debe descargar el documento inicial, firmarlo digitalmente y subir la copia firmada en aceptación."
+                                                                },
+                                                                { 
+                                                                    label: "Doc. firma", 
+                                                                    sub: "Docente", 
+                                                                    done: step3Done, 
+                                                                    active: step2Done && !step3Done, 
+                                                                    locked: !step2Done,
+                                                                    desc: "El instructor revisa la firma del aprendiz, realiza la contrafirma docente y sube el documento final firmado."
+                                                                },
+                                                                { 
+                                                                    label: "Evidencias", 
+                                                                    sub: "Aprendiz", 
+                                                                    done: step4Done, 
+                                                                    active: step3Done && !step4Done, 
+                                                                    locked: !step3Done,
+                                                                    desc: "El aprendiz debe subir el enlace con los archivos o entregables que evidencien el cumplimiento de sus compromisos."
+                                                                },
+                                                                { 
+                                                                    label: "Evaluación", 
+                                                                    sub: "Docente", 
+                                                                    done: step5Done, 
+                                                                    active: step4Done && !step5Done, 
+                                                                    locked: !step4Done,
+                                                                    desc: "El instructor califica el plan (0.0 a 5.0) evaluando el enlace de evidencias subido por el aprendiz."
+                                                                },
                                                             ];
 
                                                             return (
-                                                                <div key={plan.id} className="p-5 hover:bg-muted/10 transition-colors space-y-4">
+                                                                <div key={plan.id} className="p-4 sm:p-5 space-y-4 hover:bg-muted/10 transition-all rounded-xl border border-transparent hover:border-border/50">
                                                                     {/* Plan title + actions row */}
-                                                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b sm:border-none pb-3 sm:pb-0">
-                                                                        <div className="flex-1 min-w-0">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 pb-3">
+                                                                        <div className="space-y-0.5">
                                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                                <span className="font-bold text-sm">Plan N° {plan.planNumber}</span>
-                                                                                {plan.viewedAt ? (
-                                                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-300 gap-0.5"><Eye className="w-3 h-3" />Visto</Badge>
+                                                                                <span className="font-extrabold text-sm text-foreground">Plan N° {plan.planNumber}</span>
+                                                                                {!plan.viewedAt ? (
+                                                                                    <Badge variant="outline" className="text-[9px] font-bold bg-amber-500/10 text-amber-600 border-none">Nuevo</Badge>
                                                                                 ) : (
-                                                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-300 gap-0.5"><EyeOff className="w-3 h-3" />No visto</Badge>
-                                                                                )}
-                                                                                {plan.finalGrade !== null && plan.finalGrade !== undefined && (
-                                                                                    <Badge className="text-[10px] bg-primary text-primary-foreground">Nota: {plan.finalGrade}</Badge>
+                                                                                    <Badge variant="outline" className="text-[9px] font-bold bg-emerald-500/10 text-emerald-600 border-none">Visto</Badge>
                                                                                 )}
                                                                             </div>
                                                                             <div className="text-[11px] text-muted-foreground mt-0.5">
@@ -4275,6 +4359,7 @@ const handleOpenAnalytics = async () => {
                                                                         <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-start sm:justify-end">
                                                                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" title="Enviar correo" onClick={() => handleImpEmail(plan)}><Mail className="w-3.5 h-3.5" /></Button>
                                                                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setViewGroupPlanDetail(plan)}><Eye className="w-3 h-3" />Ver</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none text-amber-600 hover:text-amber-700" onClick={() => setResetPlanDialog({ open: true, planId: plan.id, stepNumber: 1, reason: "" })}><RotateCcw className="w-3.5 h-3.5" />Devolver Paso</Button>
                                                                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setImpPlanFormDialog({ open: true, id: plan.id, studentId: plan.studentId, planNumber: plan.planNumber, teacherDocUrl: plan.teacherDocUrl || "", startDate: format(new Date(plan.startDate), "yyyy-MM-dd"), endDate: format(new Date(plan.endDate), "yyyy-MM-dd"), observations: plan.observations || "", planScore: plan.planScore !== null && plan.planScore !== undefined ? plan.planScore : "", finalGrade: plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade : "", evidenceUrl: plan.evidenceUrl || "" })}><FileText className="w-3 h-3" />Editar</Button>
                                                                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive border border-destructive/20 bg-background sm:border-none" onClick={() => setImpDeleteConfirm(plan.id)}><Trash2 className="w-3 h-3" />Eliminar</Button>
                                                                         </div>
@@ -4296,35 +4381,47 @@ const handleOpenAnalytics = async () => {
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* ── 4-Step Stepper ── */}
-                                                                    <div className="relative grid grid-cols-4 gap-2">
-                                                                        <div className="absolute top-4 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
-                                                                        {steps.map((step, idx) => (
-                                                                            <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10">
-                                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
-                                                                                    step.done
-                                                                                        ? "bg-emerald-500 border-emerald-500 text-white"
-                                                                                        : step.locked
-                                                                                            ? "bg-muted border-border text-muted-foreground"
-                                                                                            : step.active
-                                                                                                ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
-                                                                                                : "bg-background border-muted text-muted-foreground"
-                                                                                }`}>
-                                                                                    {step.done ? (
-                                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                                                    ) : step.locked ? (
-                                                                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
-                                                                                    ) : (
-                                                                                        <span>{idx + 1}</span>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div className="text-center">
-                                                                                    <p className={`text-[10px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
-                                                                                    <p className="text-[9px] text-muted-foreground hidden sm:block">{step.sub}</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
+                                                                    {/* ── 5-Step Stepper ── */}
+                                                                    <TooltipProvider>
+                                                                        <div className="relative grid grid-cols-5 gap-2">
+                                                                            <div className="absolute top-4 left-[10%] right-[10%] h-0.5 bg-border z-0" />
+                                                                            {steps.map((step, idx) => (
+                                                                                <Tooltip key={idx}>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <div className="flex flex-col items-center gap-1.5 relative z-10 cursor-help">
+                                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
+                                                                                                step.done
+                                                                                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                                                    : step.locked
+                                                                                                        ? "bg-muted border-border text-muted-foreground"
+                                                                                                        : step.active
+                                                                                                            ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
+                                                                                                            : "bg-background border-muted text-muted-foreground"
+                                                                                            }`}>
+                                                                                                {step.done ? (
+                                                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                                                                ) : step.locked ? (
+                                                                                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                                                                ) : (
+                                                                                                    <span>{idx + 1}</span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <div className="text-center">
+                                                                                                <p className={`text-[10px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
+                                                                                                <p className="text-[9px] text-muted-foreground hidden sm:block">{step.sub}</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent className="max-w-[200px] p-3 text-xs rounded-xl shadow-lg bg-popover text-popover-foreground border border-border">
+                                                                                        <div className="space-y-1 text-left">
+                                                                                            <p className="font-bold text-primary">{step.label} ({step.sub})</p>
+                                                                                            <p className="text-muted-foreground leading-snug">{step.desc}</p>
+                                                                                        </div>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            ))}
+                                                                        </div>
+                                                                    </TooltipProvider>
 
                                                                     {/* ── Step 3 action: Teacher countersign prompt ── */}
                                                                     {step2Done && !step3Done && (
@@ -4354,6 +4451,78 @@ const handleOpenAnalytics = async () => {
                                                                             <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-amber-600 hover:text-amber-700 shrink-0" title="Eliminar firma del aprendiz" onClick={() => handleImpDeleteSignedDoc(plan.id)}><Trash2 className="w-3 h-3" /></Button>
                                                                         </div>
                                                                     )}
+
+                                                                    {/* ── Student evidence link ── */}
+                                                                    {plan.evidenceUrl && (
+                                                                        <div className="flex items-center gap-2 p-2.5 bg-sky-50/50 dark:bg-sky-950/10 border border-sky-200 rounded-xl">
+                                                                            <FileText className="w-4 h-4 text-sky-600 shrink-0" />
+                                                                            <a href={plan.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-700 hover:underline font-semibold flex-1 truncate">
+                                                                                Evidencias cargadas por aprendiz — ver enlace
+                                                                            </a>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Paso 5 — Calificación y Evaluación */}
+                                                                    <div className={`mt-4 p-4 rounded-xl border text-left ${
+                                                                        plan.finalGrade !== null
+                                                                            ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200"
+                                                                            : step4Done
+                                                                                ? new Date() > new Date(plan.endDate)
+                                                                                    ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-200"
+                                                                                    : "bg-blue-50/50 dark:bg-blue-950/10 border-blue-200"
+                                                                                : "bg-muted/50 border-muted"
+                                                                    }`}>
+                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                                            <div className="space-y-1">
+                                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Paso 5 — Calificación Final (0-5.0)</span>
+                                                                                {plan.finalGrade !== null ? (
+                                                                                    <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">
+                                                                                        Plan Evaluado con éxito. Nota: <span className="text-lg font-black">{plan.finalGrade.toFixed(1)} / 5.0</span>
+                                                                                    </p>
+                                                                                ) : step4Done ? (
+                                                                                    new Date() > new Date(plan.endDate) ? (
+                                                                                        <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                                                                                            Evidencias recibidas y fecha finalizada. Esperando asignación de calificación.
+                                                                                        </p>
+                                                                                    ) : (
+                                                                                        <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
+                                                                                            Evidencias recibidas. La calificación estará disponible al vencer el plan ({format(new Date(plan.endDate), "dd/MM/yyyy")}).
+                                                                                        </p>
+                                                                                    )
+                                                                                ) : (
+                                                                                    <p className="text-xs text-muted-foreground italic">
+                                                                                        El aprendiz debe cargar el enlace de evidencias en el Paso 4 antes de proceder con la calificación.
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                            
+                                                                            {/* Action button for teacher */}
+                                                                            {step4Done && (
+                                                                                <div className="shrink-0">
+                                                                                    {plan.finalGrade !== null ? (
+                                                                                        <Button 
+                                                                                            size="sm" 
+                                                                                            variant="outline"
+                                                                                            onClick={() => setGradePlanDialog({ open: true, planId: plan.id, grade: String(plan.finalGrade) })}
+                                                                                            className="h-8 text-xs font-bold border-emerald-300 text-emerald-800 hover:bg-emerald-100/50 cursor-pointer"
+                                                                                        >
+                                                                                            Cambiar Nota
+                                                                                        </Button>
+                                                                                    ) : (
+                                                                                        new Date() > new Date(plan.endDate) ? (
+                                                                                            <Button 
+                                                                                                size="sm"
+                                                                                                onClick={() => setGradePlanDialog({ open: true, planId: plan.id, grade: "" })}
+                                                                                                className="h-8 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+                                                                                            >
+                                                                                                Calificar Plan
+                                                                                            </Button>
+                                                                                        ) : null
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             );
                                                         })}
@@ -4419,20 +4588,7 @@ const handleOpenAnalytics = async () => {
                                                     <Label htmlFor="imp-observations">Observaciones / Criterios de Evaluación</Label>
                                                     <Textarea id="imp-observations" placeholder="Descripción detallada del plan, actividades y criterios..." rows={4} value={impPlanFormDialog.observations} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, observations: e.target.value } : prev)} />
                                                 </div>
-                                                <div className="grid grid-cols-3 gap-4">
-                                                    <div className="space-y-1">
-                                                        <Label htmlFor="imp-planScore">Calificación del Plan (0-5)</Label>
-                                                        <Input id="imp-planScore" type="number" min={0} max={5} step={0.1} placeholder="—" value={impPlanFormDialog.planScore} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, planScore: e.target.value === "" ? "" : parseFloat(e.target.value) } : prev)} />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label htmlFor="imp-finalGrade">Nota Final (0-5)</Label>
-                                                        <Input id="imp-finalGrade" type="number" min={0} max={5} step={0.1} placeholder="—" value={impPlanFormDialog.finalGrade} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, finalGrade: e.target.value === "" ? "" : parseFloat(e.target.value) } : prev)} />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label htmlFor="imp-evidenceUrl">Enlace Evidencias de Evaluación</Label>
-                                                        <Input id="imp-evidenceUrl" placeholder="https://..." value={impPlanFormDialog.evidenceUrl} onChange={(e) => setImpPlanFormDialog(prev => prev ? { ...prev, evidenceUrl: e.target.value } : prev)} />
-                                                    </div>
-                                                </div>
+
                                                 <DialogFooter className="pt-2">
                                                     <Button type="button" variant="outline" onClick={() => setImpPlanFormDialog(null)}>Cancelar</Button>
                                                     <Button type="submit">{impPlanFormDialog.id ? "Guardar Cambios" : "Crear Plan"}</Button>
@@ -4444,91 +4600,182 @@ const handleOpenAnalytics = async () => {
 
                                 {/* ── View Plan Detail Modal ── */}
                                 <Dialog open={!!viewGroupPlanDetail} onOpenChange={(o) => { if (!o) setViewGroupPlanDetail(null); }}>
-                                    <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+                                    <DialogContent className="max-w-5xl sm:max-w-5xl max-h-[85vh] overflow-y-auto rounded-2xl">
                                         <DialogHeader>
-                                            <DialogTitle>Detalle — Plan N° {viewGroupPlanDetail?.planNumber}</DialogTitle>
+                                            <DialogTitle className="flex items-center gap-2 font-bold text-lg">
+                                                <FileText className="w-5 h-5 text-primary" />
+                                                Detalle de Plan de Mejoramiento N° {viewGroupPlanDetail?.planNumber}
+                                            </DialogTitle>
                                         </DialogHeader>
-                                        {viewGroupPlanDetail && (
-                                            <div className="space-y-4 text-sm">
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="space-y-1">
-                                                        <p className="text-xs font-medium text-muted-foreground">Aprendiz</p>
-                                                        <p className="font-semibold">{formatName(viewGroupPlanDetail.student?.name, viewGroupPlanDetail.student?.profile)}</p>
+                                        {viewGroupPlanDetail && (() => {
+                                            const step1Done = !!viewGroupPlanDetail.teacherDocUrl;
+                                            const step2Done = !!viewGroupPlanDetail.signedDocUrl;
+                                            const step3Done = !!viewGroupPlanDetail.teacherSignedDocUrl;
+                                            const step4Done = !!viewGroupPlanDetail.evidenceUrl;
+                                            const step5Done = viewGroupPlanDetail.finalGrade !== null;
+
+                                            return (
+                                                <div className="space-y-5 text-sm text-left">
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-b pb-4">
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Aprendiz</p>
+                                                            <p className="font-semibold text-foreground">{formatName(viewGroupPlanDetail.student?.name, viewGroupPlanDetail.student?.profile)}</p>
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Docente</p>
+                                                            <p className="font-semibold text-primary">{formatName(viewGroupPlanDetail.teacher?.name, viewGroupPlanDetail.teacher?.profile)}</p>
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fecha Inicio</p>
+                                                            <p className="font-medium text-foreground">{format(new Date(viewGroupPlanDetail.startDate), "dd/MM/yyyy")}</p>
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fecha Fin</p>
+                                                            <p className="font-medium text-foreground">{format(new Date(viewGroupPlanDetail.endDate), "dd/MM/yyyy")}</p>
+                                                        </div>
                                                     </div>
-                                                    <div className="space-y-1">
-                                                        <p className="text-xs font-medium text-muted-foreground">Docente</p>
-                                                        <p className="font-semibold">{formatName(viewGroupPlanDetail.teacher?.name, viewGroupPlanDetail.teacher?.profile)}</p>
+
+                                                    <div className="flex items-center gap-2">
+                                                        {viewGroupPlanDetail.viewedAt ? (
+                                                            <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-none font-bold"><Eye className="w-3.5 h-3.5 mr-1" />Revisado por el aprendiz</Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-none font-bold"><EyeOff className="w-3.5 h-3.5 mr-1" />No revisado aún</Badge>
+                                                        )}
                                                     </div>
-                                                    <div className="space-y-1">
-                                                        <p className="text-xs font-medium text-muted-foreground">Fecha Inicio</p>
-                                                        <p>{format(new Date(viewGroupPlanDetail.startDate), "dd/MM/yyyy")}</p>
+
+                                                    {viewGroupPlanDetail.observations && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Observaciones</p>
+                                                            <p className="text-xs whitespace-pre-line bg-muted/40 rounded-xl p-3.5 border border-muted/70 leading-relaxed text-foreground">{viewGroupPlanDetail.observations}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Vertical Stepper Timeline */}
+                                                    <div className="space-y-4 border-t pt-4">
+                                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Flujo de Cumplimiento (Pasos 1-5)</p>
+                                                        <div className="relative pl-8 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border">
+                                                            {/* Paso 1 */}
+                                                            <div className="relative">
+                                                                <div className="absolute -left-[30px] top-0 w-6 h-0.5 mt-3 bg-border" />
+                                                                <div className={`absolute -left-[41px] top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black z-10 transition-all ${
+                                                                    step1Done ? "bg-emerald-500 border-emerald-500 text-white" : "bg-primary border-primary text-primary-foreground"
+                                                                }`}>
+                                                                    {step1Done ? "✓" : "1"}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h4 className="text-xs font-bold text-foreground">Paso 1: Plan Docente <span className="text-[10px] font-normal text-muted-foreground">(Docente)</span></h4>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">El instructor crea el plan de mejoramiento académico detallando compromisos, fechas y cargando el documento inicial.</p>
+                                                                    {viewGroupPlanDetail.teacherDocUrl ? (
+                                                                        <a href={viewGroupPlanDetail.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold mt-1">
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                                            Descargar Plan Base
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground italic block mt-1">No cargado</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Paso 2 */}
+                                                            <div className="relative">
+                                                                <div className="absolute -left-[30px] top-0 w-6 h-0.5 mt-3 bg-border" />
+                                                                <div className={`absolute -left-[41px] top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black z-10 transition-all ${
+                                                                    step2Done ? "bg-emerald-500 border-emerald-500 text-white" : step1Done ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-border text-muted-foreground"
+                                                                }`}>
+                                                                    {step2Done ? "✓" : "2"}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h4 className="text-xs font-bold text-foreground">Paso 2: Firma del Aprendiz <span className="text-[10px] font-normal text-muted-foreground">(Aprendiz)</span></h4>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">El aprendiz debe descargar el documento inicial, firmarlo digitalmente y subir la copia firmada en aceptación.</p>
+                                                                    {viewGroupPlanDetail.signedDocUrl ? (
+                                                                        <a href={viewGroupPlanDetail.signedDocUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline font-bold mt-1">
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                                            Ver Documento Firmado
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground italic block mt-1">Pendiente de firma</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Paso 3 */}
+                                                            <div className="relative">
+                                                                <div className="absolute -left-[30px] top-0 w-6 h-0.5 mt-3 bg-border" />
+                                                                <div className={`absolute -left-[41px] top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black z-10 transition-all ${
+                                                                    step3Done ? "bg-emerald-500 border-emerald-500 text-white" : step2Done ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-border text-muted-foreground"
+                                                                }`}>
+                                                                    {step3Done ? "✓" : "3"}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h4 className="text-xs font-bold text-foreground">Paso 3: Firma del Docente <span className="text-[10px] font-normal text-muted-foreground">(Docente)</span></h4>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">El instructor revisa la firma del aprendiz, realiza la contrafirma docente y sube el documento final firmado.</p>
+                                                                    {viewGroupPlanDetail.teacherSignedDocUrl ? (
+                                                                        <a href={viewGroupPlanDetail.teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline font-bold mt-1">
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                                            Ver Documento Contrafirmado
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground italic block mt-1">Pendiente de contrafirma</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Paso 4 */}
+                                                            <div className="relative">
+                                                                <div className="absolute -left-[30px] top-0 w-6 h-0.5 mt-3 bg-border" />
+                                                                <div className={`absolute -left-[41px] top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black z-10 transition-all ${
+                                                                    step4Done ? "bg-emerald-500 border-emerald-500 text-white" : step3Done ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-border text-muted-foreground"
+                                                                }`}>
+                                                                    {step4Done ? "✓" : "4"}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h4 className="text-xs font-bold text-foreground">Paso 4: Evidencias de Evaluación <span className="text-[10px] font-normal text-muted-foreground">(Aprendiz)</span></h4>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">El aprendiz debe subir el enlace con los archivos o entregables que evidencien el cumplimiento de sus compromisos.</p>
+                                                                    {viewGroupPlanDetail.evidenceUrl ? (
+                                                                        <a href={viewGroupPlanDetail.evidenceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold mt-1">
+                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                                            Ver Evidencia Cargada
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground italic block mt-1">No cargada</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Paso 5 */}
+                                                            <div className="relative">
+                                                                <div className="absolute -left-[30px] top-0 w-6 h-0.5 mt-3 bg-border" />
+                                                                <div className={`absolute -left-[41px] top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black z-10 transition-all ${
+                                                                    step5Done ? "bg-emerald-500 border-emerald-500 text-white" : step4Done ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-border text-muted-foreground"
+                                                                }`}>
+                                                                    {step5Done ? "✓" : "5"}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h4 className="text-xs font-bold text-foreground">Paso 5: Calificación Final <span className="text-[10px] font-normal text-muted-foreground">(Docente)</span></h4>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">El instructor califica el plan (0.0 a 5.0) evaluando el enlace de evidencias subido por el aprendiz.</p>
+                                                                    {viewGroupPlanDetail.finalGrade !== null && viewGroupPlanDetail.finalGrade !== undefined ? (
+                                                                        <div className="mt-1 bg-emerald-50 dark:bg-emerald-950/10 p-2.5 border border-emerald-200 rounded-xl inline-block">
+                                                                            <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">
+                                                                                Nota Final: {viewGroupPlanDetail.finalGrade.toFixed(1)} / 5.0
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground italic block mt-1">Sin calificar</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div className="space-y-1">
-                                                        <p className="text-xs font-medium text-muted-foreground">Fecha Fin</p>
-                                                        <p>{format(new Date(viewGroupPlanDetail.endDate), "dd/MM/yyyy")}</p>
-                                                    </div>
+
+                                                    <DialogFooter className="border-t pt-4">
+                                                        <Button variant="outline" className="h-10 rounded-xl font-bold" onClick={() => setViewGroupPlanDetail(null)}>Cerrar</Button>
+                                                        <Button className="gap-1 h-10 rounded-xl font-bold" onClick={() => { handleImpEmail(viewGroupPlanDetail); }}>
+                                                            <Mail className="w-4 h-4" />Enviar Correo
+                                                        </Button>
+                                                    </DialogFooter>
                                                 </div>
-                                                {viewGroupPlanDetail.observations && (
-                                                    <div className="space-y-1">
-                                                        <p className="text-xs font-medium text-muted-foreground">Observaciones</p>
-                                                        <p className="text-sm whitespace-pre-line bg-muted/30 rounded-lg p-3">{viewGroupPlanDetail.observations}</p>
-                                                    </div>
-                                                )}
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {viewGroupPlanDetail.teacherDocUrl && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-medium text-muted-foreground">Paso 1 — Documento del Plan</p>
-                                                            <a href={viewGroupPlanDetail.teacherDocUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs break-all">{viewGroupPlanDetail.teacherDocUrl}</a>
-                                                        </div>
-                                                    )}
-                                                    {viewGroupPlanDetail.signedDocUrl && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-medium text-muted-foreground">Paso 2 — Firma Aprendiz</p>
-                                                            <a href={viewGroupPlanDetail.signedDocUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline text-xs break-all">{viewGroupPlanDetail.signedDocUrl}</a>
-                                                        </div>
-                                                    )}
-                                                    {viewGroupPlanDetail.teacherSignedDocUrl && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-medium text-muted-foreground">Paso 3 — Firma Docente</p>
-                                                            <a href={viewGroupPlanDetail.teacherSignedDocUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs break-all">{viewGroupPlanDetail.teacherSignedDocUrl}</a>
-                                                        </div>
-                                                    )}
-                                                    {viewGroupPlanDetail.evidenceUrl && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-medium text-muted-foreground">Paso 4 — Evidencias de Evaluación</p>
-                                                            <a href={viewGroupPlanDetail.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs break-all">{viewGroupPlanDetail.evidenceUrl}</a>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {viewGroupPlanDetail.planScore !== null && viewGroupPlanDetail.planScore !== undefined && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-medium text-muted-foreground">Calificación del Plan</p>
-                                                            <p className="text-lg font-bold text-primary">{viewGroupPlanDetail.planScore}</p>
-                                                        </div>
-                                                    )}
-                                                    {viewGroupPlanDetail.finalGrade !== null && viewGroupPlanDetail.finalGrade !== undefined && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-medium text-muted-foreground">Nota Final</p>
-                                                            <p className="text-lg font-bold text-emerald-600">{viewGroupPlanDetail.finalGrade}</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {viewGroupPlanDetail.viewedAt ? (
-                                                        <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-300"><Eye className="w-3 h-3 mr-1" />Revisado por el aprendiz</Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-300"><EyeOff className="w-3 h-3 mr-1" />No revisado aún</Badge>
-                                                    )}
-                                                </div>
-                                                <DialogFooter>
-                                                    <Button variant="outline" onClick={() => setViewGroupPlanDetail(null)}>Cerrar</Button>
-                                                    <Button variant="ghost" className="gap-1" onClick={() => { handleImpEmail(viewGroupPlanDetail); }}>
-                                                        <Mail className="w-4 h-4" />Enviar Correo
-                                                    </Button>
-                                                </DialogFooter>
-                                            </div>
-                                        )}
+                                            );
+                                        })()}
                                     </DialogContent>
                                 </Dialog>
 
@@ -4548,6 +4795,95 @@ const handleOpenAnalytics = async () => {
                                                 <DialogFooter>
                                                     <Button type="button" variant="outline" onClick={() => setImpTeacherSignDialog(null)}>Cancelar</Button>
                                                     <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">Confirmar Firma</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        )}
+                                    </DialogContent>
+                                </Dialog>
+
+                                {/* ── Teacher Reset Plan Dialog ── */}
+                                <Dialog open={!!resetPlanDialog} onOpenChange={(open) => !open && setResetPlanDialog(null)}>
+                                    <DialogContent className="max-w-md rounded-2xl">
+                                        <DialogHeader>
+                                            <DialogTitle className="flex items-center gap-2 font-bold text-base text-amber-600">
+                                                <RotateCcw className="w-5 h-5" />
+                                                Devolver Paso de Plan
+                                            </DialogTitle>
+                                            <DialogDescription className="text-xs">
+                                                Selecciona a qué paso deseas regresar el plan de mejoramiento y opcionalmente añade un motivo. Esto notificará al aprendiz.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        {resetPlanDialog && (
+                                            <form onSubmit={handleResetPlanSubmit} className="space-y-4 py-2 text-left">
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs font-bold text-muted-foreground">Paso Destino *</Label>
+                                                    <Select
+                                                        value={String(resetPlanDialog.stepNumber)}
+                                                        onValueChange={val => setResetPlanDialog(prev => prev ? { ...prev, stepNumber: parseInt(val) } : null)}
+                                                    >
+                                                        <SelectTrigger className="h-10 rounded-lg bg-background">
+                                                            <SelectValue placeholder="Selecciona el paso" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="1">Paso 1: Plan creado (Solo Docente)</SelectItem>
+                                                            <SelectItem value="2">Paso 2: Firma del Aprendiz (Esperando firma)</SelectItem>
+                                                            <SelectItem value="3">Paso 3: Firma del Docente (Esperando contrafirma)</SelectItem>
+                                                            <SelectItem value="4">Paso 4: Evidencias (Esperando evidencias)</SelectItem>
+                                                            <SelectItem value="5">Paso 5: Evaluación (Esperando calificación)</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="reset-reason" className="text-xs font-bold text-muted-foreground">Motivo de Devolución</Label>
+                                                    <Textarea
+                                                        id="reset-reason"
+                                                        placeholder="Ej. La firma no es legible o falta cargar evidencias completas..."
+                                                        value={resetPlanDialog.reason}
+                                                        onChange={e => setResetPlanDialog(prev => prev ? { ...prev, reason: e.target.value } : prev)}
+                                                        className="min-h-[80px] rounded-lg bg-background"
+                                                    />
+                                                </div>
+                                                <DialogFooter>
+                                                    <Button type="button" variant="outline" onClick={() => setResetPlanDialog(null)}>Cancelar</Button>
+                                                    <Button type="submit" className="font-bold bg-amber-600 hover:bg-amber-700 text-white border-amber-600">Devolver Plan</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        )}
+                                    </DialogContent>
+                                </Dialog>
+
+                                {/* ── Teacher Grade Plan Dialog ── */}
+                                <Dialog open={!!gradePlanDialog} onOpenChange={(open) => !open && setGradePlanDialog(null)}>
+                                    <DialogContent className="max-w-md rounded-2xl">
+                                        <DialogHeader>
+                                            <DialogTitle className="flex items-center gap-2 font-bold text-base text-emerald-600">
+                                                <CheckSquare className="w-5 h-5" />
+                                                Calificar Plan de Mejoramiento
+                                            </DialogTitle>
+                                            <DialogDescription className="text-xs">
+                                                Revisa el desarrollo y asigna la calificación definitiva (0.0 a 5.0) para este plan de mejoramiento.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        {gradePlanDialog && (
+                                            <form onSubmit={handleGradePlanSubmit} className="space-y-4 py-2 text-left">
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="teacher-plan-grade-input" className="text-xs font-bold text-muted-foreground">Calificación Definitiva (0.0 - 5.0) *</Label>
+                                                    <Input
+                                                        id="teacher-plan-grade-input"
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        max="5"
+                                                        required
+                                                        placeholder="Ej. 4.3"
+                                                        value={gradePlanDialog.grade}
+                                                        onChange={e => setGradePlanDialog(prev => prev ? { ...prev, grade: e.target.value } : null)}
+                                                        className="h-10 rounded-lg bg-background"
+                                                    />
+                                                </div>
+                                                <DialogFooter>
+                                                    <Button type="button" variant="outline" onClick={() => setGradePlanDialog(null)}>Cancelar</Button>
+                                                    <Button type="submit" className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600">Confirmar Calificación</Button>
                                                 </DialogFooter>
                                             </form>
                                         )}

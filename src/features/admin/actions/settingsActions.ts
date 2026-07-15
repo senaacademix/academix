@@ -27,6 +27,15 @@ export async function updateSettingsAction(formData: FormData) {
     const limitWeekRaw = formData.get("limitAttendanceToCurrentWeek");
     const limitAttendanceToCurrentWeek = limitWeekRaw === "true";
 
+    const maxHoursRaw = formData.get("maxTeacherHours");
+    const maxTeacherHours = maxHoursRaw ? parseInt(maxHoursRaw as string, 10) : 40;
+
+    const scheduleStartDateRaw = formData.get("scheduleStartDate");
+    const scheduleStartDate = scheduleStartDateRaw ? new Date(scheduleStartDateRaw as string + "T12:00:00") : null;
+
+    const scheduleEndDateRaw = formData.get("scheduleEndDate");
+    const scheduleEndDate = scheduleEndDateRaw ? new Date(scheduleEndDateRaw as string + "T12:00:00") : null;
+
     const rawData = {
         institutionName: formData.get("institutionName") as string,
         institutionLogo: formData.get("institutionLogo") as string,
@@ -34,12 +43,18 @@ export async function updateSettingsAction(formData: FormData) {
         footerText: formData.get("footerText") as string,
         studentDailyLimit: studentDailyLimit !== null && !isNaN(studentDailyLimit) ? studentDailyLimit : null,
         limitAttendanceToCurrentWeek: limitAttendanceToCurrentWeek,
+        scheduleTitle: formData.get("scheduleTitle") as string || "Horario Académico",
+        scheduleStartDate: scheduleStartDate,
+        scheduleEndDate: scheduleEndDate,
+        maxTeacherHours: maxTeacherHours,
     };
 
     const data: any = {};
     for (const [key, value] of Object.entries(rawData)) {
-        if (value !== null && value !== undefined) {
+        if (value !== undefined && value !== null) {
             data[key] = value;
+        } else if (value === null && (key === "scheduleStartDate" || key === "scheduleEndDate")) {
+            data[key] = null;
         }
     }
 

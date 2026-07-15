@@ -10,7 +10,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Info, Code2, Crown } from "lucide-react";
+import { Info, Code2, Building2 } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -82,10 +82,9 @@ export function CreditsModal() {
                             </div>
                         </div>
 
-                        {/* Líder del Proyecto (DISEÑO MÁS DISCRETO) */}
+                        {/* Líder del Proyecto */}
                         <div className="p-3.5 rounded-2xl bg-muted/40 border border-muted/50 transition-all hover:bg-muted/60 text-center space-y-0.5">
                             <div className="flex items-center justify-center gap-1.5 text-muted-foreground/80">
-                                <Crown className="h-3.5 w-3.5 shrink-0" />
                                 <span className="text-[9px] font-bold tracking-widest uppercase">
                                     Líder del Proyecto
                                 </span>
@@ -93,6 +92,14 @@ export function CreditsModal() {
                             <h4 className="text-sm font-semibold text-muted-foreground">
                                 Boris David Gómez Guerrero
                             </h4>
+                        </div>
+
+                        {/* Fábrica de Software SENA */}
+                        <div className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                            <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 tracking-wide">
+                                Fábrica de Software SENA
+                            </span>
                         </div>
                     </div>
                     <p className="text-sm text-muted-foreground pt-4">

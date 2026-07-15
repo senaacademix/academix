@@ -264,7 +264,7 @@ export function AdminUsersManagement({ initialUsers, programs, currentUserId }: 
             user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
             user.profile?.identificacion.includes(searchQuery)
         );
-    });
+    }).sort((a, b) => (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" }));
 
     return (
         <div className="space-y-6">

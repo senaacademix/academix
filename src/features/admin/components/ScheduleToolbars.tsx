@@ -14,7 +14,6 @@ interface ScheduleToolbarsProps {
     setPeriodOverviewOpen: (open: boolean) => void;
 
     setIsAnalyticsModalOpen: (open: boolean) => void;
-    setIsSettingsModalOpen: (open: boolean) => void;
     schedulesPublished: boolean;
     setPublishConfirmOpen: (open: boolean) => void;
     isDirty: boolean;
@@ -36,7 +35,6 @@ export function ScheduleToolbars({
     setPeriodOverviewOpen,
 
     setIsAnalyticsModalOpen,
-    setIsSettingsModalOpen,
     schedulesPublished,
     setPublishConfirmOpen,
     isDirty,
@@ -128,17 +126,6 @@ export function ScheduleToolbars({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" align="center"><p className="text-xs">Analítica de Horarios</p></TooltipContent>
             </Tooltip>
-
-            {!isObserver && (
-                <Tooltip delayDuration={300}>
-                    <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-7 w-7 rounded border-border/40 shrink-0">
-                            <Settings className="w-3.5 h-3.5 text-primary" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" align="center"><p className="text-xs">Configuración</p></TooltipContent>
-                </Tooltip>
-            )}
 
 
             <Button

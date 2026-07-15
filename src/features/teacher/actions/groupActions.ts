@@ -422,7 +422,18 @@ export async function getGroupRemarksHistory(groupId: string) {
     // Fetch remarks
     const remarks = await prisma.remark.findMany({
         where: { courseId: { in: courseIds } },
-        select: { type: true, date: true, userId: true, courseId: true }
+        select: {
+            id: true,
+            type: true,
+            title: true,
+            description: true,
+            date: true,
+            userId: true,
+            courseId: true,
+            course: { select: { title: true } },
+            user: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } },
+            teacher: { select: { name: true, profile: { select: { nombres: true, apellido: true } } } }
+        }
     });
 
     const uniqueDates = new Set([

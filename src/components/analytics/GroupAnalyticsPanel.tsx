@@ -20,6 +20,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip as UITooltip, TooltipContent as UITooltipContent, TooltipProvider as UITooltipProvider, TooltipTrigger as UITooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
     BarChart,
@@ -36,10 +37,11 @@ import {
     LineChart,
     Line
 } from "recharts";
-import { Users, GraduationCap, UserX, UserCheck, BookOpen, AlertTriangle, CheckCircle2, Clock, Calendar, AlertCircle, Settings, Info, Eye, EyeOff, Trash2, ExternalLink, FileText, Mail, Loader2 } from "lucide-react";
+import { Users, GraduationCap, UserX, UserCheck, BookOpen, AlertTriangle, CheckCircle2, Clock, Calendar, AlertCircle, Settings, Info, Eye, EyeOff, Trash2, ExternalLink, FileText, Mail, Loader2, Search, Award } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatName } from "@/lib/utils";
@@ -67,7 +69,18 @@ interface GroupAnalyticsPanelProps {
         students: { total: number; active: number; banned: number };
         totalCourseClasses: number;
         attendances: { status: string; date: Date; courseId: string }[];
-        remarks: { type: string; date: Date }[];
+        remarks: {
+            id: string;
+            type: string;
+            title: string;
+            description: string;
+            date: Date;
+            userId: string;
+            courseId: string;
+            course: { title: string };
+            user: { name: string; profile: any };
+            teacher: { name: string; profile: any };
+        }[];
         coursesStats: { title: string; averageGrade: number; totalGrades: number }[];
         coursesList?: { id: string; title: string; teacherName?: string; schedules?: { dayOfWeek: string }[] }[];
         studentMetrics?: {
@@ -124,6 +137,10 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
     const [plansLoading, setPlansLoading] = useState(false);
     const [viewPlanDetail, setViewPlanDetail] = useState<any | null>(null);
     const [planToDelete, setPlanToDelete] = useState<string | null>(null);
+
+    const [disciplineStudentFilter, setDisciplineStudentFilter] = useState("all");
+    const [disciplineTypeFilter, setDisciplineTypeFilter] = useState("all");
+    const [disciplineSearch, setDisciplineSearch] = useState("");
 
     const loadGroupPlans = async () => {
         if (!analyticsData?.groupId) return;
@@ -365,6 +382,41 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
         ];
     }, [analyticsData, selectedCourseId]);
 
+    // Filtered Remarks List for Discipline Feed
+    const filteredRemarks = useMemo(() => {
+        if (!analyticsData || !analyticsData.remarks) return [];
+        return analyticsData.remarks.filter(rem => {
+            // Student Filter
+            const matchesStudent = disciplineStudentFilter === "all" || rem.userId === disciplineStudentFilter;
+            // Type Filter
+            const matchesType = disciplineTypeFilter === "all" || rem.type === disciplineTypeFilter;
+            // Search filter (description, title, course, creator/teacher)
+            const searchLower = disciplineSearch.toLowerCase();
+            const studentName = rem.user?.name || "";
+            const studentProfileNombres = rem.user?.profile?.nombres || "";
+            const studentProfileApellido = rem.user?.profile?.apellido || "";
+            const studentFullName = `${studentName} ${studentProfileNombres} ${studentProfileApellido}`.toLowerCase();
+            
+            const teacherName = rem.teacher?.name || "";
+            const teacherProfileNombres = rem.teacher?.profile?.nombres || "";
+            const teacherProfileApellido = rem.teacher?.profile?.apellido || "";
+            const teacherFullName = `${teacherName} ${teacherProfileNombres} ${teacherProfileApellido}`.toLowerCase();
+
+            const courseTitle = (rem.course?.title || "").toLowerCase();
+            const title = (rem.title || "").toLowerCase();
+            const description = (rem.description || "").toLowerCase();
+
+            const matchesSearch = !disciplineSearch ||
+                studentFullName.includes(searchLower) ||
+                teacherFullName.includes(searchLower) ||
+                courseTitle.includes(searchLower) ||
+                title.includes(searchLower) ||
+                description.includes(searchLower);
+
+            return matchesStudent && matchesType && matchesSearch;
+        });
+    }, [analyticsData, disciplineStudentFilter, disciplineTypeFilter, disciplineSearch]);
+
     // Missing Attendance calculation per teacher
     const missingAttendanceList = useMemo(() => {
         if (!analyticsData || !analyticsData.coursesList) return [];
@@ -590,6 +642,32 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
         }).sort((a, b) => b.score - a.score); // Sort from best to worst
     }, [analyticsData, selectedCourseId, groupDailyHours, academicWeight, attendanceWeight, disciplineWeight]);
 
+    // ── Group Integral Score (average of all students' composite scores) ──
+    const groupIntegralScore = useMemo(() => {
+        if (!rankedStudentsData || rankedStudentsData.length === 0) return null;
+        const total = rankedStudentsData.reduce((acc, s) => acc + s.score, 0);
+        const avg = total / rankedStudentsData.length;
+
+        // Breakdown averages
+        const avgAcademic = rankedStudentsData.reduce((acc, s) => acc + s.academic, 0) / rankedStudentsData.length;
+        const avgAttendance = rankedStudentsData.reduce((acc, s) => acc + s.attendance, 0) / rankedStudentsData.length;
+        const avgDiscipline = rankedStudentsData.reduce((acc, s) => acc + s.discipline, 0) / rankedStudentsData.length;
+
+        let label = "Excelente";
+        let color = "text-emerald-500";
+        let bgColor = "bg-emerald-500/10";
+        let borderColor = "border-emerald-300 dark:border-emerald-700";
+        let ringColor = "ring-emerald-400";
+        if (avg < 40) { label = "Crítico"; color = "text-red-500"; bgColor = "bg-red-500/10"; borderColor = "border-red-300 dark:border-red-700"; ringColor = "ring-red-400"; }
+        else if (avg < 60) { label = "Bajo"; color = "text-orange-500"; bgColor = "bg-orange-500/10"; borderColor = "border-orange-300 dark:border-orange-700"; ringColor = "ring-orange-400"; }
+        else if (avg < 75) { label = "Regular"; color = "text-amber-500"; bgColor = "bg-amber-500/10"; borderColor = "border-amber-300 dark:border-amber-700"; ringColor = "ring-amber-400"; }
+        else if (avg < 88) { label = "Bueno"; color = "text-blue-500"; bgColor = "bg-blue-500/10"; borderColor = "border-blue-300 dark:border-blue-700"; ringColor = "ring-blue-400"; }
+
+        return { score: parseFloat(avg.toFixed(1)), label, color, bgColor, borderColor, ringColor, avgAcademic: parseFloat(avgAcademic.toFixed(1)), avgAttendance: parseFloat(avgAttendance.toFixed(1)), avgDiscipline: parseFloat(avgDiscipline.toFixed(1)) };
+    }, [rankedStudentsData]);
+
+
+
     if (!open && !inline) return null;
 
     const content = (
@@ -700,6 +778,91 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                 </Card>
                             </div>
 
+                            {/* ── Group Integral Score Card ── */}
+                            {groupIntegralScore && (
+                                <Card className={`border-2 ${groupIntegralScore.borderColor} ${groupIntegralScore.bgColor} shadow-md overflow-hidden`}>
+                                    <CardContent className="p-0">
+                                        <div className="flex flex-col md:flex-row items-center gap-0">
+                                            {/* Big score circle */}
+                                            <div className="flex flex-col items-center justify-center p-8 md:p-10 shrink-0 border-b md:border-b-0 md:border-r border-inherit w-full md:w-auto">
+                                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Puntaje Integral del Grupo</p>
+                                                <div className={`relative flex items-center justify-center w-32 h-32 rounded-full ring-4 ${groupIntegralScore.ringColor} bg-background shadow-lg`}>
+                                                    <div className="text-center">
+                                                        <span className={`text-4xl font-black ${groupIntegralScore.color} leading-none`}>
+                                                            {groupIntegralScore.score}
+                                                        </span>
+                                                        <span className="block text-[10px] text-muted-foreground font-semibold">/ 100</span>
+                                                    </div>
+                                                </div>
+                                                <span className={`mt-3 text-base font-extrabold tracking-wide ${groupIntegralScore.color}`}>
+                                                    {groupIntegralScore.label}
+                                                </span>
+                                                <p className="text-[10px] text-muted-foreground mt-0.5 text-center max-w-[160px]">
+                                                    Promedio integral de {analyticsData.studentMetrics?.length || 0} estudiantes activos
+                                                </p>
+                                            </div>
+
+                                            {/* Breakdown bars */}
+                                            <div className="flex-1 p-6 md:p-8 grid grid-cols-1 sm:grid-cols-3 gap-5 w-full">
+                                                {/* Academic */}
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <BookOpen className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                                            <span className="text-xs font-bold text-foreground">Rendimiento</span>
+                                                        </div>
+                                                        <span className="text-sm font-extrabold text-indigo-500">{groupIntegralScore.avgAcademic}<span className="text-[10px] text-muted-foreground font-normal">/100</span></span>
+                                                    </div>
+                                                    <div className="h-3 bg-muted/50 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-indigo-500 rounded-full transition-all duration-700"
+                                                            style={{ width: `${groupIntegralScore.avgAcademic}%` }}
+                                                        />
+                                                    </div>
+                                                    <p className="text-[10px] text-muted-foreground">Peso: {academicWeight}% — Basado en calificaciones promedio del grupo</p>
+                                                </div>
+
+                                                {/* Attendance */}
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Calendar className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                                            <span className="text-xs font-bold text-foreground">Asistencia</span>
+                                                        </div>
+                                                        <span className="text-sm font-extrabold text-emerald-500">{groupIntegralScore.avgAttendance}<span className="text-[10px] text-muted-foreground font-normal">/100</span></span>
+                                                    </div>
+                                                    <div className="h-3 bg-muted/50 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+                                                            style={{ width: `${groupIntegralScore.avgAttendance}%` }}
+                                                        />
+                                                    </div>
+                                                    <p className="text-[10px] text-muted-foreground">Peso: {attendanceWeight}% — Penaliza faltas, tardanzas y retiros tempranos</p>
+                                                </div>
+
+                                                {/* Discipline */}
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                                            <span className="text-xs font-bold text-foreground">Disciplina</span>
+                                                        </div>
+                                                        <span className="text-sm font-extrabold text-amber-500">{groupIntegralScore.avgDiscipline}<span className="text-[10px] text-muted-foreground font-normal">/100</span></span>
+                                                    </div>
+                                                    <div className="h-3 bg-muted/50 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-amber-500 rounded-full transition-all duration-700"
+                                                            style={{ width: `${groupIntegralScore.avgDiscipline}%` }}
+                                                        />
+                                                    </div>
+                                                    <p className="text-[10px] text-muted-foreground">Peso: {disciplineWeight}% — Llamados de atención y felicitaciones</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             {/* Global Course Selector */}
                             <Card className="bg-background border shadow-sm">
                                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -727,11 +890,11 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                             </Card>
 
                              <Tabs defaultValue="rendimiento" className="w-full mt-6">
-                                <TabsList className="flex w-full sm:w-[750px] overflow-x-auto justify-start sm:justify-center p-1 bg-muted/60 rounded-xl mb-6 mx-auto scrollbar-none h-auto gap-1">
-                                    <TabsTrigger value="rendimiento" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Rendimiento</TabsTrigger>
-                                    <TabsTrigger value="asistencia" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Asistencia</TabsTrigger>
-                                    <TabsTrigger value="disciplina" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Disciplina</TabsTrigger>
-                                    <TabsTrigger value="mejoramiento" className="shrink-0 flex-1 sm:flex-none py-2 px-3 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Planes de Mejoramiento</TabsTrigger>
+                                <TabsList className="flex w-full p-1 bg-muted/60 rounded-xl mb-6 h-auto gap-1">
+                                    <TabsTrigger value="rendimiento" className="flex-1 py-2 px-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Rendimiento</TabsTrigger>
+                                    <TabsTrigger value="asistencia" className="flex-1 py-2 px-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Asistencia</TabsTrigger>
+                                    <TabsTrigger value="disciplina" className="flex-1 py-2 px-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Disciplina</TabsTrigger>
+                                    <TabsTrigger value="mejoramiento" className="flex-1 py-2 px-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">Planes de Mejoramiento</TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="rendimiento" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
@@ -1324,7 +1487,7 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                     </div>
                                 </TabsContent>
                                 
-                                <TabsContent value="disciplina" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                                <TabsContent value="disciplina" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0 text-left">
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                         {/* Remarks Chart */}
                                         <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
@@ -1357,8 +1520,122 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                 )}
                                             </CardContent>
                                         </Card>
+
+                                        {/* Feed of Observations */}
+                                        <Card className="col-span-1 lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
+                                            <CardHeader>
+                                                <CardTitle className="text-base font-bold text-foreground">Detalle de Observaciones</CardTitle>
+                                                <CardDescription>Filtra y revisa las observaciones disciplinarias individuales y grupales.</CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                {/* Filters */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/70" />
+                                                        <Input
+                                                            placeholder="Buscar observaciones..."
+                                                            value={disciplineSearch}
+                                                            onChange={(e) => setDisciplineSearch(e.target.value)}
+                                                            className="pl-9 h-10 rounded-xl"
+                                                        />
+                                                    </div>
+
+                                                    <Select
+                                                        value={disciplineStudentFilter}
+                                                        onValueChange={setDisciplineStudentFilter}
+                                                    >
+                                                        <SelectTrigger className="h-10 rounded-xl">
+                                                            <SelectValue placeholder="Filtrar por estudiante" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="all">Todos los aprendices</SelectItem>
+                                                            {analyticsData.studentMetrics?.map((s) => (
+                                                                <SelectItem key={s.id} value={s.id}>
+                                                                    {s.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+
+                                                    <Select
+                                                        value={disciplineTypeFilter}
+                                                        onValueChange={setDisciplineTypeFilter}
+                                                    >
+                                                        <SelectTrigger className="h-10 rounded-xl">
+                                                            <SelectValue placeholder="Filtrar por tipo" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="all">Todos los tipos</SelectItem>
+                                                            <SelectItem value="ATTENTION">Llamados de Atención</SelectItem>
+                                                            <SelectItem value="COMMENDATION">Felicitaciones</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                                {/* Feed List */}
+                                                <div className="space-y-3 pt-2">
+                                                    {filteredRemarks.length > 0 ? (
+                                                        filteredRemarks.map((rem, remIdx) => {
+                                                            const isAttention = rem.type === "ATTENTION";
+                                                            return (
+                                                                <div 
+                                                                    key={rem.id ?? remIdx} 
+                                                                    className="p-4 rounded-xl border border-muted bg-card text-left transition-all hover:bg-muted/10 space-y-3"
+                                                                >
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {isAttention ? (
+                                                                                <Badge variant="outline" className="text-xs bg-red-500/10 text-red-600 border-none font-bold py-0.5 px-2">
+                                                                                    <AlertTriangle className="w-3.5 h-3.5 mr-1 shrink-0" />
+                                                                                    Llamado de Atención
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-none font-bold py-0.5 px-2">
+                                                                                    <Award className="w-3.5 h-3.5 mr-1 shrink-0" />
+                                                                                    Felicitación
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className="text-xs text-muted-foreground font-medium">
+                                                                            {rem.date ? format(new Date(rem.date), "dd/MM/yyyy") : "Sin fecha"}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="space-y-1">
+                                                                        <h4 className="text-sm font-bold text-foreground leading-snug">
+                                                                            {rem.title || "Observación Registrada"}
+                                                                        </h4>
+                                                                        <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed bg-muted/30 p-3 rounded-lg border border-border/40">
+                                                                            {rem.description || "Sin descripción detallada."}
+                                                                        </p>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-muted-foreground pt-1 border-t border-dashed">
+                                                                        <div>
+                                                                            Aprendiz: <strong className="text-foreground/80">{rem.user ? formatName(rem.user.name, rem.user.profile) : "Desconocido"}</strong>
+                                                                        </div>
+                                                                        <div>
+                                                                            Instructor: <strong className="text-foreground/80">{rem.teacher ? formatName(rem.teacher.name, rem.teacher.profile) : "Desconocido"}</strong>
+                                                                        </div>
+                                                                        <div>
+                                                                            Asignatura: <strong className="text-primary/70">{rem.course?.title || "General"}</strong>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="flex flex-col items-center justify-center py-10 border border-dashed rounded-xl bg-muted/5 text-muted-foreground text-center">
+                                                            <AlertCircle className="w-10 h-10 mb-2 opacity-40" />
+                                                            <p className="font-semibold text-sm">Sin Resultados</p>
+                                                            <p className="text-xs mt-0.5">No hay observaciones que coincidan con los filtros aplicados.</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
                                     </div>
-                                 </TabsContent>
+                                </TabsContent>
 
                                 <TabsContent value="mejoramiento" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
                                     {plansLoading ? (
@@ -1382,8 +1659,8 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                         }
                                         return (
                                             <div className="space-y-6 text-left">
-                                                {Object.values(byStudent).map(({ student, plans: sPlans }) => (
-                                                    <div key={student?.id} className="border border-border/60 rounded-xl overflow-hidden bg-background">
+                                                {Object.values(byStudent).map(({ student, plans: sPlans }, bsIdx) => (
+                                                    <div key={student?.id ?? bsIdx} className="border border-border/60 rounded-xl overflow-hidden bg-background">
                                                         {/* Student Header */}
                                                         <div className="flex items-center gap-3 bg-muted/30 px-4 py-2.5 border-b border-border/60">
                                                             <GraduationCap className="w-4 h-4 text-primary shrink-0" />
@@ -1408,10 +1685,10 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                                 const daysPassed = Math.max(0, Math.round((nowMs - startMs) / 86400000));
 
                                                                 const steps = [
-                                                                    { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false },
-                                                                    { label: "Est. firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false },
-                                                                    { label: "Doc. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false },
-                                                                    { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done },
+                                                                    { label: "Plan creado", sub: "Docente", done: step1Done, active: !step1Done, locked: false, desc: "El instructor crea el plan de mejoramiento académico detallando compromisos, fechas y subiendo el documento inicial." },
+                                                                    { label: "Est. firma", sub: "Aprendiz", done: step2Done, active: step1Done && !step2Done, locked: false, desc: "El aprendiz descarga el documento, lo firma digitalmente y sube la copia firmada como aceptación del plan." },
+                                                                    { label: "Doc. firma", sub: "Docente", done: step3Done, active: step2Done && !step3Done, locked: false, desc: "El instructor revisa la firma del aprendiz, realiza la contrafirma docente y sube el documento final firmado." },
+                                                                    { label: "Evaluación", sub: isPastEnd ? "Disponible" : "Al finalizar", done: !!step4Done, active: step3Done && isPastEnd && !step4Done, locked: !isPastEnd && !step4Done, desc: isPastEnd ? "El instructor califica el plan (0.0 a 5.0) evaluando las evidencias subidas por el aprendiz." : "La evaluación estará disponible una vez que el plan haya vencido y el aprendiz haya subido sus evidencias." },
                                                                 ];
 
                                                                 return (
@@ -1455,34 +1732,46 @@ export function GroupAnalyticsPanel({ open, onOpenChange, inline = false, isLoad
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Stepper */}
-                                                                        <div className="relative grid grid-cols-4 gap-2 pt-1">
-                                                                            <div className="absolute top-3 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
-                                                                            {steps.map((step, idx) => (
-                                                                                <div key={idx} className="flex flex-col items-center gap-1 relative z-10">
-                                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${
-                                                                                        step.done
-                                                                                            ? "bg-emerald-500 border-emerald-500 text-white"
-                                                                                            : step.locked
-                                                                                                ? "bg-muted border-border text-muted-foreground"
-                                                                                                : step.active
-                                                                                                    ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
-                                                                                                    : "bg-background border-muted text-muted-foreground"
-                                                                                    }`}>
-                                                                                        {step.done ? (
-                                                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                                                        ) : step.locked ? (
-                                                                                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
-                                                                                        ) : (
-                                                                                            <span>{idx + 1}</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <div className="text-center">
-                                                                                        <p className={`text-[9px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
+                                                                        {/* Stepper with tooltips */}
+                                                                        <UITooltipProvider>
+                                                                            <div className="relative grid grid-cols-4 gap-2 pt-1">
+                                                                                <div className="absolute top-3 left-[12.5%] right-[12.5%] h-0.5 bg-border z-0" />
+                                                                                {steps.map((step, idx) => (
+                                                                                    <UITooltip key={idx}>
+                                                                                        <UITooltipTrigger asChild>
+                                                                                            <div className="flex flex-col items-center gap-1 relative z-10 cursor-help">
+                                                                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${
+                                                                                                    step.done
+                                                                                                        ? "bg-emerald-500 border-emerald-500 text-white"
+                                                                                                        : step.locked
+                                                                                                            ? "bg-muted border-border text-muted-foreground"
+                                                                                                            : step.active
+                                                                                                                ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30"
+                                                                                                                : "bg-background border-muted text-muted-foreground"
+                                                                                                }`}>
+                                                                                                    {step.done ? (
+                                                                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                                                                    ) : step.locked ? (
+                                                                                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                                                                    ) : (
+                                                                                                        <span>{idx + 1}</span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                <div className="text-center">
+                                                                                                    <p className={`text-[9px] font-semibold leading-tight ${step.done ? "text-emerald-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</p>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </UITooltipTrigger>
+                                                                                        <UITooltipContent side="bottom" className="max-w-[200px] p-3 text-xs rounded-xl shadow-lg bg-popover text-popover-foreground border border-border">
+                                                                                            <div className="space-y-1 text-left">
+                                                                                                <p className="font-bold text-primary">{step.label} <span className="font-normal text-muted-foreground">({step.sub})</span></p>
+                                                                                                <p className="text-muted-foreground leading-snug">{step.desc}</p>
+                                                                                            </div>
+                                                                                        </UITooltipContent>
+                                                                                    </UITooltip>
+                                                                                ))}
+                                                                            </div>
+                                                                        </UITooltipProvider>
                                                                     </div>
                                                                 );
                                                             })}

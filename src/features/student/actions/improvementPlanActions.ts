@@ -9,6 +9,58 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
+function processExpiredPlans(plans: any[]) {
+    const now = new Date();
+    
+    // 1. Revert automatic grades (0.0) for plans where the teacher countersign is still missing
+    const toRevertIds = plans
+        .filter(p => p.finalGrade === 0 && p.planScore === 0 && !p.teacherSignedDocUrl)
+        .map(p => p.id);
+
+    if (toRevertIds.length > 0) {
+        prisma.improvementPlan.updateMany({
+            where: { id: { in: toRevertIds } },
+            data: {
+                finalGrade: null,
+                planScore: null
+            }
+        }).catch(err => console.error("Error reverting invalid auto-grades:", err));
+    }
+
+    // 2. Find plans to auto-grade to 0.0
+    const toUpdateIds = plans
+        .filter(p => now > new Date(p.endDate) && !!p.teacherSignedDocUrl && !p.evidenceUrl && p.finalGrade === null)
+        .map(p => p.id);
+
+    if (toUpdateIds.length > 0) {
+        prisma.improvementPlan.updateMany({
+            where: { id: { in: toUpdateIds } },
+            data: {
+                finalGrade: 0.0,
+                planScore: 0.0
+            }
+        }).catch(err => console.error("Error auto-grading expired plans:", err));
+    }
+
+    return plans.map(p => {
+        if (p.finalGrade === 0 && p.planScore === 0 && !p.teacherSignedDocUrl) {
+            return {
+                ...p,
+                finalGrade: null,
+                planScore: null
+            };
+        }
+        if (now > new Date(p.endDate) && !!p.teacherSignedDocUrl && !p.evidenceUrl && p.finalGrade === null) {
+            return {
+                ...p,
+                finalGrade: 0.0,
+                planScore: 0.0
+            };
+        }
+        return p;
+    });
+}
+
 export async function getImprovementPlans(targetStudentId?: string) {
     const session = await getSession();
     if (!session?.user) {
@@ -48,7 +100,7 @@ export async function getImprovementPlans(targetStudentId?: string) {
             },
             orderBy: { createdAt: "desc" }
         });
-        return { success: true, data: plans };
+        return { success: true, data: processExpiredPlans(plans) };
     } catch (error: any) {
         console.error("Error al obtener planes de mejoramiento:", error);
         return { success: false, error: error.message || "Error al obtener planes" };
@@ -86,7 +138,7 @@ export async function getGroupImprovementPlans(groupId: string) {
             },
             orderBy: [{ studentId: "asc" }, { createdAt: "desc" }]
         });
-        return { success: true, data: plans };
+        return { success: true, data: processExpiredPlans(plans) };
     } catch (error: any) {
         console.error("Error al obtener planes de mejoramiento del grupo:", error);
         return { success: false, error: error.message || "Error al obtener planes" };
@@ -383,3 +435,279 @@ export async function markPlanViewed(planId: string) {
         return { success: false, error: error.message || "Error" };
     }
 }
+
+export async function submitEvidenceUrl(planId: string, evidenceUrl: string) {
+    const session = await getSession();
+    if (!session?.user) {
+        throw new Error("No autorizado");
+    }
+
+    try {
+        const plan = await prisma.improvementPlan.findUnique({
+            where: { id: planId }
+        });
+
+        if (!plan) {
+            throw new Error("Plan de mejoramiento no encontrado");
+        }
+
+        if (plan.studentId !== session.user.id) {
+            throw new Error("No autorizado");
+        }
+
+        const updated = await prisma.improvementPlan.update({
+            where: { id: planId },
+            data: { evidenceUrl }
+        });
+
+        if (plan.teacherId) {
+            const studentName = session.user.name || "Un aprendiz";
+            (async () => {
+                try {
+                    await sendPushNotification(plan.teacherId, {
+                        title: "Evidencias Cargadas",
+                        body: `El aprendiz ${studentName} ha cargado las evidencias para el Plan de Mejoramiento ${plan.planNumber}.`,
+                        url: "/dashboard/teacher"
+                    });
+                } catch (err) {
+                    console.error("Error sending push notification to teacher on plan evidence:", err);
+                }
+            })();
+        }
+
+        return { success: true, data: updated };
+    } catch (error: any) {
+        console.error("Error al subir evidencias:", error);
+        return { success: false, error: error.message || "Error al subir evidencias" };
+    }
+}
+
+export async function deleteEvidenceUrl(planId: string) {
+    const session = await getSession();
+    if (!session?.user) {
+        throw new Error("No autorizado");
+    }
+
+    try {
+        const plan = await prisma.improvementPlan.findUnique({ where: { id: planId } });
+        if (!plan) throw new Error("Plan no encontrado");
+
+        const isStudent = session.user.role === "student" && plan.studentId === session.user.id;
+        const isTeacher = session.user.role === "teacher" && plan.teacherId === session.user.id;
+        const isAdmin = session.user.role === "admin";
+
+        if (!isStudent && !isTeacher && !isAdmin) {
+            throw new Error("No autorizado");
+        }
+
+        const updated = await prisma.improvementPlan.update({
+            where: { id: planId },
+            data: { evidenceUrl: null }
+        });
+        return { success: true, data: updated };
+    } catch (error: any) {
+        console.error("Error al eliminar evidencias:", error);
+        return { success: false, error: error.message || "Error al eliminar" };
+    }
+}
+
+export async function resetPlanToStep(planId: string, stepNumber: number, reason?: string) {
+    const session = await getSession();
+    if (!session?.user || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("No autorizado");
+    }
+
+    try {
+        const plan = await prisma.improvementPlan.findUnique({ where: { id: planId } });
+        if (!plan) {
+            throw new Error("Plan no encontrado");
+        }
+
+        if (session.user.role === "teacher" && plan.teacherId !== session.user.id) {
+            throw new Error("No autorizado a modificar este plan");
+        }
+
+        const dataUpdate: any = {};
+        let stepName = "";
+
+        if (stepNumber <= 1) {
+            dataUpdate.signedDocUrl = null;
+            dataUpdate.teacherSignedDocUrl = null;
+            dataUpdate.evidenceUrl = null;
+            dataUpdate.planScore = null;
+            dataUpdate.finalGrade = null;
+            stepName = "Paso 1: Plan creado";
+        } else if (stepNumber === 2) {
+            dataUpdate.signedDocUrl = null;
+            dataUpdate.teacherSignedDocUrl = null;
+            dataUpdate.evidenceUrl = null;
+            dataUpdate.planScore = null;
+            dataUpdate.finalGrade = null;
+            stepName = "Paso 2: Firma del aprendiz";
+        } else if (stepNumber === 3) {
+            dataUpdate.teacherSignedDocUrl = null;
+            dataUpdate.evidenceUrl = null;
+            dataUpdate.planScore = null;
+            dataUpdate.finalGrade = null;
+            stepName = "Paso 3: Firma del docente";
+        } else if (stepNumber === 4) {
+            dataUpdate.evidenceUrl = null;
+            dataUpdate.planScore = null;
+            dataUpdate.finalGrade = null;
+            stepName = "Paso 4: Evidencias";
+        } else if (stepNumber === 5) {
+            dataUpdate.planScore = null;
+            dataUpdate.finalGrade = null;
+            stepName = "Paso 5: Evaluación";
+        }
+
+        const updated = await prisma.improvementPlan.update({
+            where: { id: planId },
+            data: dataUpdate
+        });
+
+        (async () => {
+            try {
+                await sendPushNotification(plan.studentId, {
+                    title: "Plan de Mejoramiento Devuelto",
+                    body: `El plan ${plan.planNumber} fue devuelto al ${stepName}.${reason ? ` Motivo: ${reason}` : ""}`,
+                    url: "/dashboard/student/records"
+                });
+            } catch (err) {
+                console.error("Error sending push notification on plan reset:", err);
+            }
+        })();
+
+        return { success: true, data: updated };
+    } catch (error: any) {
+        console.error("Error al restablecer plan de mejoramiento:", error);
+        return { success: false, error: error.message || "Error al restablecer the plan" };
+    }
+}
+
+export async function gradeImprovementPlan(planId: string, grade: number) {
+    const session = await getSession();
+    if (!session?.user || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("No autorizado");
+    }
+
+    if (grade < 0 || grade > 5) {
+        throw new Error("La nota debe estar entre 0 y 5.0");
+    }
+
+    try {
+        const plan = await prisma.improvementPlan.findUnique({
+            where: { id: planId }
+        });
+
+        if (!plan) {
+            throw new Error("Plan de mejoramiento no encontrado");
+        }
+
+        if (session.user.role === "teacher" && plan.teacherId !== session.user.id) {
+            throw new Error("No autorizado a calificar este plan");
+        }
+
+        const isPastEnd = new Date() > new Date(plan.endDate);
+        if (!isPastEnd) {
+            throw new Error("No se puede calificar el plan hasta que finalice la fecha de entrega");
+        }
+
+        const updated = await prisma.improvementPlan.update({
+            where: { id: planId },
+            data: {
+                finalGrade: grade,
+                planScore: grade
+            }
+        });
+
+        (async () => {
+            try {
+                await sendPushNotification(plan.studentId, {
+                    title: "Plan Calificado",
+                    body: `Tu Plan de Mejoramiento ${plan.planNumber} ha sido calificado con una nota de ${grade.toFixed(1)}.`,
+                    url: "/dashboard/student/records"
+                });
+            } catch (err) {
+                console.error("Error sending push notification on plan grading:", err);
+            }
+        })();
+
+        return { success: true, data: updated };
+    } catch (error: any) {
+        console.error("Error al calificar plan:", error);
+        return { success: false, error: error.message || "Error al calificar el plan" };
+    }
+}
+
+export async function getAllImprovementPlansAdmin() {
+    const session = await getSession();
+    if (!session?.user || session.user.role !== "admin") {
+        throw new Error("No autorizado");
+    }
+
+    try {
+        const plans = await prisma.improvementPlan.findMany({
+            include: {
+                student: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        groupId: true,
+                        group: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        },
+                        profile: { select: { nombres: true, apellido: true, identificacion: true } }
+                    }
+                },
+                teacher: {
+                    select: {
+                        id: true,
+                        name: true,
+                        profile: { select: { nombres: true, apellido: true } }
+                    }
+                }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        const courses = await prisma.course.findMany({
+            select: {
+                id: true,
+                title: true,
+                groupId: true,
+                teacherId: true
+            }
+        });
+
+        const processedPlans = processExpiredPlans(plans);
+
+        const courseMap = new Map<string, string>();
+        courses.forEach(c => {
+            if (c.groupId && c.teacherId) {
+                courseMap.set(`${c.groupId}-${c.teacherId}`, c.title);
+            }
+        });
+
+        const mappedPlans = processedPlans.map(plan => {
+            const groupId = plan.student?.groupId || "";
+            const teacherId = plan.teacherId;
+            const subject = courseMap.get(`${groupId}-${teacherId}`) || "General / Otras asignaturas";
+            return {
+                ...plan,
+                subject
+            };
+        });
+
+        return { success: true, data: mappedPlans };
+    } catch (error: any) {
+        console.error("Error al obtener todos los planes para admin:", error);
+        return { success: false, error: error.message || "Error al obtener planes" };
+    }
+}
+
+

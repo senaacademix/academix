@@ -79,6 +79,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           isActive: false,
         },
         {
+          title: "Planes de Mejoramiento",
+          url: "/dashboard/admin/improvement-plans",
+          icon: ClipboardList,
+          isActive: false,
+        },
+        {
           title: "Programación de Horarios",
           url: "/dashboard/admin/schedule",
           icon: CalendarClock,

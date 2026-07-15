@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getScheduleEvents, createScheduleEvent, deleteScheduleEvent, deleteEventsBeforeDate } from "@/features/schedule/actions/eventActions";
+import { getScheduleEvents, createScheduleEvent, deleteScheduleEvent, deleteEventsBeforeDate, generateHolidaysForPeriod } from "@/features/schedule/actions/eventActions";
 import { Calendar as CalendarIcon, Trash2, Plus, CalendarDays, Loader2, Sparkles, Clock, AlignLeft, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { fromUTC } from "@/lib/dateUtils";
 import { toast } from "sonner";
@@ -26,7 +26,15 @@ import { cn } from "@/lib/utils";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay, startOfDay, isBefore, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
 
-export function ScheduleEventManagement({ isObserver = false }: { isObserver?: boolean }) {
+export function ScheduleEventManagement({ 
+    isObserver = false,
+    scheduleStartDate,
+    scheduleEndDate
+}: { 
+    isObserver?: boolean;
+    scheduleStartDate?: string | null;
+    scheduleEndDate?: string | null;
+}) {
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -108,6 +116,20 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
             return;
         }
 
+        if (scheduleStartDate && scheduleEndDate) {
+            const startLimit = new Date(scheduleStartDate);
+            const endLimit = new Date(scheduleEndDate);
+            startLimit.setHours(0, 0, 0, 0);
+            endLimit.setHours(23, 59, 59, 999);
+
+            const chosenDate = new Date(eventDate + "T12:00:00");
+
+            if (chosenDate < startLimit || chosenDate > endLimit) {
+                toast.error(`La fecha seleccionada debe estar dentro del periodo de programación del horario (${format(startLimit, "dd/MM/yyyy")} a ${format(endLimit, "dd/MM/yyyy")})`);
+                return;
+            }
+        }
+
         const start = new Date(eventDate + "T12:00:00");
         const end = new Date(eventDate + "T12:00:00");
 
@@ -168,6 +190,26 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
         setBulkDeleting(false);
     };
 
+    const [generatingHolidays, setGeneratingHolidays] = useState(false);
+
+    const handleGenerateHolidays = async () => {
+        setGeneratingHolidays(true);
+        try {
+            const res = await generateHolidaysForPeriod();
+            if (res.success) {
+                toast.success(res.message);
+                fetchEvents();
+            } else {
+                toast.error(res.error || "Ocurrió un error al generar los festivos");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Error de comunicación con el servidor");
+        } finally {
+            setGeneratingHolidays(false);
+        }
+    };
+
     // Count events before bulkDeleteDate for the warning preview
     const eventsBeforeCutoff = bulkDeleteDate
         ? events.filter(e => {
@@ -175,6 +217,14 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
             return evtDate <= new Date(bulkDeleteDate + "T23:59:59");
         }).length
         : 0;
+
+    const prevMonthDate = subMonths(currentMonth, 1);
+    const prevMonthEnd = endOfMonth(prevMonthDate);
+    const isPrevMonthDisabled = scheduleStartDate ? prevMonthEnd < new Date(scheduleStartDate) : false;
+
+    const nextMonthDate = addMonths(currentMonth, 1);
+    const nextMonthStart = startOfMonth(nextMonthDate);
+    const isNextMonthDisabled = scheduleEndDate ? nextMonthStart > new Date(scheduleEndDate) : false;
 
     return (
         <div className="w-full h-full flex flex-col bg-background overflow-hidden relative">
@@ -190,31 +240,66 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
                         <Sparkles className="w-4 h-4 text-white" />
                     </div>
                     <div>
-                        <h2 className="text-base font-black text-foreground leading-tight flex items-center gap-2">
-                            <span>Gestión de Eventos y Festivos</span>
-                        </h2>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-base font-black text-foreground leading-tight">
+                                Gestión de Eventos y Festivos
+                            </h2>
+                            {scheduleStartDate && scheduleEndDate && (
+                                <div className="flex items-center gap-1.5 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-md text-[9px] font-bold text-muted-foreground select-none">
+                                    <CalendarIcon className="w-3 h-3 text-primary" />
+                                    <span>Periodo:</span>
+                                    <span className="text-primary font-black">
+                                        {(() => {
+                                            const start = new Date(scheduleStartDate);
+                                            const end = new Date(scheduleEndDate);
+                                            const formatD = (d: Date) => {
+                                                if (isNaN(d.getTime())) return "N/A";
+                                                const date = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+                                                return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+                                            };
+                                            return `${formatD(start)} al ${formatD(end)}`;
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                         <p className="text-[11px] text-muted-foreground mt-0">
                             Configuración de eventos especiales, festivos y fechas no lectivas de la institución.
                         </p>
                     </div>
                 </div>
-                {/* Bulk delete button in header */}
                 {!isObserver && (
-                    <Button
-                        variant="destructive"
-                        size="sm"
-                        className="gap-2 rounded-xl shrink-0"
-                        onClick={() => setBulkDeleteOpen(true)}
-                    >
-                        <Trash2 className="w-4 h-4" />
-                        Eliminar desde fecha
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 rounded-xl border-emerald-500/30 hover:border-emerald-500/50 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 shrink-0 font-semibold"
+                            onClick={handleGenerateHolidays}
+                            disabled={generatingHolidays}
+                        >
+                            {generatingHolidays ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                            ) : (
+                                <Sparkles className="w-4 h-4 text-emerald-500" />
+                            )}
+                            Generar Festivos Colombia
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            className="gap-2 rounded-xl shrink-0"
+                            onClick={() => setBulkDeleteOpen(true)}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar desde fecha
+                        </Button>
+                    </div>
                 )}
             </div>
 
             {/* Main Content Scroll Area */}
             <div className="flex-1 flex overflow-hidden relative z-10">
-                <div className="max-w-[1600px] mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-1 gap-6 h-full flex-1">
+                <div className="w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-1 gap-6 h-full flex-1">
 
                     {/* Left Column: Form */}
                     {!isObserver && (
@@ -335,6 +420,14 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
                                                             setEventDate("");
                                                         }
                                                     }}
+                                                    disabled={(date) => {
+                                                        if (!scheduleStartDate || !scheduleEndDate) return false;
+                                                        const start = new Date(scheduleStartDate);
+                                                        const end = new Date(scheduleEndDate);
+                                                        start.setHours(0, 0, 0, 0);
+                                                        end.setHours(23, 59, 59, 999);
+                                                        return date < start || date > end;
+                                                    }}
                                                     initialFocus
                                                 />
                                             </PopoverContent>
@@ -373,6 +466,7 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
                                         size="icon"
                                         className="h-8 w-8 rounded-lg"
                                         onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                                        disabled={isPrevMonthDisabled}
                                         title="Mes anterior"
                                     >
                                         <ChevronLeft className="w-4 h-4" />
@@ -389,6 +483,7 @@ export function ScheduleEventManagement({ isObserver = false }: { isObserver?: b
                                         size="icon"
                                         className="h-8 w-8 rounded-lg"
                                         onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                                        disabled={isNextMonthDisabled}
                                         title="Mes siguiente"
                                     >
                                         <ChevronRight className="w-4 h-4" />

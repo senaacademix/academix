@@ -36,7 +36,6 @@ import { PeriodOverviewDialog } from "@/features/admin/components/PeriodOverview
 import { ScheduleAnalyticsDialog } from "./ScheduleAnalyticsDialog";
 import { TeacherAvailabilityView } from "@/features/schedule/components/TeacherAvailabilityView";
 import { TeacherQualificationsView } from "@/features/teacher/components/TeacherQualificationsView";
-import { ScheduleSettingsDialog } from "./ScheduleSettingsDialog";
 import { ScheduleToolbars } from "./ScheduleToolbars";
 
 import { LeftGroupsSidebar } from "./LeftGroupsSidebar";
@@ -198,8 +197,6 @@ export function SchedulePlanning({
         // Modals visibilities
         isAnalyticsModalOpen,
         setIsAnalyticsModalOpen,
-        isSettingsModalOpen,
-        setIsSettingsModalOpen,
         publishConfirmOpen,
         setPublishConfirmOpen,
 
@@ -718,6 +715,25 @@ export function SchedulePlanning({
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {scheduleStartDate && scheduleEndDate && (
+                        <div className="flex items-center gap-1.5 bg-primary/5 border border-primary/10 px-2.5 py-1 rounded-md text-[10px] font-bold text-muted-foreground ml-auto shrink-0 select-none">
+                            <Calendar className="w-3.5 h-3.5 text-primary" />
+                            <span>Periodo:</span>
+                            <span className="text-primary font-black">
+                                {(() => {
+                                    const start = new Date(scheduleStartDate);
+                                    const end = new Date(scheduleEndDate);
+                                    const formatD = (d: Date) => {
+                                        if (isNaN(d.getTime())) return "N/A";
+                                        const date = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+                                        return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+                                    };
+                                    return `${formatD(start)} al ${formatD(end)}`;
+                                })()}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Row 2: Actions */}
@@ -786,7 +802,6 @@ export function SchedulePlanning({
                         setPeriodOverviewOpen={setPeriodOverviewOpen}
 
                         setIsAnalyticsModalOpen={setIsAnalyticsModalOpen}
-                        setIsSettingsModalOpen={setIsSettingsModalOpen}
                         schedulesPublished={schedulesPublished}
                         setPublishConfirmOpen={setPublishConfirmOpen}
                         isDirty={isDirty}
@@ -1852,19 +1867,7 @@ export function SchedulePlanning({
                 programs={localPrograms}
             />
 
-            <ScheduleSettingsDialog
-                open={isSettingsModalOpen}
-                onOpenChange={setIsSettingsModalOpen}
-                scheduleTitle={scheduleTitle}
-                setScheduleTitle={setScheduleTitle}
-                scheduleStartDate={scheduleStartDate}
-                setScheduleStartDate={setScheduleStartDate}
-                scheduleEndDate={scheduleEndDate}
-                setScheduleEndDate={setScheduleEndDate}
-                maxTeacherHours={maxTeacherHours}
-                setMaxTeacherHours={setMaxTeacherHours}
-                triggerSettingsChange={triggerSettingsChange}
-            />
+
 
             {/* Admin Editing Dialogs */}
             <Dialog open={!!editingTeacherAvailabilityId} onOpenChange={(open) => !open && setEditingTeacherAvailabilityId(null)}>
