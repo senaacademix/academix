@@ -34,9 +34,15 @@ async function main() {
     process.exit(1);
   }
 
+  const identificacion = await question("Número de Identificación: ");
+  if (!identificacion.trim()) {
+    console.error("Error: La identificación es obligatoria.");
+    process.exit(1);
+  }
+
   const emailNorm = email.trim().toLowerCase();
 
-  // Check duplicate
+  // Check duplicate email
   const existing = await prisma.user.findUnique({
     where: { email: emailNorm },
   });
@@ -76,7 +82,7 @@ async function main() {
     await tx.profile.create({
       data: {
         userId,
-        identificacion: "ADMIN-" + Date.now().toString().slice(-6),
+        identificacion: identificacion.trim(),
         nombres,
         apellido,
         telefono: null,
