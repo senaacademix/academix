@@ -596,12 +596,62 @@ export async function getSystemSettingsAction() {
             }
         });
     }
-return {
-        ...settings,
+    let startDate = settings.scheduleStartDate;
+    let endDate = settings.scheduleEndDate;
+
+    if (!startDate || !endDate) {
+        const programs = await prisma.program.findMany({
+            where: {
+                OR: [
+                    { startDate: { not: null } },
+                    { endDate: { not: null } }
+                ]
+            },
+            select: {
+                startDate: true,
+                endDate: true
+            }
+        });
+
+        if (programs.length > 0) {
+            const startDates = programs.map(p => p.startDate).filter(Boolean) as Date[];
+            const endDates = programs.map(p => p.endDate).filter(Boolean) as Date[];
+            
+            let updated = false;
+            if (startDates.length > 0 && !startDate) {
+                startDate = new Date(Math.min(...startDates.map(d => d.getTime())));
+                updated = true;
+            }
+            if (endDates.length > 0 && !endDate) {
+                endDate = new Date(Math.max(...endDates.map(d => d.getTime())));
+                updated = true;
+            }
+            
+            if (updated) {
+                settings = await prisma.systemSettings.update({
+                    where: { id: "settings" },
+                    data: {
+                        scheduleStartDate: startDate,
+                        scheduleEndDate: endDate
+                    }
+                });
+            }
+        }
+    }
+
+    return {
+        id: settings.id,
         institutionName: settings.institutionName,
         institutionLogo: settings.institutionLogo,
         institutionHeroImage: settings.institutionHeroImage,
-        footerText: settings.footerText
+        footerText: settings.footerText,
+        scheduleTitle: settings.scheduleTitle,
+        scheduleStartDate: settings.scheduleStartDate,
+        scheduleEndDate: settings.scheduleEndDate,
+        maxTeacherHours: settings.maxTeacherHours,
+        studentDailyLimit: settings.studentDailyLimit,
+        limitAttendanceToCurrentWeek: settings.limitAttendanceToCurrentWeek,
+        schedulesPublished: settings.schedulesPublished,
     };
 }
 

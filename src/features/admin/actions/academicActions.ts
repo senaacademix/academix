@@ -17,6 +17,18 @@ async function requireAdmin() {
     }
     return session;
 }
+/** Run async tasks with bounded concurrency to avoid exhausting the DB connection pool. */
+async function runInBatches<T>(items: T[], fn: (item: T) => Promise<void>, concurrency = 5): Promise<void> {
+    let index = 0;
+    async function worker() {
+        while (index < items.length) {
+            const current = items[index++];
+            await fn(current);
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+}
+
 
 async function requireAdminOrObserver() {
     const session = await getSession();
@@ -817,11 +829,17 @@ export async function registerStudentsBulkAction(groupId: string, list: StudentI
     let successCount = 0;
     const errors: string[] = [];
 
-    for (const student of finalImportList) {
-        try {
-            const studentId = crypto.randomUUID();
+    const hashedStudents = await Promise.all(
+        finalImportList.map(async (student) => {
             const password = student.identificacion;
             const hashedPassword = await hashPassword(password);
+            return { student, hashedPassword };
+        })
+    );
+
+    await runInBatches(hashedStudents, async ({ student, hashedPassword }) => {
+        try {
+            const studentId = crypto.randomUUID();
 
             await prisma.$transaction(async (tx) => {
                 await tx.user.create({
@@ -859,7 +877,7 @@ export async function registerStudentsBulkAction(groupId: string, list: StudentI
         } catch (e: any) {
             errors.push(`Error registrando a ${student.nombres} ${student.apellido}: ${e.message}`);
         }
-    }
+    });
 
     const { auditLogger } = await import("../services/auditLogger");
     await auditLogger.log({
@@ -1147,11 +1165,17 @@ export async function registerTeachersBulkAction(programId: string | null | unde
     let successCount = 0;
     const errors: string[] = [];
 
-    for (const teacher of finalImportList) {
-        try {
-            const teacherId = crypto.randomUUID();
+    const hashedTeachers = await Promise.all(
+        finalImportList.map(async (teacher) => {
             const password = teacher.identificacion;
             const hashedPassword = await hashPassword(password);
+            return { teacher, hashedPassword };
+        })
+    );
+
+    await runInBatches(hashedTeachers, async ({ teacher, hashedPassword }) => {
+        try {
+            const teacherId = crypto.randomUUID();
 
             await prisma.$transaction(async (tx) => {
                 await tx.user.create({
@@ -1193,7 +1217,7 @@ export async function registerTeachersBulkAction(programId: string | null | unde
         } catch (e: any) {
             errors.push(`Error registrando a ${teacher.nombres} ${teacher.apellido}: ${e.message}`);
         }
-    }
+    });
 
     const { auditLogger } = await import("../services/auditLogger");
     await auditLogger.log({
@@ -1969,3 +1993,119 @@ export async function saveScheduleBatchAction(pendingChanges: any[]) {
     revalidatePath("/dashboard/admin/courses");
     return { success: true };
 }
+
+export async function importPeriodsAndCoursesAction(programId: string, data: any[]) {
+    const session = await requireAdmin();
+    if (!programId) throw new Error("El programa es obligatorio");
+    if (!data || data.length === 0) throw new Error("Los datos de importación están vacíos");
+
+    let successPeriods = 0;
+    let successCourses = 0;
+
+    await Promise.all(
+        data.map(async (periodItem) => {
+            if (!periodItem.name) return;
+            
+            // 1. Create period
+            const period = await prisma.period.create({
+                data: {
+                    name: periodItem.name,
+                    description: periodItem.description || null,
+                    esEspecial: periodItem.esEspecial ?? false,
+                    programId: programId,
+                }
+            });
+            successPeriods++;
+
+            // 2. Create courses if any
+            if (Array.isArray(periodItem.courses)) {
+                await Promise.all(
+                    periodItem.courses.map(async (courseItem: any) => {
+                        if (!courseItem.title) return;
+                        await prisma.course.create({
+                            data: {
+                                title: courseItem.title,
+                                description: courseItem.description || null,
+                                externalUrl: courseItem.externalUrl || null,
+                                weeklyHours: courseItem.weeklyHours ? parseFloat(courseItem.weeklyHours) : 0,
+                                badge: courseItem.badge || null,
+                                badgeColor: courseItem.badgeColor || null,
+                                periodId: period.id,
+                            }
+                        });
+                        successCourses++;
+                    })
+                );
+            }
+        })
+    );
+
+    revalidatePath("/dashboard/admin/courses");
+    return { success: true, successPeriods, successCourses };
+}
+
+export async function importGroupsAndStudentsAction(programId: string, data: any[]) {
+    const session = await requireAdmin();
+    if (!programId) throw new Error("El programa es obligatorio");
+    if (!data || data.length === 0) throw new Error("Los datos de importación están vacíos");
+
+    let successGroups = 0;
+    let successStudents = 0;
+    const errors: string[] = [];
+
+    // Let's resolve existing periods in this program to map periodName to periodId
+    const programPeriods = await prisma.period.findMany({
+        where: { programId },
+        select: { id: true, name: true }
+    });
+
+    const periodMap = new Map(programPeriods.map(p => [p.name.toLowerCase().trim(), p.id]));
+
+    await runInBatches(data, async (groupItem) => {
+        if (!groupItem.name) return;
+
+        let periodId = null;
+        if (groupItem.periodName) {
+            periodId = periodMap.get(groupItem.periodName.toLowerCase().trim()) || null;
+        }
+
+        try {
+            // Create group
+            const group = await prisma.group.create({
+                data: {
+                    name: groupItem.name,
+                    description: groupItem.description || null,
+                    startTime: groupItem.startTime || "07:00",
+                    endTime: groupItem.endTime || "13:00",
+                    categoria: groupItem.categoria || "LECTIVA",
+                    programId: programId,
+                    periodId: periodId,
+                }
+            });
+            successGroups++;
+
+            // Create students under this group if any
+            if (Array.isArray(groupItem.students) && groupItem.students.length > 0) {
+                const studentRows = groupItem.students.map((s: any) => ({
+                    identificacion: s.identificacion,
+                    email: s.email,
+                    nombres: s.nombres || s.name || "Estudiante",
+                    apellido: s.apellido || "",
+                    telefono: s.telefono,
+                }));
+
+                const result = await registerStudentsBulkAction(group.id, studentRows);
+                successStudents += result.successCount;
+                if (result.errors && result.errors.length > 0) {
+                    errors.push(`Grupo ${groupItem.name}: ${result.errors.join(", ")}`);
+                }
+            }
+        } catch (err: any) {
+            errors.push(`Error al crear grupo ${groupItem.name}: ${err.message}`);
+        }
+    }, 3);
+
+    revalidatePath("/dashboard/admin/courses");
+    return { success: true, successGroups, successStudents, errors };
+}
+

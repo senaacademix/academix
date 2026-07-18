@@ -21,41 +21,42 @@ export async function updateSettingsAction(formData: FormData) {
         throw new Error("Unauthorized");
     }
 
-    const limitRaw = formData.get("studentDailyLimit");
-    const studentDailyLimit = limitRaw ? parseInt(limitRaw as string, 10) : null;
-
-    const limitWeekRaw = formData.get("limitAttendanceToCurrentWeek");
-    const limitAttendanceToCurrentWeek = limitWeekRaw === "true";
-
-    const maxHoursRaw = formData.get("maxTeacherHours");
-    const maxTeacherHours = maxHoursRaw ? parseInt(maxHoursRaw as string, 10) : 40;
-
-    const scheduleStartDateRaw = formData.get("scheduleStartDate");
-    const scheduleStartDate = scheduleStartDateRaw ? new Date(scheduleStartDateRaw as string + "T12:00:00") : null;
-
-    const scheduleEndDateRaw = formData.get("scheduleEndDate");
-    const scheduleEndDate = scheduleEndDateRaw ? new Date(scheduleEndDateRaw as string + "T12:00:00") : null;
-
-    const rawData = {
-        institutionName: formData.get("institutionName") as string,
-        institutionLogo: formData.get("institutionLogo") as string,
-        institutionHeroImage: formData.get("institutionHeroImage") as string,
-        footerText: formData.get("footerText") as string,
-        studentDailyLimit: studentDailyLimit !== null && !isNaN(studentDailyLimit) ? studentDailyLimit : null,
-        limitAttendanceToCurrentWeek: limitAttendanceToCurrentWeek,
-        scheduleTitle: formData.get("scheduleTitle") as string || "Horario Académico",
-        scheduleStartDate: scheduleStartDate,
-        scheduleEndDate: scheduleEndDate,
-        maxTeacherHours: maxTeacherHours,
-    };
-
     const data: any = {};
-    for (const [key, value] of Object.entries(rawData)) {
-        if (value !== undefined && value !== null) {
-            data[key] = value;
-        } else if (value === null && (key === "scheduleStartDate" || key === "scheduleEndDate")) {
-            data[key] = null;
-        }
+
+    if (formData.has("institutionName")) {
+        data.institutionName = formData.get("institutionName") as string;
+    }
+    if (formData.has("institutionLogo")) {
+        data.institutionLogo = formData.get("institutionLogo") as string;
+    }
+    if (formData.has("institutionHeroImage")) {
+        data.institutionHeroImage = formData.get("institutionHeroImage") as string;
+    }
+    if (formData.has("footerText")) {
+        data.footerText = formData.get("footerText") as string;
+    }
+    if (formData.has("studentDailyLimit")) {
+        const limitRaw = formData.get("studentDailyLimit");
+        data.studentDailyLimit = limitRaw ? parseInt(limitRaw as string, 10) : null;
+    }
+    if (formData.has("limitAttendanceToCurrentWeek")) {
+        const limitWeekRaw = formData.get("limitAttendanceToCurrentWeek");
+        data.limitAttendanceToCurrentWeek = limitWeekRaw === "true";
+    }
+    if (formData.has("scheduleTitle")) {
+        data.scheduleTitle = formData.get("scheduleTitle") as string || "Horario Académico";
+    }
+    if (formData.has("scheduleStartDate")) {
+        const scheduleStartDateRaw = formData.get("scheduleStartDate");
+        data.scheduleStartDate = scheduleStartDateRaw ? new Date(scheduleStartDateRaw as string + "T12:00:00") : null;
+    }
+    if (formData.has("scheduleEndDate")) {
+        const scheduleEndDateRaw = formData.get("scheduleEndDate");
+        data.scheduleEndDate = scheduleEndDateRaw ? new Date(scheduleEndDateRaw as string + "T12:00:00") : null;
+    }
+    if (formData.has("maxTeacherHours")) {
+        const maxHoursRaw = formData.get("maxTeacherHours");
+        data.maxTeacherHours = maxHoursRaw ? parseInt(maxHoursRaw as string, 10) : 40;
     }
 
     const result = await settingsService.updateSettings(data);

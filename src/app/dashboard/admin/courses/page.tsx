@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AcademicManagement } from "@/features/admin/components/AcademicManagement";
-import { getAllCoursesAdminAction, getAllUsersAction } from "@/app/admin-actions";
+import { getAllCoursesAdminAction, getAllUsersAction, getSystemSettingsAction } from "@/app/admin-actions";
 
 export default async function AdminCoursesPage() {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -11,9 +11,10 @@ export default async function AdminCoursesPage() {
         redirect("/dashboard/student");
     }
 
-    const [{ courses, total }, { users: allUsers }] = await Promise.all([
+    const [{ courses, total }, { users: allUsers }, settings] = await Promise.all([
         getAllCoursesAdminAction({ limit: 100 }),
-        getAllUsersAction({ role: "teacher", limit: 500 })
+        getAllUsersAction({ role: "teacher", limit: 500 }),
+        getSystemSettingsAction()
     ]);
 
     // Map courses to match UI expected types
@@ -37,6 +38,7 @@ export default async function AdminCoursesPage() {
                 teachers={mappedTeachers}
                 totalCount={total}
                 isObserver={false}
+                settings={settings}
             />
         </div>
     );

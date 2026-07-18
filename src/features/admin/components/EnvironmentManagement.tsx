@@ -2,7 +2,7 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +53,8 @@ import {
  Projector,
  ChevronDown,
  ChevronUp,
+ Upload,
+ Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -60,6 +62,7 @@ import {
  createEnvironmentAction,
  updateEnvironmentAction,
  deleteEnvironmentAction,
+ importEnvironmentsAction,
 } from "@/features/admin/actions/environmentActions";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -124,7 +127,23 @@ const emptyForm = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function EnvironmentManagement({ initialEnvironments, programId, onActionComplete, isObserver = false }: EnvironmentManagementProps) {
- const [environments, setEnvironments] = useState<TrainingEnvironment[]>(initialEnvironments);
+  const [environments, setEnvironments] = useState<TrainingEnvironment[]>(initialEnvironments);
+  const [progressModal, setProgressModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    progress: number;
+    currentCount: number;
+    totalCount: number;
+    type: "import" | "export";
+  }>({
+    isOpen: false,
+    title: "",
+    progress: 0,
+    currentCount: 0,
+    totalCount: 0,
+    type: "import",
+  });
+  const cancelRef = useRef<boolean>(false);
 
  useEffect(() => {
   setEnvironments(initialEnvironments);
@@ -146,6 +165,121 @@ export function EnvironmentManagement({ initialEnvironments, programId, onAction
  const [deleteId, setDeleteId] = useState<string | null>(null);
 
  const [isPending, startTransition] = useTransition();
+
+  const simulateExportProgress = async (title: string, onComplete: () => void) => {
+    cancelRef.current = false;
+    setProgressModal({
+      isOpen: true,
+      title,
+      progress: 0,
+      currentCount: 0,
+      totalCount: 100,
+      type: "export",
+    });
+
+    for (let p = 0; p <= 100; p += 10) {
+      if (cancelRef.current) {
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+        toast.warning("Exportación cancelada");
+        return;
+      }
+      setProgressModal(prev => ({ ...prev, progress: p }));
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    setProgressModal(prev => ({ ...prev, isOpen: false }));
+    onComplete();
+  };
+
+  const handleExportJSON = () => {
+    simulateExportProgress("Generando archivo de ambientes de formación...", () => {
+      try {
+        const dataToExport = environments.map((e) => ({
+          name: e.name,
+          capacity: e.capacity,
+          location: e.location,
+          resources: e.resources,
+          description: e.description,
+          isActive: e.isActive,
+        }));
+        const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+          JSON.stringify(dataToExport, null, 2)
+        )}`;
+        const downloadAnchor = document.createElement("a");
+        downloadAnchor.setAttribute("href", jsonString);
+        downloadAnchor.setAttribute("download", `Ambientes_de_Formacion.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        toast.success("Ambientes exportados con éxito");
+      } catch (err: any) {
+        toast.error("Error al exportar: " + err.message);
+      }
+    });
+  };
+
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = JSON.parse(evt.target?.result as string);
+        if (!Array.isArray(data)) {
+          toast.error("El archivo JSON debe contener un arreglo de ambientes");
+          return;
+        }
+
+        cancelRef.current = false;
+        setProgressModal({
+          isOpen: true,
+          title: "Importando ambientes de formación...",
+          progress: 0,
+          currentCount: 0,
+          totalCount: data.length,
+          type: "import",
+        });
+
+        const interval = setInterval(() => {
+          setProgressModal(prev => {
+            if (prev.progress >= 90) {
+              clearInterval(interval);
+              return prev;
+            }
+            return { ...prev, progress: prev.progress + 10 };
+          });
+        }, 50);
+
+        try {
+          const res = await importEnvironmentsAction(programId, data);
+          clearInterval(interval);
+
+          if (cancelRef.current) {
+            setProgressModal(prev => ({ ...prev, isOpen: false }));
+            toast.warning("Importación cancelada");
+            return;
+          }
+
+          setProgressModal(prev => ({ ...prev, progress: 100, currentCount: data.length }));
+          await new Promise(resolve => setTimeout(resolve, 150));
+          setProgressModal(prev => ({ ...prev, isOpen: false }));
+
+          if (res.success) {
+            toast.success(`Importación exitosa: ${res.successCount} ambientes creados`);
+          }
+          onActionComplete?.();
+        } catch (err: any) {
+          clearInterval(interval);
+          setProgressModal(prev => ({ ...prev, isOpen: false }));
+          toast.error(err.message || "Error al importar ambientes");
+        }
+      } catch (err: any) {
+        toast.error("Error al parsear el JSON: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
  // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -285,16 +419,36 @@ export function EnvironmentManagement({ initialEnvironments, programId, onAction
  </p>
  </div>
  </div>
- {!isObserver && (
-	  <Button
-	  id="btn-create-environment"
-	  onClick={openCreate}
-	  className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 text-white border-0"
-	  >
-	  <Plus className="w-4 h-4" />
-	  Nuevo Ambiente
-	  </Button>
-  )}
+  <div className="flex flex-wrap items-center gap-2">
+    <Button onClick={handleExportJSON} variant="outline" className="gap-2 border-blue-500/20 text-blue-600 hover:text-blue-700 hover:bg-blue-500/5 dark:text-blue-400">
+      <Download className="w-4 h-4" />
+      Exportar JSON
+    </Button>
+    {!isObserver && (
+      <>
+        <div className="relative">
+          <input
+            type="file"
+            accept=".json"
+            onChange={handleImportJSON}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+          <Button variant="outline" className="gap-2 border-amber-500/20 text-amber-600 hover:text-amber-700 hover:bg-amber-500/5 dark:text-amber-400">
+            <Upload className="w-4 h-4" />
+            Importar JSON
+          </Button>
+        </div>
+        <Button
+          id="btn-create-environment"
+          onClick={openCreate}
+          className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 text-white border-0"
+        >
+          <Plus className="w-4 h-4" />
+          Nuevo Ambiente
+        </Button>
+      </>
+    )}
+  </div>
  </div>
 
  {/* ── Stats Strip ── */}
@@ -826,6 +980,45 @@ export function EnvironmentManagement({ initialEnvironments, programId, onAction
  </AlertDialogFooter>
  </AlertDialogContent>
  </AlertDialog>
- </div>
- );
+
+ <Dialog open={progressModal.isOpen} onOpenChange={() => {}}>
+    <DialogContent className="max-w-[400px] pointer-events-auto" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+      <DialogHeader>
+        <DialogTitle className="text-base font-bold flex items-center gap-2">
+          {progressModal.type === "import" ? "Procesando Importación" : "Generando Exportación"}
+        </DialogTitle>
+        <DialogDescription className="text-xs">
+          {progressModal.title}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="py-4 space-y-3">
+        <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+          <div 
+            className="bg-primary h-3 rounded-full transition-all duration-300 ease-out" 
+            style={{ width: `${progressModal.progress}%` }}
+          ></div>
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{progressModal.progress}% completado</span>
+          {progressModal.type === "import" && (
+            <span>{progressModal.currentCount} de {progressModal.totalCount}</span>
+          )}
+        </div>
+      </div>
+      <div className="flex justify-end pt-2 border-t border-border/20">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => {
+            cancelRef.current = true;
+          }}
+          className="text-xs h-8"
+        >
+          Cancelar
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
+  </div>
+  );
 }

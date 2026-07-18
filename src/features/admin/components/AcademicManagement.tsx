@@ -2,7 +2,7 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ import {
     ChevronRight, Layers, Clock, X, Info, GraduationCap, ArrowLeft, ArrowUpRight, GripVertical,
     AlertCircle, Building, Code, Database, Binary, MessageSquare, Terminal,
     ShieldCheck, Cloud, Rocket, NotebookTabs, Lock as LockIcon, Download,
-    Activity
+    Activity, Upload
 } from "lucide-react";
 import {
     DndContext,
@@ -104,7 +104,9 @@ import {
     updateGroupCourseScheduleAction,
     deleteGroupCourseAction,
     checkScheduleConflictsAction,
-    updateTeacherAction
+    updateTeacherAction,
+    importPeriodsAndCoursesAction,
+    importGroupsAndStudentsAction
 } from "@/features/admin/actions/academicActions";
 import { createCourseAction, updateCourseAction } from "@/features/teacher/actions/courseActions";
 import { 
@@ -315,6 +317,7 @@ interface AcademicManagementProps {
     teachers: Teacher[];
     totalCount: number;
     isObserver?: boolean;
+    settings?: any;
 }
 
 interface SortableCourseItemProps {
@@ -532,12 +535,28 @@ function SortablePeriodCard({
     );
 }
 
-export function AcademicManagement({ initialCourses, teachers, totalCount, isObserver = false }: AcademicManagementProps) {
+export function AcademicManagement({ initialCourses, teachers, totalCount, isObserver = false, settings }: AcademicManagementProps) {
     const [programs, setPrograms] = useState<Program[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [teachersList, setTeachersList] = useState<Teacher[]>(teachers);
     const [subTab, setSubTab] = useState<string>("overview");
     const [isPending, startTransition] = useTransition();
+    const [progressModal, setProgressModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        progress: number;
+        currentCount: number;
+        totalCount: number;
+        type: "import" | "export";
+    }>({
+        isOpen: false,
+        title: "",
+        progress: 0,
+        currentCount: 0,
+        totalCount: 0,
+        type: "import",
+    });
+    const cancelRef = useRef<boolean>(false);
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1188,27 +1207,16 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
 
         startTransition(async () => {
             try {
-                const sDate = programStartDate ? new Date(programStartDate + "T12:00:00") : null;
-                const eDate = programEndDate ? new Date(programEndDate + "T12:00:00") : null;
-
                 if (programToEdit) {
                     await updateProgramAction(programToEdit.id, {
                         name: programName,
-                        description: programDescription,
-                        startDate: sDate,
-                        endDate: eDate,
-                        scheduleTitle: programScheduleTitle || null,
-                        maxTeacherHours: programMaxHours
+                        description: programDescription
                     });
                     toast.success("Programa de formación actualizado");
                 } else {
                     await createProgramAction({
                         name: programName,
-                        description: programDescription,
-                        startDate: sDate,
-                        endDate: eDate,
-                        scheduleTitle: programScheduleTitle || null,
-                        maxTeacherHours: programMaxHours
+                        description: programDescription
                     });
                     toast.success("Programa de formación creado");
                 }
@@ -1563,6 +1571,327 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                 toast.error(error.message || "Error al registrar estudiante");
             }
         });
+    };
+    const simulateExportProgress = async (title: string, onComplete: () => void) => {
+        cancelRef.current = false;
+        setProgressModal({
+            isOpen: true,
+            title,
+            progress: 0,
+            currentCount: 0,
+            totalCount: 100,
+            type: "export",
+        });
+
+        for (let p = 0; p <= 100; p += 10) {
+            if (cancelRef.current) {
+                setProgressModal(prev => ({ ...prev, isOpen: false }));
+                toast.warning("Exportación cancelada");
+                return;
+            }
+            setProgressModal(prev => ({ ...prev, progress: p }));
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+        onComplete();
+    };
+
+    const handleExportPeriodsJSON = () => {
+        if (!selectedProgram) return;
+        simulateExportProgress("Generando archivo de periodos y materias...", () => {
+            try {
+                const dataToExport = selectedProgram.periods.map(period => ({
+                    name: period.name,
+                    description: period.description,
+                    esEspecial: period.esEspecial,
+                    courses: period.courses.map(course => ({
+                        title: course.title,
+                        description: course.description,
+                        externalUrl: course.externalUrl,
+                        weeklyHours: course.weeklyHours,
+                        badge: course.badge,
+                        badgeColor: course.badgeColor,
+                    }))
+                }));
+                const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+                    JSON.stringify(dataToExport, null, 2)
+                )}`;
+                const downloadAnchor = document.createElement("a");
+                downloadAnchor.setAttribute("href", jsonString);
+                downloadAnchor.setAttribute("download", `Periodos_y_Materias_${selectedProgram.name.replace(/\s+/g, "_")}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                toast.success("Periodos y materias exportados con éxito");
+            } catch (err: any) {
+                toast.error("Error al exportar: " + err.message);
+            }
+        });
+    };
+
+    const handleImportPeriodsJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedProgram) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = JSON.parse(evt.target?.result as string);
+                if (!Array.isArray(data)) {
+                    toast.error("El archivo JSON debe contener un arreglo de periodos");
+                    return;
+                }
+
+                cancelRef.current = false;
+                setProgressModal({
+                    isOpen: true,
+                    title: "Importando periodos y materias...",
+                    progress: 0,
+                    currentCount: 0,
+                    totalCount: data.length,
+                    type: "import",
+                });
+
+                const interval = setInterval(() => {
+                    setProgressModal(prev => {
+                        if (prev.progress >= 90) {
+                            clearInterval(interval);
+                            return prev;
+                        }
+                        return { ...prev, progress: prev.progress + 10 };
+                    });
+                }, 50);
+
+                try {
+                    const res = await importPeriodsAndCoursesAction(selectedProgram.id, data);
+                    clearInterval(interval);
+
+                    if (cancelRef.current) {
+                        setProgressModal(prev => ({ ...prev, isOpen: false }));
+                        toast.warning("Importación cancelada");
+                        return;
+                    }
+
+                    setProgressModal(prev => ({ ...prev, progress: 100, currentCount: data.length }));
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+
+                    if (res.success) {
+                        toast.success(`Importación exitosa: ${res.successPeriods} periodos y ${res.successCourses} materias creados`);
+                    }
+                    await refreshAll();
+                } catch (err: any) {
+                    clearInterval(interval);
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+                    toast.error(err.message || "Error al importar periodos y materias");
+                }
+            } catch (err: any) {
+                toast.error("Error al parsear el JSON: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+    };
+
+    const handleExportGroupsJSON = () => {
+        if (!selectedProgram) return;
+        simulateExportProgress("Generando archivo de grupos y alumnos...", () => {
+            try {
+                const dataToExport = selectedProgram.groups.map(group => ({
+                    name: group.name,
+                    description: group.description,
+                    startTime: group.startTime,
+                    endTime: group.endTime,
+                    categoria: group.categoria,
+                    periodName: group.period?.name || null,
+                    students: group.students.map(student => ({
+                        identificacion: student.profile?.identificacion,
+                        nombres: student.profile?.nombres || student.name.split(" ")[0] || "Estudiante",
+                        apellido: student.profile?.apellido || student.name.split(" ").slice(1).join(" ") || "",
+                        email: student.email,
+                        telefono: student.profile?.telefono || null
+                    }))
+                }));
+                const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+                    JSON.stringify(dataToExport, null, 2)
+                )}`;
+                const downloadAnchor = document.createElement("a");
+                downloadAnchor.setAttribute("href", jsonString);
+                downloadAnchor.setAttribute("download", `Grupos_y_Alumnos_${selectedProgram.name.replace(/\s+/g, "_")}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                toast.success("Grupos y alumnos exportados con éxito");
+            } catch (err: any) {
+                toast.error("Error al exportar: " + err.message);
+            }
+        });
+    };
+
+    const handleImportGroupsJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedProgram) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = JSON.parse(evt.target?.result as string);
+                if (!Array.isArray(data)) {
+                    toast.error("El archivo JSON debe contener un arreglo de grupos");
+                    return;
+                }
+
+                cancelRef.current = false;
+                setProgressModal({
+                    isOpen: true,
+                    title: "Importando grupos y alumnos...",
+                    progress: 0,
+                    currentCount: 0,
+                    totalCount: data.length,
+                    type: "import",
+                });
+
+                const interval = setInterval(() => {
+                    setProgressModal(prev => {
+                        if (prev.progress >= 90) {
+                            clearInterval(interval);
+                            return prev;
+                        }
+                        return { ...prev, progress: prev.progress + 10 };
+                    });
+                }, 50);
+
+                try {
+                    const res = await importGroupsAndStudentsAction(selectedProgram.id, data);
+                    clearInterval(interval);
+
+                    if (cancelRef.current) {
+                        setProgressModal(prev => ({ ...prev, isOpen: false }));
+                        toast.warning("Importación cancelada");
+                        return;
+                    }
+
+                    setProgressModal(prev => ({ ...prev, progress: 100, currentCount: data.length }));
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+
+                    if (res.success) {
+                        if (res.errors && res.errors.length > 0) {
+                            toast.warning(`Grupos importados (${res.successGroups}), pero con algunos problemas en estudiantes: \n${res.errors.slice(0, 5).join("\n")}`);
+                        } else {
+                            toast.success(`Importación exitosa: ${res.successGroups} grupos y ${res.successStudents} estudiantes creados`);
+                        }
+                    }
+                    await refreshAll();
+                } catch (err: any) {
+                    clearInterval(interval);
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+                    toast.error(err.message || "Error al importar grupos y alumnos");
+                }
+            } catch (err: any) {
+                toast.error("Error al parsear el JSON: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+    };
+
+    const handleExportTeachersJSON = () => {
+        if (!selectedProgram) return;
+        simulateExportProgress("Generando archivo de profesores...", () => {
+            try {
+                const dataToExport = selectedProgram.teachers.map(teacher => ({
+                    identificacion: teacher.profile?.identificacion,
+                    nombres: teacher.profile?.nombres || teacher.name?.split(" ")[0] || "Profesor",
+                    apellido: teacher.profile?.apellido || teacher.name?.split(" ").slice(1).join(" ") || "",
+                    email: teacher.email,
+                    telefono: teacher.profile?.telefono || null
+                }));
+                const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+                    JSON.stringify(dataToExport, null, 2)
+                )}`;
+                const downloadAnchor = document.createElement("a");
+                downloadAnchor.setAttribute("href", jsonString);
+                downloadAnchor.setAttribute("download", `Profesores_${selectedProgram.name.replace(/\s+/g, "_")}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                toast.success("Profesores exportados con éxito");
+            } catch (err: any) {
+                toast.error("Error al exportar: " + err.message);
+            }
+        });
+    };
+
+    const handleImportTeachersJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedProgram) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = JSON.parse(evt.target?.result as string);
+                if (!Array.isArray(data)) {
+                    toast.error("El archivo JSON debe contener un arreglo de profesores");
+                    return;
+                }
+                const list = data.map(item => ({
+                    identificacion: item.identificacion,
+                    nombres: item.nombres || item.name || "Profesor",
+                    apellido: item.apellido || "",
+                    email: item.email,
+                    telefono: item.telefono || undefined
+                }));
+
+                cancelRef.current = false;
+                setProgressModal({
+                    isOpen: true,
+                    title: "Importando profesores...",
+                    progress: 0,
+                    currentCount: 0,
+                    totalCount: list.length,
+                    type: "import",
+                });
+
+                const interval = setInterval(() => {
+                    setProgressModal(prev => {
+                        if (prev.progress >= 90) {
+                            clearInterval(interval);
+                            return prev;
+                        }
+                        return { ...prev, progress: prev.progress + 10 };
+                    });
+                }, 50);
+
+                try {
+                    const res = await registerTeachersBulkAction(selectedProgram.id, list);
+                    clearInterval(interval);
+
+                    if (cancelRef.current) {
+                        setProgressModal(prev => ({ ...prev, isOpen: false }));
+                        toast.warning("Importación cancelada");
+                        return;
+                    }
+
+                    setProgressModal(prev => ({ ...prev, progress: 100, currentCount: list.length }));
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+
+                    if (res.errors && res.errors.length > 0) {
+                        toast.warning(`Profesores registrados: ${res.successCount}. Errores/Omitidos: \n${res.errors.slice(0, 5).join("\n")}`);
+                    } else {
+                        toast.success(`Importación exitosa: ${res.successCount} profesores registrados`);
+                    }
+                    await refreshAll();
+                } catch (err: any) {
+                    clearInterval(interval);
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+                    toast.error(err.message || "Error al importar profesores");
+                }
+            } catch (err: any) {
+                toast.error("Error al parsear el JSON: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
     };
 
     const handleDownloadTemplate = () => {
@@ -2251,8 +2580,10 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                 }
 
                                 // 5. Program time progress
-                                const startDate = selectedProgram.startDate ? new Date(selectedProgram.startDate) : null;
-                                const endDate = selectedProgram.endDate ? new Date(selectedProgram.endDate) : null;
+                                const progStart = selectedProgram.startDate || settings?.scheduleStartDate;
+                                const progEnd = selectedProgram.endDate || settings?.scheduleEndDate;
+                                const startDate = progStart ? new Date(progStart) : null;
+                                const endDate = progEnd ? new Date(progEnd) : null;
                                 const now = new Date();
                                 let progressPercent = 0;
                                 let statusText = "No definido";
@@ -2545,14 +2876,34 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
 
                         {/* SUB-TAB: PERIODS & COURSES */}
                         <TabsContent value="periods" className="space-y-6 mt-0">
-                            <div className="flex justify-between items-center pb-2">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-2">
                                 <h4 className="text-base font-semibold text-muted-foreground">Periodos y Materias de {selectedProgram.name}</h4>
-                                {!isObserver && (
-                                    <Button onClick={openCreatePeriod} size="sm" className="shadow-sm">
-                                        <Plus className="h-4 w-4 mr-1.5" />
-                                        Agregar Periodo
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button onClick={handleExportPeriodsJSON} variant="outline" size="sm" className="shadow-sm border-blue-500/20 text-blue-600 hover:text-blue-700 hover:bg-blue-500/5 dark:text-blue-400">
+                                        <Download className="h-4 w-4 mr-1.5" />
+                                        Exportar JSON
                                     </Button>
-                                )}
+                                    {!isObserver && (
+                                        <>
+                                            <div className="relative">
+                                                <input
+                                                    type="file"
+                                                    accept=".json"
+                                                    onChange={handleImportPeriodsJSON}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                />
+                                                <Button variant="outline" size="sm" className="shadow-sm border-amber-500/20 text-amber-600 hover:text-amber-700 hover:bg-amber-500/5 dark:text-amber-400">
+                                                    <Upload className="h-4 w-4 mr-1.5" />
+                                                    Importar JSON
+                                                </Button>
+                                            </div>
+                                            <Button onClick={openCreatePeriod} size="sm" className="shadow-sm">
+                                                <Plus className="h-4 w-4 mr-1.5" />
+                                                Agregar Periodo
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Sub-pestañas para clasificar los periodos */}
@@ -2731,14 +3082,34 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                             ) : (
                                 /* GROUPS LIST TABLE VIEW */
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center pb-2">
+                                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-2">
                                         <h4 className="text-base font-semibold text-muted-foreground">Grupos de Alumnos de {selectedProgram.name}</h4>
-                                        {!isObserver && (
-                                            <Button onClick={openCreateGroup} size="sm" className="shadow-sm">
-                                                <Plus className="h-4 w-4 mr-1.5" />
-                                                Agregar Grupo
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button onClick={handleExportGroupsJSON} variant="outline" size="sm" className="shadow-sm border-blue-500/20 text-blue-600 hover:text-blue-700 hover:bg-blue-500/5 dark:text-blue-400">
+                                                <Download className="h-4 w-4 mr-1.5" />
+                                                Exportar JSON
                                             </Button>
-                                        )}
+                                            {!isObserver && (
+                                                <>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="file"
+                                                            accept=".json"
+                                                            onChange={handleImportGroupsJSON}
+                                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                        />
+                                                        <Button variant="outline" size="sm" className="shadow-sm border-amber-500/20 text-amber-600 hover:text-amber-700 hover:bg-amber-500/5 dark:text-amber-400">
+                                                            <Upload className="h-4 w-4 mr-1.5" />
+                                                            Importar JSON
+                                                        </Button>
+                                                    </div>
+                                                    <Button onClick={openCreateGroup} size="sm" className="shadow-sm">
+                                                        <Plus className="h-4 w-4 mr-1.5" />
+                                                        Agregar Grupo
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {selectedProgram.groups.length === 0 ? (
@@ -2795,14 +3166,34 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
 
                         {/* SUB-TAB: TEACHERS */}
                         <TabsContent value="teachers" className="space-y-6 mt-0">
-                            <div className="flex justify-between items-center pb-2">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-2">
                                 <h4 className="text-base font-semibold text-muted-foreground">Profesores de {selectedProgram.name}</h4>
-                                {!isObserver && (
-                                    <Button onClick={() => setAssignTeachersDialogOpen(true)} size="sm" className="shadow-sm">
-                                        <Plus className="h-4 w-4 mr-1.5" />
-                                        Registrar Profesor
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button onClick={handleExportTeachersJSON} variant="outline" size="sm" className="shadow-sm border-blue-500/20 text-blue-600 hover:text-blue-700 hover:bg-blue-500/5 dark:text-blue-400">
+                                        <Download className="h-4 w-4 mr-1.5" />
+                                        Exportar JSON
                                     </Button>
-                                )}
+                                    {!isObserver && (
+                                        <>
+                                            <div className="relative">
+                                                <input
+                                                    type="file"
+                                                    accept=".json"
+                                                    onChange={handleImportTeachersJSON}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                />
+                                                <Button variant="outline" size="sm" className="shadow-sm border-amber-500/20 text-amber-600 hover:text-amber-700 hover:bg-amber-500/5 dark:text-amber-400">
+                                                    <Upload className="h-4 w-4 mr-1.5" />
+                                                    Importar JSON
+                                                </Button>
+                                            </div>
+                                            <Button onClick={() => setAssignTeachersDialogOpen(true)} size="sm" className="shadow-sm">
+                                                <Plus className="h-4 w-4 mr-1.5" />
+                                                Registrar Profesor
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {(!selectedProgram.teachers || selectedProgram.teachers.length === 0) ? (
@@ -3072,47 +3463,8 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                 rows={3}
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="progStartDate">Fecha de Inicio</Label>
-                                <Input
-                                    id="progStartDate"
-                                    type="date"
-                                    value={programStartDate}
-                                    onChange={(e) => setProgramStartDate(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="progEndDate">Fecha de Fin</Label>
-                                <Input
-                                    id="progEndDate"
-                                    type="date"
-                                    value={programEndDate}
-                                    onChange={(e) => setProgramEndDate(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="progScheduleTitle">Título del Horario</Label>
-                            <Input
-                                id="progScheduleTitle"
-                                placeholder="Ej: Horario Académico 2026-1"
-                                value={programScheduleTitle}
-                                onChange={(e) => setProgramScheduleTitle(e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="progMaxHours">Límite Legal de Horas Semanales por Docente</Label>
-                            <Input
-                                id="progMaxHours"
-                                type="number"
-                                min={1}
-                                max={80}
-                                value={programMaxHours}
-                                onChange={(e) => setProgramMaxHours(Number(e.target.value))}
-                            />
-                            <p className="text-xs text-muted-foreground">Este valor se usará para alertar asignaciones que superen el límite contractual.</p>
-                        </div>
+
+
                     </div>
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => setProgramDialogOpen(false)} disabled={isPending}>
@@ -4200,6 +4552,45 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                             {isPending ? "Insertando..." : groupCourseToEdit ? "Guardar Cambios" : "Insertar Horario"}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={progressModal.isOpen} onOpenChange={() => {}}>
+                <DialogContent className="max-w-[400px] pointer-events-auto" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            {progressModal.type === "import" ? "Procesando Importación" : "Generando Exportación"}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            {progressModal.title}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-3">
+                        <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                            <div 
+                                className="bg-primary h-3 rounded-full transition-all duration-300 ease-out" 
+                                style={{ width: `${progressModal.progress}%` }}
+                            ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>{progressModal.progress}% completado</span>
+                            {progressModal.type === "import" && (
+                                <span>{progressModal.currentCount} de {progressModal.totalCount}</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex justify-end pt-2 border-t border-border/20">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                                cancelRef.current = true;
+                            }}
+                            className="text-xs h-8"
+                        >
+                            Cancelar
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

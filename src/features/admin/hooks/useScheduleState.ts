@@ -217,17 +217,17 @@ export function useScheduleState({
     useEffect(() => {
         const activeProg = localPrograms.find(p => p.id === programId);
         if (activeProg) {
-            setScheduleStartDate(activeProg.startDate ? new Date(activeProg.startDate).toISOString().split('T')[0] : "");
-            setScheduleEndDate(activeProg.endDate ? new Date(activeProg.endDate).toISOString().split('T')[0] : "");
-            setScheduleTitle(activeProg.scheduleTitle || "");
-            setMaxTeacherHours(activeProg.maxTeacherHours ?? 40);
+            setScheduleStartDate(activeProg.startDate ? new Date(activeProg.startDate).toISOString().split('T')[0] : (initialScheduleStartDate ? new Date(initialScheduleStartDate).toISOString().split('T')[0] : ""));
+            setScheduleEndDate(activeProg.endDate ? new Date(activeProg.endDate).toISOString().split('T')[0] : (initialScheduleEndDate ? new Date(initialScheduleEndDate).toISOString().split('T')[0] : ""));
+            setScheduleTitle(activeProg.scheduleTitle || initialScheduleTitle || "");
+            setMaxTeacherHours(activeProg.maxTeacherHours ?? initialMaxTeacherHours ?? 40);
         } else {
-            setScheduleStartDate("");
-            setScheduleEndDate("");
-            setScheduleTitle("");
-            setMaxTeacherHours(40);
+            setScheduleStartDate(initialScheduleStartDate ? new Date(initialScheduleStartDate).toISOString().split('T')[0] : "");
+            setScheduleEndDate(initialScheduleEndDate ? new Date(initialScheduleEndDate).toISOString().split('T')[0] : "");
+            setScheduleTitle(initialScheduleTitle || "");
+            setMaxTeacherHours(initialMaxTeacherHours ?? 40);
         }
-    }, [programId, localPrograms]);
+    }, [programId, localPrograms, initialScheduleStartDate, initialScheduleEndDate, initialScheduleTitle, initialMaxTeacherHours]);
 
     const program = useMemo(() => localPrograms.find(p => p.id === programId), [localPrograms, programId]);
 

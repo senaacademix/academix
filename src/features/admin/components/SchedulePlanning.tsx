@@ -13,7 +13,7 @@ import {
     BookOpen, Terminal, User, UserCog,
     UserCheck, Brain, Wrench, Lightbulb, NotebookTabs,
     Sun, Moon, Globe, Lock, ZoomIn, ZoomOut,
-    PanelLeft, PanelRight, CalendarDays, BarChart3, Monitor
+    PanelLeft, PanelRight, CalendarDays, BarChart3, Monitor, X
 } from "lucide-react";
 import { toast } from "sonner";
 import { DayOfWeek } from "@/generated/prisma/client";
@@ -1027,7 +1027,7 @@ export function SchedulePlanning({
 
             {/* ── TEACHER OVERVIEW DIALOG ── */}
             <Dialog open={teacherOverviewOpen} onOpenChange={setTeacherOverviewOpen}>
-                <DialogContent className="w-screen max-w-none sm:max-w-none h-screen max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none border-none flex flex-col p-0 overflow-hidden gap-0 bg-background">
+                <DialogContent showCloseButton={false} className="w-screen max-w-none sm:max-w-none h-screen max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none border-none flex flex-col p-0 overflow-hidden gap-0 bg-background [&>button]:hidden">
                     {/* Fixed Header */}
                     <div className="shrink-0 border-b border-border bg-card/80 backdrop-blur-sm px-6 py-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1129,6 +1129,15 @@ export function SchedulePlanning({
                                     className="h-8 text-[10px] rounded-lg px-3 font-bold border-border hover:bg-accent"
                                 >
                                     Limpiar Filtros
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setTeacherOverviewOpen(false)}
+                                    className="h-8 w-8 p-0 rounded-lg hover:bg-destructive/10 hover:text-destructive border border-border/50"
+                                    title="Cerrar"
+                                >
+                                    <X className="w-4 h-4" />
                                 </Button>
                             </div>
                         </div>
@@ -1397,16 +1406,13 @@ export function SchedulePlanning({
 
                     <div className="shrink-0 border-t border-border bg-card px-6 py-3 flex items-center justify-between gap-4">
                         <span className="text-[11px] text-muted-foreground font-medium">Mostrando {visibleTeachersForOverview.length} docentes.</span>
-                        <Button onClick={() => setTeacherOverviewOpen(false)} className="rounded-xl h-8 px-4 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
-                            Cerrar Vista General
-                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
 
             {/* ── TRAINING ENVIRONMENTS OVERVIEW DIALOG ── */}
             <Dialog open={envOverviewOpen} onOpenChange={setEnvOverviewOpen}>
-                <DialogContent className="w-screen max-w-none sm:max-w-none h-screen max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none border-none flex flex-col p-0 overflow-hidden gap-0 bg-background">
+                <DialogContent showCloseButton={false} className="w-screen max-w-none sm:max-w-none h-screen max-h-none top-0 left-0 translate-x-0 translate-y-0 rounded-none border-none flex flex-col p-0 overflow-hidden gap-0 bg-background [&>button]:hidden">
                     {/* Fixed Header */}
                     <div className="shrink-0 border-b border-border bg-card/80 backdrop-blur-sm px-6 py-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1456,6 +1462,15 @@ export function SchedulePlanning({
                                     className="h-8 text-[10px] rounded-lg px-3 font-bold border-border hover:bg-accent"
                                 >
                                     Limpiar Filtros
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setEnvOverviewOpen(false)}
+                                    className="h-8 w-8 p-0 rounded-lg hover:bg-destructive/10 hover:text-destructive border border-border/50"
+                                    title="Cerrar"
+                                >
+                                    <X className="w-4 h-4" />
                                 </Button>
                             </div>
                         </div>
@@ -1614,9 +1629,6 @@ export function SchedulePlanning({
 
                     <div className="shrink-0 border-t border-border bg-card px-6 py-3 flex items-center justify-between gap-4">
                         <span className="text-[11px] text-muted-foreground font-medium">Mostrando {filteredEnvironments.length} ambientes.</span>
-                        <Button onClick={() => setEnvOverviewOpen(false)} className="rounded-xl h-8 px-4 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
-                            Cerrar Vista General
-                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

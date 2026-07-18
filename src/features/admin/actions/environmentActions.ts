@@ -115,3 +115,34 @@ export async function deleteEnvironmentAction(id: string) {
     revalidatePath("/dashboard/admin/courses");
     return { success: true };
 }
+
+export async function importEnvironmentsAction(programId: string, data: any[]) {
+    await requireAdmin();
+    if (!programId) throw new Error("El programa es obligatorio");
+    if (!data || data.length === 0) throw new Error("Los datos de importación están vacíos");
+
+    let successCount = 0;
+    
+    await Promise.all(
+        data.map(async (envItem) => {
+            if (!envItem.name) return;
+            
+            await prisma.trainingEnvironment.create({
+                data: {
+                    name: envItem.name,
+                    capacity: envItem.capacity ? parseInt(envItem.capacity) : 20,
+                    location: envItem.location || null,
+                    resources: Array.isArray(envItem.resources) ? envItem.resources : [],
+                    description: envItem.description || null,
+                    isActive: envItem.isActive ?? true,
+                    programId: programId,
+                }
+            });
+            successCount++;
+        })
+    );
+
+    revalidatePath("/dashboard/admin/courses");
+    return { success: true, successCount };
+}
+
