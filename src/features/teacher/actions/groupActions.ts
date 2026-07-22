@@ -174,11 +174,11 @@ export async function saveAttendanceBatch(
             });
         }
 
-        // Notification logic for batch
+        // Notification logic for batch - non-blocking
         const targetStatuses = ["ABSENT", "LATE", "LEAVE_EARLY"];
         const notifiedRecords = records.filter(r => targetStatuses.includes(r.status));
         if (notifiedRecords.length > 0) {
-            (async () => {
+            setTimeout(async () => {
                 try {
                     const course = await prisma.course.findUnique({
                         where: { id: courseId },
@@ -192,34 +192,35 @@ export async function saveAttendanceBatch(
                         timeZone: "UTC"
                     });
 
-                    for (const r of notifiedRecords) {
-                        let title = "Registro de Asistencia";
-                        let body = "";
+                    await Promise.allSettled(
+                        notifiedRecords.map(async r => {
+                            let title = "Registro de Asistencia";
+                            let body = "";
 
-                        if (r.status === "ABSENT") {
-                            title = "Falta Registrada";
-                            body = `Se ha registrado una inasistencia (falta) en ${courseTitle} para el ${formattedDate}.`;
-                        } else if (r.status === "LATE") {
-                            title = "Llegada Tarde Registrada";
-                            body = `Se ha registrado una llegada tarde en ${courseTitle} para el ${formattedDate}.`;
-                        } else if (r.status === "LEAVE_EARLY") {
-                            title = "Retiro Anticipado";
-                            body = `Se ha registrado un retiro anticipado en ${courseTitle} para el ${formattedDate}.`;
-                        }
+                            if (r.status === "ABSENT") {
+                                title = "Falta Registrada";
+                                body = `Se ha registrado una inasistencia (falta) en ${courseTitle} para el ${formattedDate}.`;
+                            } else if (r.status === "LATE") {
+                                title = "Llegada Tarde Registrada";
+                                body = `Se ha registrado una llegada tarde en ${courseTitle} para el ${formattedDate}.`;
+                            } else if (r.status === "LEAVE_EARLY") {
+                                title = "Retiro Anticipado";
+                                body = `Se ha registrado un retiro anticipado en ${courseTitle} para el ${formattedDate}.`;
+                            }
 
-                        await sendPushNotification(r.studentId, {
-                            title,
-                            body,
-                            url: "/dashboard/student/attendance"
-                        });
-                    }
+                            return sendPushNotification(r.studentId, {
+                                title,
+                                body,
+                                url: "/dashboard/student/attendance"
+                            });
+                        })
+                    );
                 } catch (err) {
                     console.error("Error sending batch attendance notifications:", err);
                 }
-            })();
+            }, 0);
         }
 
-        revalidatePath("/dashboard/teacher");
         return { success: true };
     } catch (error: any) {
         console.error("Error saving attendance:", error);
@@ -586,14 +587,18 @@ export async function saveSingleAttendanceAction(
             }
         }
 
-        // Find existing record
-        const existing = await prisma.attendance.findFirst({
+        // Find existing record using compound unique key constraint
+        const existing = await prisma.attendance.findUnique({
             where: {
-                courseId,
-                userId: studentId,
-                date: dateObj
+                courseId_userId_date: {
+                    courseId,
+                    userId: studentId,
+                    date: dateObj
+                }
             }
         });
+
+        let savedRecord: any = null;
 
         if (status === "UNMARKED" as any) {
             if (existing) {
@@ -602,29 +607,30 @@ export async function saveSingleAttendanceAction(
                 });
             }
         } else if (status === "PRESENT") {
-            if (existing) {
-                await prisma.attendance.update({
-                    where: { id: existing.id },
-                    data: {
-                        status: "PRESENT",
-                        justification: null,
-                        arrivalTime: null,
-                        departureTime: null
-                    }
-                });
-            } else {
-                await prisma.attendance.create({
-                    data: {
+            savedRecord = await prisma.attendance.upsert({
+                where: {
+                    courseId_userId_date: {
                         courseId,
                         userId: studentId,
-                        date: dateObj,
-                        status: "PRESENT",
-                        justification: null,
-                        arrivalTime: null,
-                        departureTime: null
+                        date: dateObj
                     }
-                });
-            }
+                },
+                update: {
+                    status: "PRESENT",
+                    justification: null,
+                    arrivalTime: null,
+                    departureTime: null
+                },
+                create: {
+                    courseId,
+                    userId: studentId,
+                    date: dateObj,
+                    status: "PRESENT",
+                    justification: null,
+                    arrivalTime: null,
+                    departureTime: null
+                }
+            });
         } else {
             const dbStatus = (status === "EXCUSED" || status === "ABSENT") ? "ABSENT" : (status as any);
             const dbJustification = status === "EXCUSED" ? (justification || "Justificado en planilla") : null;
@@ -675,35 +681,36 @@ export async function saveSingleAttendanceAction(
                 }
             }
 
-            if (existing) {
-                await prisma.attendance.update({
-                    where: { id: existing.id },
-                    data: {
-                        status: dbStatus as any,
-                        justification: dbJustification,
-                        arrivalTime: dbArrivalTime,
-                        departureTime: dbDepartureTime
-                    }
-                });
-            } else {
-                await prisma.attendance.create({
-                    data: {
+            savedRecord = await prisma.attendance.upsert({
+                where: {
+                    courseId_userId_date: {
                         courseId,
                         userId: studentId,
-                        date: dateObj,
-                        status: dbStatus as any,
-                        justification: dbJustification,
-                        arrivalTime: dbArrivalTime,
-                        departureTime: dbDepartureTime
+                        date: dateObj
                     }
-                });
-            }
+                },
+                update: {
+                    status: dbStatus as any,
+                    justification: dbJustification,
+                    arrivalTime: dbArrivalTime,
+                    departureTime: dbDepartureTime
+                },
+                create: {
+                    courseId,
+                    userId: studentId,
+                    date: dateObj,
+                    status: dbStatus as any,
+                    justification: dbJustification,
+                    arrivalTime: dbArrivalTime,
+                    departureTime: dbDepartureTime
+                }
+            });
         }
 
-        // Notification logic for single record
+        // Notification logic for single record - non-blocking
         const targetStatuses = ["ABSENT", "EXCUSED", "LATE", "LEAVE_EARLY"];
         if (targetStatuses.includes(status)) {
-            (async () => {
+            setTimeout(async () => {
                 try {
                     const course = await prisma.course.findUnique({
                         where: { id: courseId },
@@ -739,11 +746,10 @@ export async function saveSingleAttendanceAction(
                 } catch (err) {
                     console.error("Error sending single attendance notification:", err);
                 }
-            })();
+            }, 0);
         }
 
-        revalidatePath("/dashboard/teacher");
-        return { success: true };
+        return { success: true, record: savedRecord };
     } catch (error: any) {
         console.error("Error saving single attendance:", error);
         return { success: false, error: error.message };

@@ -984,7 +984,6 @@ const handleOpenAnalytics = async () => {
     };
 
     const setStudentAttendance = async (studentId: string, status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "UNMARKED") => {
-        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -1016,6 +1015,9 @@ const handleOpenAnalytics = async () => {
                 timeString = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`;
             }
         }
+
+        const prevRecord = attRecords[studentId];
+
         // Optimistic UI update
         setAttRecords(prev => {
             const newRecords = { ...prev };
@@ -1031,7 +1033,6 @@ const handleOpenAnalytics = async () => {
             return newRecords;
         });
 
-        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 attCourseId,
@@ -1042,26 +1043,45 @@ const handleOpenAnalytics = async () => {
                 status === "LATE" ? timeString : undefined,
                 status === "LEAVE_EARLY" ? timeString : undefined
             );
-            if (res.success) {
-                loadHistory(selectedGroup!.id);
-            } else {
+            if (res.success && res.record) {
+                setAttendanceHistory(prev => {
+                    const filtered = prev.filter((a: any) => !(a.courseId === attCourseId && a.userId === studentId && new Date(a.date).toISOString().split('T')[0] === attDate));
+                    return status === "UNMARKED" ? filtered : [res.record, ...filtered];
+                });
+            } else if (!res.success) {
                 toast.error("Error al registrar asistencia: " + res.error);
-                loadHistory(selectedGroup!.id);
+                // Rollback optimistic update
+                setAttRecords(prev => {
+                    const newRecords = { ...prev };
+                    if (prevRecord) {
+                        newRecords[studentId] = prevRecord;
+                    } else {
+                        delete newRecords[studentId];
+                    }
+                    return newRecords;
+                });
             }
         } catch (e) {
             toast.error("Error de red al guardar asistencia");
-            loadHistory(selectedGroup!.id);
-        } finally {
-            setIsSavingAtt(false);
+            // Rollback optimistic update
+            setAttRecords(prev => {
+                const newRecords = { ...prev };
+                if (prevRecord) {
+                    newRecords[studentId] = prevRecord;
+                } else {
+                    delete newRecords[studentId];
+                }
+                return newRecords;
+            });
         }
     };
 
     const updateLateTime = async (studentId: string, time: string) => {
-        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
         }
+        const prevTime = attRecords[studentId]?.arrivalTime;
         // Optimistic update
         setAttRecords(prev => {
             if (!prev[studentId]) return prev;
@@ -1071,7 +1091,6 @@ const handleOpenAnalytics = async () => {
             };
         });
 
-        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 attCourseId,
@@ -1081,26 +1100,39 @@ const handleOpenAnalytics = async () => {
                 undefined,
                 time
             );
-            if (res.success) {
-                loadHistory(selectedGroup!.id);
-            } else {
+            if (res.success && res.record) {
+                setAttendanceHistory(prev => {
+                    const filtered = prev.filter((a: any) => !(a.courseId === attCourseId && a.userId === studentId && new Date(a.date).toISOString().split('T')[0] === attDate));
+                    return [res.record, ...filtered];
+                });
+            } else if (!res.success) {
                 toast.error("Error al actualizar la hora de ingreso: " + res.error);
-                loadHistory(selectedGroup!.id);
+                setAttRecords(prev => {
+                    if (!prev[studentId]) return prev;
+                    return {
+                        ...prev,
+                        [studentId]: { ...prev[studentId], arrivalTime: prevTime }
+                    };
+                });
             }
         } catch (e) {
             toast.error("Error de red al actualizar la hora");
-            loadHistory(selectedGroup!.id);
-        } finally {
-            setIsSavingAtt(false);
+            setAttRecords(prev => {
+                if (!prev[studentId]) return prev;
+                return {
+                    ...prev,
+                    [studentId]: { ...prev[studentId], arrivalTime: prevTime }
+                };
+            });
         }
     };
 
     const updateLeaveTime = async (studentId: string, time: string) => {
-        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
         }
+        const prevTime = attRecords[studentId]?.departureTime;
         // Optimistic update
         setAttRecords(prev => {
             if (!prev[studentId]) return prev;
@@ -1110,7 +1142,6 @@ const handleOpenAnalytics = async () => {
             };
         });
 
-        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(
                 attCourseId,
@@ -1121,17 +1152,30 @@ const handleOpenAnalytics = async () => {
                 undefined,
                 time
             );
-            if (res.success) {
-                loadHistory(selectedGroup!.id);
-            } else {
+            if (res.success && res.record) {
+                setAttendanceHistory(prev => {
+                    const filtered = prev.filter((a: any) => !(a.courseId === attCourseId && a.userId === studentId && new Date(a.date).toISOString().split('T')[0] === attDate));
+                    return [res.record, ...filtered];
+                });
+            } else if (!res.success) {
                 toast.error("Error al actualizar la hora de retiro: " + res.error);
-                loadHistory(selectedGroup!.id);
+                setAttRecords(prev => {
+                    if (!prev[studentId]) return prev;
+                    return {
+                        ...prev,
+                        [studentId]: { ...prev[studentId], departureTime: prevTime }
+                    };
+                });
             }
         } catch (e) {
             toast.error("Error de red al actualizar la hora");
-            loadHistory(selectedGroup!.id);
-        } finally {
-            setIsSavingAtt(false);
+            setAttRecords(prev => {
+                if (!prev[studentId]) return prev;
+                return {
+                    ...prev,
+                    [studentId]: { ...prev[studentId], departureTime: prevTime }
+                };
+            });
         }
     };
 
@@ -1515,7 +1559,6 @@ const handleOpenAnalytics = async () => {
     };
 
     const handleUpdateSingleAttendance = async (studentId: string, dateStr: string, status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "EXCUSED") => {
-        if (isSavingAtt) return;
         if (isDateLocked && !hasEditPermission) {
             toast.error("Esta fecha pertenece a una semana anterior y está bloqueada.");
             return;
@@ -1530,19 +1573,21 @@ const handleOpenAnalytics = async () => {
         }
 
         const toastId = toast.loading("Actualizando asistencia...");
-        setIsSavingAtt(true);
         try {
             const res = await saveSingleAttendanceAction(attCourseId, studentId, dateStr, status, justification);
             if (res.success) {
                 toast.success("Asistencia actualizada", { id: toastId });
-                await loadHistory(selectedGroup!.id);
+                if (res.record) {
+                    setAttendanceHistory(prev => {
+                        const filtered = prev.filter((a: any) => !(a.courseId === attCourseId && a.userId === studentId && new Date(a.date).toISOString().split('T')[0] === dateStr));
+                        return [res.record, ...filtered];
+                    });
+                }
             } else {
                 toast.error("Error: " + res.error, { id: toastId });
             }
         } catch (error: any) {
             toast.error("Error al actualizar la asistencia", { id: toastId });
-        } finally {
-            setIsSavingAtt(false);
         }
     };
 
@@ -1605,7 +1650,6 @@ const handleOpenAnalytics = async () => {
     };
 
     const handleDeleteAttendance = (att: any) => {
-        if (isSavingAtt) return;
         const studentName = formatName(att.user.name, att.user.profile);
         const formattedDate = format(new Date(att.date), "dd/MM/yyyy");
         
@@ -1615,7 +1659,6 @@ const handleOpenAnalytics = async () => {
             async () => {
                 const dateStr = new Date(att.date).toISOString().split('T')[0];
                 const toastId = toast.loading("Retirando falta/retraso...");
-                setIsSavingAtt(true);
                 try {
                     const res = await saveSingleAttendanceAction(
                         att.courseId,
@@ -1625,14 +1668,12 @@ const handleOpenAnalytics = async () => {
                     );
                     if (res.success) {
                         toast.success("Asistencia actualizada a 'Presente'", { id: toastId });
-                        await loadHistory(selectedGroup!.id);
+                        setAttendanceHistory(prev => prev.filter((a: any) => a.id !== att.id));
                     } else {
                         toast.error("Error al retirar la falta/retraso: " + res.error, { id: toastId });
                     }
                 } catch (error: any) {
                     toast.error("Error de conexión al retirar la falta/retraso", { id: toastId });
-                } finally {
-                    setIsSavingAtt(false);
                 }
             }
         );
