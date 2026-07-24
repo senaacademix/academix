@@ -674,12 +674,10 @@ export function ScheduleView() {
                                                     >
                                                         <div>
                                                             <div className="font-semibold truncate leading-tight">{event.courseTitle}</div>
-                                                            {event.course.group && (
-                                                                <div className="text-[9px] opacity-75 truncate flex flex-col gap-0.5">
-                                                                    <span>Grupo: {event.course.group.name}</span>
-                                                                    {event.course.teacher && <span>Docente: {event.course.teacher.name}</span>}
-                                                                </div>
-                                                            )}
+                                                            <div className="text-[9px] opacity-75 truncate flex flex-col gap-0.5">
+                                                                {event.course.group && <span>Grupo: {event.course.group.name}</span>}
+                                                                {event.course.teacher && <span>Docente: {event.course.teacher.name}</span>}
+                                                            </div>
                                                         </div>
                                                         <div className="opacity-80 text-[10px]">{toFormat12h(event.startTime)} – {toFormat12h(event.endTime)}</div>
                                                     </button>

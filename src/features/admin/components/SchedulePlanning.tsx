@@ -506,6 +506,7 @@ export function SchedulePlanning({
             dayOfWeek: DayOfWeek;
             startTime: string;
             endTime: string;
+            teacherName: string | null;
         }[] = [];
 
         for (const p of localPrograms) {
@@ -521,6 +522,7 @@ export function SchedulePlanning({
                                 dayOfWeek: s.dayOfWeek,
                                 startTime: s.startTime,
                                 endTime: s.endTime,
+                                teacherName: c.teacher?.name || c.teacher?.email || null,
                             });
                         }
                     }
@@ -1586,6 +1588,10 @@ export function SchedulePlanning({
                                                                                         className="p-1.5 rounded-lg border flex flex-col gap-0.5 leading-snug cursor-help animate-in fade-in duration-200"
                                                                                     >
                                                                                         <div className="font-extrabold text-[9px] truncate">{as.courseTitle}</div>
+                                                                                        <div className="text-[8px] font-bold opacity-90 truncate flex items-center gap-1 text-primary">
+                                                                                            <User className="w-2.5 h-2.5 shrink-0 opacity-75" />
+                                                                                            <span className="truncate">{as.teacherName || "Sin docente"}</span>
+                                                                                        </div>
                                                                                         <div className="flex items-center justify-between text-[8px] font-semibold opacity-85">
                                                                                             <span className="truncate max-w-[80px]">{as.groupName}</span>
                                                                                             <span>{toFormat12h(as.startTime)} – {toFormat12h(as.endTime)}</span>
@@ -1597,7 +1603,8 @@ export function SchedulePlanning({
                                                                                 </TooltipTrigger>
                                                                                 <TooltipContent className="w-56 p-2 bg-slate-950 text-slate-100 border border-slate-800 rounded-lg">
                                                                                     <p className="font-bold text-xs">{as.courseTitle}</p>
-                                                                                    <p className="text-[10px] text-slate-400 mt-0.5">Grupo: {as.groupName}</p>
+                                                                                    <p className="text-[10px] text-slate-300 font-semibold mt-0.5">Docente: {as.teacherName || "Sin docente"}</p>
+                                                                                    <p className="text-[10px] text-slate-400">Grupo: {as.groupName}</p>
                                                                                     <p className="text-[10px] text-slate-400">Horario: {toFormat12h(as.startTime)} – {toFormat12h(as.endTime)}</p>
                                                                                     {hasConflict && (
                                                                                         <p className="text-[9px] text-red-400 font-bold mt-1">Este ambiente tiene dos o más grupos programados en el mismo rango de tiempo.</p>
