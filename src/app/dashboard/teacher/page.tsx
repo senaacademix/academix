@@ -6,6 +6,8 @@ import { courseService } from "@/features/teacher/services/courseService";
 
 import prisma from "@/lib/prisma";
 
+import { getFormattedTodayDate } from "@/lib/dateUtils";
+
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
   const user = session?.user as any;
@@ -18,13 +20,11 @@ export default async function Page() {
   const courses = await courseService.getTeacherCourses(session.user.id);
   const groups = await courseService.getTeacherGroups(session.user.id);
 
+  const reqHeaders = await headers();
+  const timezone = reqHeaders.get("x-vercel-ip-timezone") || "America/Bogota";
+
   const currentDate = new Date().toISOString();
-  const formattedDate = new Date().toLocaleDateString('es-ES', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-  });
+  const formattedDate = getFormattedTodayDate(timezone);
 
   return (
     <TeacherDashboard 

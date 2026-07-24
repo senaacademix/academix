@@ -328,6 +328,88 @@ export async function createUserAction(data: {
     return user;
 }
 
+export async function updateStudentAction(userId: string, data: {
+    email: string;
+    identificacion: string;
+    nombres: string;
+    apellido: string;
+    telefono?: string;
+    groupId?: string;
+}) {
+    await requireAdmin();
+
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { profile: true }
+    });
+
+    if (!user) {
+        throw new Error("Usuario no encontrado");
+    }
+
+    const emailTrimmed = data.email.trim().toLowerCase();
+    if (emailTrimmed !== user.email) {
+        const existingUser = await prisma.user.findUnique({
+            where: { email: emailTrimmed }
+        });
+        if (existingUser && existingUser.id !== userId) {
+            throw new Error("Ya existe otro usuario con este correo electrónico");
+        }
+    }
+
+    if (data.identificacion) {
+        const existingProfile = await prisma.profile.findFirst({
+            where: {
+                identificacion: data.identificacion.trim(),
+                userId: { not: userId }
+            }
+        });
+        if (existingProfile) {
+            throw new Error(`Ya existe un perfil registrado con la identificación: ${data.identificacion}`);
+        }
+    }
+
+    const fullName = `${data.nombres.trim()} ${data.apellido.trim()}`;
+    const groupId = (data.groupId && data.groupId !== "none" && data.groupId !== "all") ? data.groupId : null;
+
+    const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+            email: emailTrimmed,
+            name: fullName,
+            groupId: groupId,
+            profile: {
+                upsert: {
+                    create: {
+                        identificacion: data.identificacion.trim(),
+                        nombres: data.nombres.trim(),
+                        apellido: data.apellido.trim(),
+                        telefono: data.telefono?.trim() || null
+                    },
+                    update: {
+                        identificacion: data.identificacion.trim(),
+                        nombres: data.nombres.trim(),
+                        apellido: data.apellido.trim(),
+                        telefono: data.telefono?.trim() || null
+                    }
+                }
+            }
+        },
+        include: {
+            profile: true,
+            group: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
+    });
+
+    revalidatePath("/dashboard/admin/users");
+    return updatedUser;
+}
+
 export async function getUserDetailsAction(userId: string) {
     const session = await requireAdminOrObserver();
     const isObserver = false;

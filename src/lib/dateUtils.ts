@@ -75,3 +75,22 @@ export function formatDateTime(date: Date | string, formatStr: string = "dd/MM/y
     if (isNaN(d.getTime())) return "Fecha inválida";
     return format(d, formatStr, { locale: es });
 }
+
+/**
+ * Retorna la fecha actual formateada en español (ej: "jueves, 23 de julio de 2026").
+ * Si se pasa una zona horaria (como "America/Bogota" o la proveniente de x-vercel-ip-timezone),
+ * ajusta el cálculo al tiempo local de esa zona horaria.
+ */
+export function getFormattedTodayDate(timeZone?: string): string {
+    const options: Intl.DateTimeFormatOptions = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    };
+    if (timeZone) {
+        options.timeZone = timeZone;
+    }
+    return new Intl.DateTimeFormat('es-ES', options).format(new Date());
+}
+

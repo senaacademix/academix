@@ -47,12 +47,20 @@ import {
 } from "@/components/ui/dialog";
 
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import {
     Search, Trash2, Eye, UserCog, Users as UsersIcon, UserPlus, ChevronLeft, ChevronRight,
     BookOpen, Calendar, MessageSquare, FileText, CheckCircle2, AlertCircle, X, GraduationCap,
-    Key, RefreshCw, Bookmark
+    Key, RefreshCw, Bookmark, MoreVertical, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction, updateStudentNovedadAction } from "@/app/admin-actions";
+import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction, updateStudentNovedadAction, updateStudentAction } from "@/app/admin-actions";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -79,6 +87,7 @@ interface User {
         novedadColor?: string | null;
         dataProcessingConsent?: boolean | null;
     } | null;
+    groupId?: string | null;
     group?: {
         id: string;
         name: string;
@@ -143,6 +152,62 @@ export function UserManagement({
     const [userForNovedad, setUserForNovedad] = useState<User | null>(null);
     const [novedadText, setNovedadText] = useState("");
     const [novedadColorText, setNovedadColorText] = useState<string>("blue");
+
+    // Edit student form state
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [editIdentificacion, setEditIdentificacion] = useState("");
+    const [editNombres, setEditNombres] = useState("");
+    const [editApellido, setEditApellido] = useState("");
+    const [editEmail, setEditEmail] = useState("");
+    const [editTelefono, setEditTelefono] = useState("");
+    const [editGroupId, setEditGroupId] = useState<string>("none");
+
+    const handleOpenEditModal = (user: User) => {
+        setEditingUser(user);
+        setEditIdentificacion(user.profile?.identificacion || "");
+        setEditNombres(user.profile?.nombres || user.name?.split(" ")[0] || "");
+        setEditApellido(user.profile?.apellido || user.name?.split(" ").slice(1).join(" ") || "");
+        setEditEmail(user.email || "");
+        setEditTelefono(user.profile?.telefono || "");
+        setEditGroupId(user.groupId || user.group?.id || "none");
+        setEditDialogOpen(true);
+    };
+
+    const handleSaveEditStudent = () => {
+        if (!editingUser) return;
+        if (!editIdentificacion || !editNombres || !editApellido || !editEmail) {
+            toast.error("Por favor completa los campos obligatorios");
+            return;
+        }
+        startTransition(async () => {
+            try {
+                const updated = await updateStudentAction(editingUser.id, {
+                    email: editEmail,
+                    identificacion: editIdentificacion,
+                    nombres: editNombres,
+                    apellido: editApellido,
+                    telefono: editTelefono,
+                    groupId: editGroupId
+                });
+                setUsers(prev => prev.map(u => u.id === editingUser.id ? {
+                    ...u,
+                    email: updated.email,
+                    name: updated.name,
+                    groupId: updated.groupId,
+                    profile: updated.profile ? {
+                        ...u.profile,
+                        ...updated.profile
+                    } : u.profile,
+                    group: updated.group || null
+                } : u));
+                toast.success("Estudiante actualizado correctamente");
+                setEditDialogOpen(false);
+            } catch (error: any) {
+                toast.error(error.message || "Error al actualizar estudiante");
+            }
+        });
+    };
 
     
     // Group analytics state
@@ -739,99 +804,107 @@ export function UserManagement({
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    
-                                                    <Tooltip><TooltipTrigger asChild><Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => {
-                                                            if (user.email) window.location.href = `mailto:${user.email}`;
-                                                        }}
-                                                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                                    >
-                                                        <Mail className="h-4 w-4" />
-                                                    </Button></TooltipTrigger><TooltipContent><p>Enviar correo</p></TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button
-                                                         variant="ghost"
-                                                         size="icon"
-                                                         onClick={() => {
-                                                             setSelectedUser(user);
-                                                             setDetailsSheetOpen(true);
-                                                         }}
-                                                         className="text-primary hover:text-primary/80"
-                                                     >
-                                                         <GraduationCap className="h-4 w-4" />
-                                                     </Button></TooltipTrigger><TooltipContent><p>Ver Registro Académico</p></TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button
-                                                                                                            variant="ghost"
-                                                                                                            size="icon"
-                                                                                                            onClick={() => {
-                                                                                                                setUserToResetPassword(user);
-                                                                                                                setResetPasswordDialogOpen(true);
-                                                                                                            }}
-                                                                                                            disabled={isPending || (!user.profile?.identificacion) || isObserver}
-                                                                                                            className="text-amber-600 hover:text-amber-700"
-                                                                                                        >
-                                                                                                            <Key className="h-4 w-4" />
-                                                                                                        </Button></TooltipTrigger><TooltipContent><p>{user.profile?.identificacion ? "Restablecer contraseña al número de documento" : "Usuario sin documento registrado"}</p></TooltipContent></Tooltip>
-                                                    {!isObserver && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {/* Ver Registro Académico (por fuera) */}
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => {
+                                                                    setSelectedUser(user);
+                                                                    setDetailsSheetOpen(true);
+                                                                }}
+                                                                className="text-primary hover:text-primary/80"
+                                                            >
+                                                                <GraduationCap className="h-4 w-4" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Ver Registro Académico</p></TooltipContent>
+                                                    </Tooltip>
+
+                                                    {/* Menú de acciones (3 puntos) */}
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
+                                                                <MoreVertical className="h-4 w-4" />
+                                                                <span className="sr-only">Abrir menú</span>
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-52">
+                                                            {!isObserver && (
+                                                                <DropdownMenuItem onClick={() => handleOpenEditModal(user)}>
+                                                                    <Pencil className="mr-2 h-4 w-4 text-blue-600" />
+                                                                    <span>Editar estudiante</span>
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    if (user.email) window.location.href = `mailto:${user.email}`;
+                                                                }}
+                                                            >
+                                                                <Mail className="mr-2 h-4 w-4 text-blue-600" />
+                                                                <span>Enviar correo</span>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                disabled={isPending || (!user.profile?.identificacion) || isObserver}
+                                                                onClick={() => {
+                                                                    setUserToResetPassword(user);
+                                                                    setResetPasswordDialogOpen(true);
+                                                                }}
+                                                            >
+                                                                <Key className="mr-2 h-4 w-4 text-amber-600" />
+                                                                <span>Restablecer contraseña</span>
+                                                            </DropdownMenuItem>
+                                                            {!isObserver && (
+                                                                <DropdownMenuItem
                                                                     onClick={() => {
                                                                         setUserForNovedad(user);
                                                                         setNovedadText(user.profile?.novedad || "");
                                                                         setNovedadColorText(user.profile?.novedadColor || "blue");
                                                                         setNovedadDialogOpen(true);
                                                                     }}
-                                                                    disabled={isPending}
-                                                                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/50 dark:text-emerald-400 dark:hover:text-emerald-300"
                                                                 >
-                                                                    <Bookmark className="h-4 w-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>Registrar Novedad</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                    {!isObserver && (
-                                                         <Tooltip><TooltipTrigger asChild><Button
-                                                             variant="ghost"
-                                                             size="icon"
-                                                             onClick={async () => {
-                                                                 try {
-                                                                     const res = await resetStudentDailyAttempts(user.id);
-                                                                     if (res.success) {
-                                                                         toast.success("Intentos diarios reiniciados con éxito.");
-                                                                     } else {
-                                                                         toast.error(res.error || "No se pudieron reiniciar los intentos.");
-                                                                     }
-                                                                 } catch (error) {
-                                                                     toast.error("Error al conectar con el servidor.");
-                                                                 }
-                                                             }}
-                                                             className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-                                                         >
-                                                             <RefreshCw className="h-4 w-4" />
-                                                         </Button></TooltipTrigger><TooltipContent><p>Reiniciar intentos diarios</p></TooltipContent></Tooltip>
-                                                     )}
-                                                     {!isObserver && (
-                                                         <Button
-                                                             variant="ghost"
-                                                             size="icon"
-                                                             onClick={() => {
-                                                                 setUserToDelete(user);
-                                                                 setDeleteDialogOpen(true);
-                                                             }}
-                                                             disabled={isPending}
-                                                             className="text-destructive hover:text-destructive"
-                                                         >
-                                                             <Trash2 className="h-4 w-4" />
-                                                         </Button>
-                                                     )}
+                                                                    <Bookmark className="mr-2 h-4 w-4 text-emerald-600" />
+                                                                    <span>Registrar novedad</span>
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {!isObserver && (
+                                                                <DropdownMenuItem
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const res = await resetStudentDailyAttempts(user.id);
+                                                                            if (res.success) {
+                                                                                toast.success("Intentos diarios reiniciados con éxito.");
+                                                                            } else {
+                                                                                toast.error(res.error || "No se pudieron reiniciar los intentos.");
+                                                                            }
+                                                                        } catch (error) {
+                                                                            toast.error("Error al conectar con el servidor.");
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <RefreshCw className="mr-2 h-4 w-4 text-indigo-600" />
+                                                                    <span>Reiniciar intentos diarios</span>
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {!isObserver && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                                                        onClick={() => {
+                                                                            setUserToDelete(user);
+                                                                            setDeleteDialogOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        <span>Eliminar estudiante</span>
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -1193,6 +1266,92 @@ export function UserManagement({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div >
+
+            {/* Edit Student Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Editar Estudiante</DialogTitle>
+                        <DialogDescription>
+                            Modifica la información general del estudiante.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="editIdentificacion">Número de Identificación *</Label>
+                            <Input
+                                id="editIdentificacion"
+                                value={editIdentificacion}
+                                onChange={(e) => setEditIdentificacion(e.target.value)}
+                                placeholder="Ej: 1000123456"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editNombres">Nombres *</Label>
+                                <Input
+                                    id="editNombres"
+                                    value={editNombres}
+                                    onChange={(e) => setEditNombres(e.target.value)}
+                                    placeholder="Ej: Juan Carlos"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editApellido">Apellidos *</Label>
+                                <Input
+                                    id="editApellido"
+                                    value={editApellido}
+                                    onChange={(e) => setEditApellido(e.target.value)}
+                                    placeholder="Ej: Pérez Gómez"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="editEmail">Correo Electrónico *</Label>
+                            <Input
+                                id="editEmail"
+                                type="email"
+                                value={editEmail}
+                                onChange={(e) => setEditEmail(e.target.value)}
+                                placeholder="ejemplo@correo.com"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="editTelefono">Teléfono</Label>
+                            <Input
+                                id="editTelefono"
+                                value={editTelefono}
+                                onChange={(e) => setEditTelefono(e.target.value)}
+                                placeholder="Ej: 3001234567"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="editGroupId">Grupo / Ficha</Label>
+                            <Select value={editGroupId} onValueChange={setEditGroupId}>
+                                <SelectTrigger id="editGroupId">
+                                    <SelectValue placeholder="Seleccionar grupo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Sin grupo asignado</SelectItem>
+                                    {groupsList.map((g) => (
+                                        <SelectItem key={g.id} value={g.id}>
+                                            {g.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleSaveEditStudent} disabled={isPending}>
+                            {isPending ? "Guardando..." : "Guardar Cambios"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 }

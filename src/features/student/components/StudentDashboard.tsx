@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useWebPush } from "@/hooks/useWebPush";
 import { Bell, BellOff, Loader2 } from "lucide-react";
+import { getFormattedTodayDate } from "@/lib/dateUtils";
 
 export function StudentDashboard({
     availableCourses,
@@ -70,10 +71,14 @@ export function StudentDashboard({
     };
 
     const [mounted, setMounted] = useState(false);
+    const [clientDate, setClientDate] = useState<string>("");
     
     useEffect(() => {
         setMounted(true);
+        setClientDate(getFormattedTodayDate());
     }, []);
+
+    const displayDate = mounted && clientDate ? clientDate : (formattedDate || "");
 
     // States for password change suggestion
     const [suggestPasswordChange, setSuggestPasswordChange] = useState(false);
@@ -161,7 +166,7 @@ export function StudentDashboard({
                             ¡Hola, {studentName ? formatName(studentName) : 'Estudiante'}!
                         </h1>
                         <p className="text-sm text-muted-foreground capitalize">
-                            {formattedDate || (mounted ? new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')} — Aquí tienes un resumen de tu actividad académica en AcademiX.
+                            {displayDate} — Aquí tienes un resumen de tu actividad académica en AcademiX.
                         </p>
                     </div>
                     {/* Botón de Notificaciones para el Estudiante */}

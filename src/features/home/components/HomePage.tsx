@@ -11,6 +11,7 @@ import { formatName } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LampContainer } from "@/components/ui/lamp";
 import { motion } from "framer-motion";
+import { getFormattedTodayDate } from "@/lib/dateUtils";
 
 interface HomePageProps {
     initialUserName?: string;
@@ -21,6 +22,7 @@ interface HomePageProps {
 export default function HomePage({ initialUserName, initialUserRole, initialDate }: HomePageProps) {
     const [settings, setSettings] = useState<{ institutionName?: string | null }>({});
     const [mounted, setMounted] = useState(false);
+    const [clientDate, setClientDate] = useState<string>("");
     const { data: session } = authClient.useSession();
     
     const role = initialUserRole || getRoleFromUser(session?.user);
@@ -29,7 +31,10 @@ export default function HomePage({ initialUserName, initialUserRole, initialDate
     // Prevent hydration mismatch
     useEffect(() => {
         setMounted(true);
+        setClientDate(getFormattedTodayDate());
     }, []);
+
+    const displayDate = mounted && clientDate ? clientDate : (initialDate || "");
 
     useEffect(() => {
         const fetchData = async () => {
@@ -95,7 +100,7 @@ export default function HomePage({ initialUserName, initialUserRole, initialDate
                                     ¡Hola, {userName ? formatName(userName) : 'Usuario'}!
                                 </h2>
                                 <p className="text-sm md:text-base opacity-90 capitalize drop-shadow-md">
-                                    {initialDate || (mounted ? new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')}
+                                    {displayDate}
                                 </p>
                             </div>
                         </motion.div>

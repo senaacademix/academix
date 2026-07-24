@@ -24,6 +24,7 @@ export {
     createAdminOrObserverAction,
     updateAdminOrObserverAction,
     deleteAdminOrObserverAction,
-    updateStudentNovedadAction
+    updateStudentNovedadAction,
+    updateStudentAction
 } from "@/features/admin/actions/adminActions";
 

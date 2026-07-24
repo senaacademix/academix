@@ -32,6 +32,8 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 
+import { getFormattedTodayDate } from "@/lib/dateUtils";
+
 interface TeacherDashboardProps {
     courses: any[];
     groups: any[];
@@ -44,10 +46,14 @@ export function TeacherDashboard({ courses, groups, currentDate, teacherName, fo
     const { data: session } = authClient.useSession();
     const [courseFilter, setCourseFilter] = useState("active");
     const [mounted, setMounted] = useState(false);
+    const [clientDate, setClientDate] = useState<string>("");
 
     useEffect(() => {
         setMounted(true);
+        setClientDate(getFormattedTodayDate());
     }, []);
+
+    const displayDate = mounted && clientDate ? clientDate : (formattedDate || "");
 
     const now = currentDate ? new Date(currentDate) : new Date();
     const activeCoursesCount = courses.filter(course => !course.group?.endDate || new Date(course.group.endDate) >= now).length;
@@ -61,7 +67,7 @@ export function TeacherDashboard({ courses, groups, currentDate, teacherName, fo
                         ¡Hola, {teacherName ? formatName(teacherName) : 'Profesor'}!
                     </h2>
                     <p className="text-sm text-muted-foreground capitalize">
-                        {formattedDate || (mounted ? new Date(currentDate || "").toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '')} — Bienvenido, gestiona tus grupos y revisa el progreso de tus estudiantes.
+                        {displayDate} — Bienvenido, gestiona tus grupos y revisa el progreso de tus estudiantes.
                     </p>
                 </div>
             </div>

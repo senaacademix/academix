@@ -5,6 +5,8 @@ import { StudentDashboard } from "@/features/student/components/StudentDashboard
 import { courseService } from "@/features/teacher/services/courseService";
 import { getAvailableThemes } from "@/app/actions/themes";
 
+import { getFormattedTodayDate } from "@/lib/dateUtils";
+
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session || session.user.role !== "student") {
@@ -17,12 +19,9 @@ export default async function Page() {
 
   const themes = await getAvailableThemes();
 
-  const formattedDate = new Date().toLocaleDateString('es-ES', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-  });
+  const reqHeaders = await headers();
+  const timezone = reqHeaders.get("x-vercel-ip-timezone") || "America/Bogota";
+  const formattedDate = getFormattedTodayDate(timezone);
 
   return <StudentDashboard
     availableCourses={availableCourses}

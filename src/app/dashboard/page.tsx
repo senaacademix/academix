@@ -1,16 +1,14 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import HomePage from "@/features/home/components/HomePage";
+import { getFormattedTodayDate } from "@/lib/dateUtils";
 
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
   
-  const initialDate = new Date().toLocaleDateString('es-ES', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-  });
+  const reqHeaders = await headers();
+  const timezone = reqHeaders.get("x-vercel-ip-timezone") || "America/Bogota";
+  const initialDate = getFormattedTodayDate(timezone);
 
   return (
     <HomePage 
