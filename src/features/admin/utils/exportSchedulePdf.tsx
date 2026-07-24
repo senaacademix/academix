@@ -40,9 +40,19 @@ const ScheduleDocument = ({ programs, scheduleTitle }: { programs: any[], schedu
 
             group.courses?.forEach((course: any) => {
                 course.schedules?.forEach((sched: any) => {
-                    const startH = parseInt(sched.startTime.split(':')[0], 10);
-                    const endH = parseInt(sched.endTime.split(':')[0], 10);
-                    const endM = parseInt(sched.endTime.split(':')[1], 10);
+                    let startH = parseInt(sched.startTime.split(':')[0], 10);
+                    let endH = parseInt(sched.endTime.split(':')[0], 10);
+                    let endM = parseInt(sched.endTime.split(':')[1], 10);
+
+                    if (group.startTime && group.endTime) {
+                        const gStartH = parseInt(group.startTime.split(':')[0], 10);
+                        const gEndH = parseInt(group.endTime.split(':')[0], 10);
+                        const gEndM = parseInt(group.endTime.split(':')[1], 10);
+                        startH = Math.min(startH, gStartH);
+                        endH = Math.max(endH, gEndH);
+                        if (endH === gEndH && gEndM > 0) endM = gEndM;
+                    }
+
                     const startIdx = startH - 6;
                     const endIdx = endH - 6 + (endM > 0 ? 1 : 0);
                     const dayIdx = getDayIndex(sched.dayOfWeek);

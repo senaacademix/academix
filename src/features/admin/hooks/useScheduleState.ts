@@ -593,7 +593,7 @@ export function useScheduleState({
     const handleExportExcel = useCallback(async () => {
         setIsExportingExcel(true);
         try {
-            await exportScheduleToExcel(localPrograms, scheduleTitle || "Horario Académico");
+            await exportScheduleToExcel(localPrograms, scheduleTitle || "Horario Académico", scheduleStartDate, scheduleEndDate);
             toast.success("Excel exportado correctamente.");
         } catch (error) {
             console.error(error);
@@ -601,7 +601,7 @@ export function useScheduleState({
         } finally {
             setIsExportingExcel(false);
         }
-    }, [localPrograms, scheduleTitle]);
+    }, [localPrograms, scheduleTitle, scheduleStartDate, scheduleEndDate]);
 
     const handleDiscard = useCallback(() => {
         if (!confirm("¿Descartar todos los cambios pendientes? Se revertirá al último estado guardado.")) return;
@@ -641,13 +641,14 @@ export function useScheduleState({
         return options;
     }, [dlgStart, dlgGroupId, program?.groups]);
 
-    const openDlg = useCallback((gid: string, day: DayOfWeek, title: string, startStr?: string, durationMin: number = 120) => {
+    const openDlg = useCallback((gid: string, day: DayOfWeek, title: string, startStr?: string, durationMin?: number) => {
         const g = localPrograms.flatMap(p => p.groups).find(x => x.id === gid); if (!g) return;
         setDlgGroupId(gid); setDlgTitle(title); setDlgDay(day);
         
         const mStart = startStr ? toMin(startStr) : toMin(g.startTime);
         const limit = toMin(g.endTime);
-        const mEnd = Math.min(mStart + durationMin, limit);
+        const effectiveDur = (durationMin !== undefined && durationMin > 0) ? durationMin : Math.max(limit - mStart, 60);
+        const mEnd = Math.min(mStart + effectiveDur, limit);
 
         setDlgStart(toStr(mStart));
         setDlgEnd(toStr(mEnd));

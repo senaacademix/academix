@@ -507,7 +507,7 @@ export function CalendarGroupGrid({
                                             const rawStart = yToPctMin(relY, h, gS, gE) - (d.offsetMin ?? 0);
                                             localMove(d.courseId, d.title, d.teacherId ?? null, d.durationMin, day, rawStart, gS, gE, d.scheduleId);
                                         } else {
-                                            const sessionDur = d.durationMin > 0 ? Math.min(d.durationMin, gE - gS) : (gE - gS);
+                                            const sessionDur = gE - gS;
                                             openDlg(g.id, day, d.title ?? "", toStr(gS), sessionDur);
                                         }
                                     } catch (err) {
