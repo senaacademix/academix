@@ -1,6 +1,7 @@
 import { Page, Text, View, Document, StyleSheet, Font, Link } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatCalendarDate } from '@/lib/dateUtils';
 
 // Ensure fonts are registered if not already globally available where this is rendered
 // The parent component or global setup might already handle this, but it's safe to have here if isolated.
@@ -606,7 +607,7 @@ export const CourseReportPDFDocument = ({
                                     <View key={record.id} style={styles.tableRow} wrap={false}>
                                         <View style={{ width: '30%' }}>
                                             <Text style={{ fontSize: 9, color: '#111827' }}>
-                                                {format(new Date(record.date), "PPP", { locale: es })}
+                                                {formatCalendarDate(record.date, "PPP")}
                                             </Text>
                                             {record.departureTime && (
                                                 <Text style={{ fontSize: 7, color: COLORS.gray500, marginTop: 1 }}>
@@ -664,7 +665,7 @@ export const CourseReportPDFDocument = ({
                                         </Text>
                                         <Text style={styles.remarkTitle}>{remark.title}</Text>
                                     </View>
-                                    <Text style={styles.remarkDate}>{format(new Date(remark.date), "PPP", { locale: es })}</Text>
+                                    <Text style={styles.remarkDate}>{formatCalendarDate(remark.date, "PPP")}</Text>
                                 </View>
                                 <Text style={styles.remarkDesc}>{remark.description}</Text>
                             </View>

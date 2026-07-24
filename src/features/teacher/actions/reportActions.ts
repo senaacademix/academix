@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { courseService } from "../services/courseService";
 import prisma from "@/lib/prisma";
 import { formatName } from "@/lib/utils";
-import { toUTCStartOfDayFromLocal } from "@/lib/dateUtils";
+import { toUTCStartOfDayFromLocal, formatCalendarDate } from "@/lib/dateUtils";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -134,7 +134,7 @@ export async function getCourseCompleteDataAction(courseId: string) {
     const attendanceData = course.attendances.map((attendance: any) => ({
         "Estudiante": attendance.user.name || "Sin nombre",
         "Email": attendance.user.email,
-        "Fecha": new Date(attendance.date).toLocaleDateString('es-ES'),
+        "Fecha": formatCalendarDate(attendance.date, "dd/MM/yyyy"),
         "Estado": attendance.status === 'ABSENT' ? 'Ausente' :
                 attendance.status === 'LATE' ? 'Tarde' : 'Excusado',
         "Hora Llegada": attendance.arrivalTime ? new Date(attendance.arrivalTime).toLocaleTimeString('es-ES') : "-",
@@ -145,7 +145,7 @@ export async function getCourseCompleteDataAction(courseId: string) {
     const remarksData = course.remarks.map((remark: any) => ({
         "Estudiante": remark.user.name || "Sin nombre",
         "Email": remark.user.email,
-        "Fecha": new Date(remark.date).toLocaleDateString('es-ES'),
+        "Fecha": formatCalendarDate(remark.date, "dd/MM/yyyy"),
         "Tipo": remark.type === 'COMMENDATION' ? 'Felicitación' : remark.type === 'ATTENTION' ? 'Llamado de Atención' : remark.type === 'CITATION' ? 'Citación' : 'Otra',
         "Título": remark.title,
         "Descripción": remark.description

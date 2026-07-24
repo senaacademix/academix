@@ -1891,6 +1891,10 @@ export async function saveScheduleBatchAction(pendingChanges: any[]) {
         for (const ch of settingsChanges) {
             await updateSettingsAction({ 
                 schedulesPublished: ch.schedulesPublished,
+                ...(ch.scheduleStartDate ? { scheduleStartDate: new Date(ch.scheduleStartDate + "T12:00:00") } : {}),
+                ...(ch.scheduleEndDate ? { scheduleEndDate: new Date(ch.scheduleEndDate + "T12:00:00") } : {}),
+                ...(ch.scheduleTitle ? { scheduleTitle: ch.scheduleTitle } : {}),
+                ...(ch.maxTeacherHours !== undefined ? { maxTeacherHours: ch.maxTeacherHours } : {})
             });
             if (ch.programId) {
                 await prisma.program.update({

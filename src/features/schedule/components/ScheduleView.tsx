@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Calendar, Clock, BookOpen, Info, Users, GraduationCap, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCalendarDate } from "@/lib/dateUtils";
 import { getScheduleViewAction } from "@/features/schedule/actions/scheduleActions";
 import { useSession } from "@/lib/auth-client";
 import {
@@ -939,13 +940,13 @@ export function ScheduleView() {
                                         {selectedCourse?.group?.startDate && (
                                             <div className="space-y-1">
                                                 <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Inicio</p>
-                                                <p className="text-sm font-medium">{new Date(selectedCourse.group.startDate).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                                                <p className="text-sm font-medium">{formatCalendarDate(selectedCourse.group.startDate, "dd 'de' MMMM 'de' yyyy")}</p>
                                             </div>
                                         )}
                                         {selectedCourse?.group?.endDate && (
                                             <div className="space-y-1">
                                                 <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Fin</p>
-                                                <p className="text-sm font-medium">{new Date(selectedCourse.group.endDate).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                                                <p className="text-sm font-medium">{formatCalendarDate(selectedCourse.group.endDate, "dd 'de' MMMM 'de' yyyy")}</p>
                                             </div>
                                         )}
                                     </div>

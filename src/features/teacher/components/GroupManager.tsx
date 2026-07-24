@@ -72,9 +72,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatName } from "@/lib/utils";
+import { formatCalendarDate, fromUTC } from "@/lib/dateUtils";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
-import { formatCalendarDate } from "@/lib/dateUtils";
 import { resetStudentPassword, saveAttendanceBatch, saveRemarkBatch, getGroupAttendanceHistory, getGroupRemarksHistory, getTeacherComprehensiveGroupAnalyticsAction, saveSingleAttendanceAction, deleteRemarkAction, resetStudentDailyAttempts, notifyEmailSentBatchAction } from "../actions/groupActions";
 import { getRemarkTemplatesAction, createRemarkTemplateAction, updateRemarkTemplateAction, deleteRemarkTemplateAction } from "../actions/remarkActions";
 import { getGroupImprovementPlans, upsertImprovementPlan, deleteImprovementPlan, deleteSignedDocument, deleteTeacherSignedDoc, submitTeacherSignedDoc, markPlanViewed, resetPlanToStep, gradeImprovementPlan } from "@/features/student/actions/improvementPlanActions";
@@ -1651,7 +1651,7 @@ const handleOpenAnalytics = async () => {
 
     const handleDeleteAttendance = (att: any) => {
         const studentName = formatName(att.user.name, att.user.profile);
-        const formattedDate = format(new Date(att.date), "dd/MM/yyyy");
+        const formattedDate = formatCalendarDate(att.date, "dd/MM/yyyy");
         
         requestConfirm(
             "¿Retirar registro de asistencia?",
@@ -3497,7 +3497,7 @@ const handleOpenAnalytics = async () => {
                                                                                 const isAbsent = rec.status === "ABSENT";
                                                                                 const isLate = rec.status === "LATE";
                                                                                 const isLeaveEarly = rec.status === "LEAVE_EARLY";
-                                                                                const formattedDate = format(new Date(rec.date), "dd/MM/yyyy");
+                                                                                const formattedDate = formatCalendarDate(rec.date, "dd/MM/yyyy");
                                                                                 
                                                                                 return (
                                                                                     <TableRow key={rec.id} className="hover:bg-muted/5 transition-colors">
@@ -4202,7 +4202,7 @@ const handleOpenAnalytics = async () => {
                                                                             )}
                                                                         </div>
                                                                         <div className="flex items-center gap-2 shrink-0">
-                                                                            <span className="text-[10px] font-semibold text-muted-foreground bg-muted/65 px-1.5 py-0.5 rounded">{format(new Date(rem.date), "dd MMM yyyy")}</span>
+                                                                            <span className="text-[10px] font-semibold text-muted-foreground bg-muted/65 px-1.5 py-0.5 rounded">{formatCalendarDate(rem.date, "dd MMM yyyy")}</span>
                                                                             <Button
                                                                                 variant="ghost"
                                                                                 size="icon"
@@ -4394,14 +4394,14 @@ const handleOpenAnalytics = async () => {
                                                                                 )}
                                                                             </div>
                                                                             <div className="text-[11px] text-muted-foreground mt-0.5">
-                                                                                {format(new Date(plan.startDate), "dd/MM/yyyy")} → {format(new Date(plan.endDate), "dd/MM/yyyy")}
+                                                                                {formatCalendarDate(plan.startDate, "dd/MM/yyyy")} → {formatCalendarDate(plan.endDate, "dd/MM/yyyy")}
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-start sm:justify-end">
                                                                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" title="Enviar correo" onClick={() => handleImpEmail(plan)}><Mail className="w-3.5 h-3.5" /></Button>
                                                                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setViewGroupPlanDetail(plan)}><Eye className="w-3 h-3" />Ver</Button>
                                                                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none text-amber-600 hover:text-amber-700" onClick={() => setResetPlanDialog({ open: true, planId: plan.id, stepNumber: 1, reason: "" })}><RotateCcw className="w-3.5 h-3.5" />Devolver Paso</Button>
-                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setImpPlanFormDialog({ open: true, id: plan.id, studentId: plan.studentId, planNumber: plan.planNumber, teacherDocUrl: plan.teacherDocUrl || "", startDate: format(new Date(plan.startDate), "yyyy-MM-dd"), endDate: format(new Date(plan.endDate), "yyyy-MM-dd"), observations: plan.observations || "", planScore: plan.planScore !== null && plan.planScore !== undefined ? plan.planScore : "", finalGrade: plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade : "", evidenceUrl: plan.evidenceUrl || "" })}><FileText className="w-3 h-3" />Editar</Button>
+                                                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 border border-border/50 bg-background sm:border-none" onClick={() => setImpPlanFormDialog({ open: true, id: plan.id, studentId: plan.studentId, planNumber: plan.planNumber, teacherDocUrl: plan.teacherDocUrl || "", startDate: formatCalendarDate(plan.startDate, "yyyy-MM-dd"), endDate: formatCalendarDate(plan.endDate, "yyyy-MM-dd"), observations: plan.observations || "", planScore: plan.planScore !== null && plan.planScore !== undefined ? plan.planScore : "", finalGrade: plan.finalGrade !== null && plan.finalGrade !== undefined ? plan.finalGrade : "", evidenceUrl: plan.evidenceUrl || "" })}><FileText className="w-3 h-3" />Editar</Button>
                                                                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive border border-destructive/20 bg-background sm:border-none" onClick={() => setImpDeleteConfirm(plan.id)}><Trash2 className="w-3 h-3" />Eliminar</Button>
                                                                         </div>
                                                                     </div>
@@ -4668,11 +4668,11 @@ const handleOpenAnalytics = async () => {
                                                         </div>
                                                         <div className="space-y-0.5">
                                                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fecha Inicio</p>
-                                                            <p className="font-medium text-foreground">{format(new Date(viewGroupPlanDetail.startDate), "dd/MM/yyyy")}</p>
+                                                            <p className="font-medium text-foreground">{formatCalendarDate(viewGroupPlanDetail.startDate, "dd/MM/yyyy")}</p>
                                                         </div>
                                                         <div className="space-y-0.5">
                                                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fecha Fin</p>
-                                                            <p className="font-medium text-foreground">{format(new Date(viewGroupPlanDetail.endDate), "dd/MM/yyyy")}</p>
+                                                            <p className="font-medium text-foreground">{formatCalendarDate(viewGroupPlanDetail.endDate, "dd/MM/yyyy")}</p>
                                                         </div>
                                                     </div>
 

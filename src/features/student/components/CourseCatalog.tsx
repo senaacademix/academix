@@ -6,6 +6,7 @@ import { enrollStudentAction } from "@/features/student/actions/enrollmentAction
 import { BookOpen, User, Lock, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatName } from "@/lib/utils";
+import { formatCalendarDate } from "@/lib/dateUtils";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import React from "react";
 
@@ -103,13 +104,13 @@ export function CourseCatalog({ courses, pendingEnrollments = [] }: { courses: a
                                     <div className="flex flex-col items-center p-2 rounded-xl bg-muted/10 border border-border/10">
                                         <span className="text-[7px] font-black text-muted-foreground uppercase tracking-tighter">Inicio</span>
                                         <span className="text-[9px] font-bold mt-1">
-                                            {course.group?.startDate ? new Date(course.group.startDate).toLocaleDateString() : "---"}
+                                            {course.group?.startDate ? formatCalendarDate(course.group.startDate, "dd/MM/yyyy") : "---"}
                                         </span>
                                     </div>
                                     <div className="flex flex-col items-center p-2 rounded-xl bg-muted/10 border border-border/10">
                                         <span className="text-[7px] font-black text-muted-foreground uppercase tracking-tighter">Fin</span>
                                         <span className="text-[9px] font-bold mt-1">
-                                            {course.group?.endDate ? new Date(course.group.endDate).toLocaleDateString() : "---"}
+                                            {course.group?.endDate ? formatCalendarDate(course.group.endDate, "dd/MM/yyyy") : "---"}
                                         </span>
                                     </div>
                                 </div>

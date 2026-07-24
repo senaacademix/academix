@@ -127,11 +127,21 @@ export function useScheduleState({
 }) {
     const router = useRouter();
     const [isSaving, setIsSaving] = useState(false);
+    const formatIsoDate = (d: Date | string | null | undefined) => {
+        if (!d) return "";
+        const date = typeof d === "string" ? new Date(d) : d;
+        if (isNaN(date.getTime())) return "";
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(date.getUTCDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
+
     const justSavedRef = useRef(false);
     const [schedulesPublished, setSchedulesPublished] = useState(initialSchedulesPublished);
     const [scheduleTitle, setScheduleTitle] = useState(initialScheduleTitle);
-    const [scheduleStartDate, setScheduleStartDate] = useState(initialScheduleStartDate ? initialScheduleStartDate.toISOString().split('T')[0] : "");
-    const [scheduleEndDate, setScheduleEndDate] = useState(initialScheduleEndDate ? initialScheduleEndDate.toISOString().split('T')[0] : "");
+    const [scheduleStartDate, setScheduleStartDate] = useState(formatIsoDate(initialScheduleStartDate));
+    const [scheduleEndDate, setScheduleEndDate] = useState(formatIsoDate(initialScheduleEndDate));
     const [maxTeacherHours, setMaxTeacherHours] = useState(initialMaxTeacherHours);
 
     const [localPrograms, setLocalPrograms] = useState<Program[]>(() => JSON.parse(JSON.stringify(initialPrograms)));
@@ -147,8 +157,8 @@ export function useScheduleState({
             setLocalPrograms(JSON.parse(JSON.stringify(initialPrograms)));
             setSchedulesPublished(initialSchedulesPublished);
             setScheduleTitle(initialScheduleTitle);
-            setScheduleStartDate(initialScheduleStartDate ? initialScheduleStartDate.toISOString().split('T')[0] : "");
-            setScheduleEndDate(initialScheduleEndDate ? initialScheduleEndDate.toISOString().split('T')[0] : "");
+            setScheduleStartDate(formatIsoDate(initialScheduleStartDate));
+            setScheduleEndDate(formatIsoDate(initialScheduleEndDate));
             setMaxTeacherHours(initialMaxTeacherHours);
         }
     }, [initialPrograms, initialSchedulesPublished, initialScheduleTitle, initialScheduleStartDate, initialScheduleEndDate, initialMaxTeacherHours, isDirty, isSaving]);
@@ -215,19 +225,11 @@ export function useScheduleState({
     }, [initialPrograms, programId]);
 
     useEffect(() => {
-        const activeProg = localPrograms.find(p => p.id === programId);
-        if (activeProg) {
-            setScheduleStartDate(activeProg.startDate ? new Date(activeProg.startDate).toISOString().split('T')[0] : (initialScheduleStartDate ? new Date(initialScheduleStartDate).toISOString().split('T')[0] : ""));
-            setScheduleEndDate(activeProg.endDate ? new Date(activeProg.endDate).toISOString().split('T')[0] : (initialScheduleEndDate ? new Date(initialScheduleEndDate).toISOString().split('T')[0] : ""));
-            setScheduleTitle(activeProg.scheduleTitle || initialScheduleTitle || "");
-            setMaxTeacherHours(activeProg.maxTeacherHours ?? initialMaxTeacherHours ?? 40);
-        } else {
-            setScheduleStartDate(initialScheduleStartDate ? new Date(initialScheduleStartDate).toISOString().split('T')[0] : "");
-            setScheduleEndDate(initialScheduleEndDate ? new Date(initialScheduleEndDate).toISOString().split('T')[0] : "");
-            setScheduleTitle(initialScheduleTitle || "");
-            setMaxTeacherHours(initialMaxTeacherHours ?? 40);
-        }
-    }, [programId, localPrograms, initialScheduleStartDate, initialScheduleEndDate, initialScheduleTitle, initialMaxTeacherHours]);
+        setScheduleStartDate(formatIsoDate(initialScheduleStartDate));
+        setScheduleEndDate(formatIsoDate(initialScheduleEndDate));
+        setScheduleTitle(initialScheduleTitle || "Horario Académico");
+        setMaxTeacherHours(initialMaxTeacherHours ?? 40);
+    }, [initialScheduleStartDate, initialScheduleEndDate, initialScheduleTitle, initialMaxTeacherHours]);
 
     const program = useMemo(() => localPrograms.find(p => p.id === programId), [localPrograms, programId]);
 

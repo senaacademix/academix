@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { DayOfWeek } from "@/generated/prisma/client";
 import { cn } from "@/lib/utils";
+import { formatCalendarDate } from "@/lib/dateUtils";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -721,16 +722,7 @@ export function SchedulePlanning({
                             <Calendar className="w-3.5 h-3.5 text-primary" />
                             <span>Periodo:</span>
                             <span className="text-primary font-black">
-                                {(() => {
-                                    const start = new Date(scheduleStartDate);
-                                    const end = new Date(scheduleEndDate);
-                                    const formatD = (d: Date) => {
-                                        if (isNaN(d.getTime())) return "N/A";
-                                        const date = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
-                                        return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
-                                    };
-                                    return `${formatD(start)} al ${formatD(end)}`;
-                                })()}
+                                {formatCalendarDate(scheduleStartDate, "dd/MM/yyyy")} al {formatCalendarDate(scheduleEndDate, "dd/MM/yyyy")}
                             </span>
                         </div>
                     )}
@@ -1789,38 +1781,18 @@ export function SchedulePlanning({
                                 : "Al publicar los horarios, estos serán visibles para los estudiantes y docentes una vez que guardes los cambios."}
                         </AlertDialogDescription>
 
-                        {!schedulesPublished && (
-                            <div className="mt-4 flex flex-col gap-3 text-left">
-                                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                                    Para publicar, es obligatorio definir las fechas del periodo:
-                                </p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-xs">Fecha de Inicio</Label>
-                                        <Input 
-                                            type="date" 
-                                            value={scheduleStartDate} 
-                                            onChange={e => setScheduleStartDate(e.target.value)}
-                                            className={`h-8 text-xs ${!scheduleStartDate ? "border-red-500/50 focus-visible:ring-red-500/30" : ""}`}
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-xs">Fecha de Fin</Label>
-                                        <Input 
-                                            type="date" 
-                                            value={scheduleEndDate} 
-                                            onChange={e => setScheduleEndDate(e.target.value)}
-                                            className={`h-8 text-xs ${!scheduleEndDate ? "border-red-500/50 focus-visible:ring-red-500/30" : ""}`}
-                                        />
-                                    </div>
-                                </div>
+                        {!schedulesPublished && scheduleStartDate && scheduleEndDate && (
+                            <div className="mt-3 p-3 rounded-xl bg-muted/40 border border-border/40 text-xs flex flex-col gap-1 text-left">
+                                <span className="font-semibold text-muted-foreground">Periodo de vigencia global:</span>
+                                <span className="font-bold text-primary">
+                                    {formatCalendarDate(scheduleStartDate, "dd/MM/yyyy")} al {formatCalendarDate(scheduleEndDate, "dd/MM/yyyy")}
+                                </span>
                             </div>
                         )}
                     </AlertDialogHeader>
                     <AlertDialogFooter className="mt-2">
                         <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
                         <AlertDialogAction
-                            disabled={!schedulesPublished && (!scheduleStartDate || !scheduleEndDate)}
                             onClick={() => {
                                 const val = !schedulesPublished;
                                 triggerSettingsChange(scheduleTitle, scheduleStartDate, scheduleEndDate, maxTeacherHours, val);

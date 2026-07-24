@@ -6,8 +6,8 @@ import { markRemarkViewed } from "@/features/student/actions/studentActions";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquareWarning, Award, Search, Info, CalendarDays, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { formatName } from "@/lib/utils";
+import { formatCalendarDate } from "@/lib/dateUtils";
 import {
     Table,
     TableBody,
@@ -104,7 +104,7 @@ export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
                         {remarks.map((remark) => (
                             <TableRow key={remark.id} className={!remark.viewedAt ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}>
                                 <TableCell className="text-sm">
-                                    {format(new Date(remark.date), "PPP", { locale: es })}
+                                    {formatCalendarDate(remark.date, "PPP")}
                                 </TableCell>
                                 <TableCell className="text-sm">
                                     {formatName(remark.teacher.name, remark.teacher.profile)}
@@ -173,7 +173,7 @@ export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
                         <div className="flex-1 min-w-0">
                             <DialogTitle className="text-xl font-black leading-tight">Detalle de Observación</DialogTitle>
                             <DialogDescription className="text-xs mt-0.5">
-                                {viewingRemark && format(new Date(viewingRemark.date), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+                                {viewingRemark && formatCalendarDate(viewingRemark.date, "dd 'de' MMMM 'de' yyyy")}
                             </DialogDescription>
                         </div>
                         <Button variant="outline" size="sm" className="shrink-0" onClick={() => setIsViewDialogOpen(false)}>
