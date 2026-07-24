@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getScheduleEvents, createScheduleEvent, deleteScheduleEvent, deleteEventsBeforeDate, generateHolidaysForPeriod } from "@/features/schedule/actions/eventActions";
 import { Calendar as CalendarIcon, Trash2, Plus, CalendarDays, Loader2, Sparkles, Clock, AlignLeft, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
-import { fromUTC } from "@/lib/dateUtils";
+import { fromUTC, formatCalendarDate } from "@/lib/dateUtils";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -552,98 +552,110 @@ export function ScheduleEventManagement({
                                     </div>
 
                                     {/* Days grid */}
-                                    <div className="grid grid-cols-7 divide-x divide-y flex-1 auto-rows-fr overflow-hidden">
+                                    <div className="grid grid-cols-7 divide-x divide-y flex-1 overflow-y-auto min-h-[460px]">
                                         {monthDays.map((day, i) => {
                                             const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+                                            const dayIsoStr = format(day, "yyyy-MM-dd");
                                             const dbEventsForDay = events.filter(e => {
-                                                const eStartDate = startOfDay(fromUTC(e.startDate));
-                                                const dayStart = startOfDay(day);
-                                                return dayStart.getTime() === eStartDate.getTime();
+                                                const eDate = typeof e.startDate === "string" ? new Date(e.startDate) : e.startDate;
+                                                const y = eDate.getUTCFullYear();
+                                                const m = String(eDate.getUTCMonth() + 1).padStart(2, "0");
+                                                const d = String(eDate.getUTCDate()).padStart(2, "0");
+                                                return `${y}-${m}-${d}` === dayIsoStr;
                                             });
 
                                             return (
                                                 <div
                                                     key={i}
                                                     className={cn(
-                                                        "p-2 flex flex-col relative group/day transition-colors cursor-pointer hover:bg-muted/30",
+                                                        "p-1.5 sm:p-2 min-h-[88px] sm:min-h-[102px] flex flex-col relative group/day transition-colors cursor-pointer hover:bg-muted/30",
                                                         !isCurrentMonth && "bg-muted/10",
                                                         isSameDay(day, today) && "bg-primary/5",
                                                     )}
-                                                    onClick={() => setEventDate(format(day, "yyyy-MM-dd"))}
+                                                    onClick={() => setEventDate(dayIsoStr)}
                                                 >
-                                                    <div className={cn(
-                                                        "text-xs font-bold mb-1.5 w-7 h-7 flex items-center justify-center rounded-full shrink-0",
-                                                        isSameDay(day, today) ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground",
-                                                        !isCurrentMonth && "opacity-40"
-                                                    )}>
-                                                        {format(day, "d")}
+                                                    <div className="flex items-center justify-between mb-1.5 w-full shrink-0">
+                                                        <span className={cn(
+                                                            "text-xs font-bold w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full shrink-0",
+                                                            isSameDay(day, today) ? "bg-primary text-primary-foreground shadow-md font-black" : "text-muted-foreground",
+                                                            !isCurrentMonth && "opacity-40"
+                                                        )}>
+                                                            {format(day, "d")}
+                                                        </span>
+                                                        {dbEventsForDay.length > 0 && (
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse mr-1" />
+                                                        )}
                                                     </div>
 
-                                                    <div className="flex flex-col gap-1.5 overflow-y-auto hide-scrollbar z-10">
-                                                        {dbEventsForDay.map(evt => (
-                                                            <div key={evt.id} onClick={(e) => e.stopPropagation()}>
-                                                                <Popover>
-                                                                    <PopoverTrigger asChild>
-                                                                        <div className={cn(
-                                                                            "text-[10px] font-bold px-2 py-1 rounded-md border truncate cursor-help transition-all hover:-translate-y-0.5 hover:shadow-md",
-                                                                            evt.type === "HOLIDAY"
-                                                                                ? "bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/30 text-red-700 dark:text-red-300"
-                                                                                : "bg-gradient-to-r from-amber-500/15 to-orange-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300"
-                                                                        )}>
-                                                                            {evt.startTime && <span className="opacity-70 mr-1.5">[{evt.startTime}]</span>}
-                                                                            {evt.title}
-                                                                        </div>
-                                                                    </PopoverTrigger>
-                                                                    <PopoverContent className="w-80 p-5 shadow-2xl border-muted/20 z-[100]" side="right" align="start">
-                                                                        <div className="flex justify-between items-start gap-4">
-                                                                            <div className="space-y-1 min-w-0">
-                                                                                <div className="font-extrabold text-lg leading-tight">{evt.title}</div>
-                                                                                <div className="text-sm font-semibold text-muted-foreground">
-                                                                                    {evt.type === "HOLIDAY" ? "Día Festivo" : "Evento Institucional"}
-                                                                                </div>
-                                                                                <div className="text-xs text-muted-foreground font-medium">
-                                                                                    {format(fromUTC(evt.startDate), "PPP", { locale: es })}
-                                                                                </div>
-                                                                                {(evt.startTime || evt.endTime) && (
-                                                                                    <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
-                                                                                        <Clock className="w-4 h-4" />
-                                                                                        {evt.startTime || "--:--"} hasta {evt.endTime || "--:--"}
+                                                    <div className="flex flex-col gap-1 overflow-y-auto hide-scrollbar z-10 w-full flex-1">
+                                                        {dbEventsForDay.map(evt => {
+                                                            const displayTitle = evt.title.replace(/^Día Festivo:\s*/i, "").trim();
+                                                            return (
+                                                                <div key={evt.id} onClick={(e) => e.stopPropagation()}>
+                                                                    <Popover>
+                                                                        <PopoverTrigger asChild>
+                                                                            <div className={cn(
+                                                                                "text-[10px] sm:text-[11px] font-bold px-2 py-1 rounded-lg border truncate cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md flex items-center gap-1.5 w-full",
+                                                                                evt.type === "HOLIDAY"
+                                                                                    ? "bg-red-500/15 dark:bg-red-950/40 border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-500/25"
+                                                                                    : "bg-amber-500/15 dark:bg-amber-950/40 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/25"
+                                                                            )}>
+                                                                                <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", evt.type === "HOLIDAY" ? "bg-red-500" : "bg-amber-500")} />
+                                                                                {evt.startTime && <span className="opacity-70 shrink-0 font-mono text-[9px]">[{evt.startTime}]</span>}
+                                                                                <span className="truncate flex-1 leading-tight">{displayTitle}</span>
+                                                                            </div>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-80 p-5 shadow-2xl border-muted/20 z-[100]" side="right" align="start">
+                                                                            <div className="flex justify-between items-start gap-4">
+                                                                                <div className="space-y-1 min-w-0">
+                                                                                    <div className="font-extrabold text-lg leading-tight">{evt.title}</div>
+                                                                                    <div className="text-sm font-semibold text-muted-foreground">
+                                                                                        {evt.type === "HOLIDAY" ? "Día Festivo" : "Evento Institucional"}
                                                                                     </div>
-                                                                                )}
-                                                                                {evt.description && (
-                                                                                    <p className="text-sm text-foreground/80 mt-3 bg-muted/40 p-3 rounded-lg border border-border/50">
-                                                                                        {evt.description}
-                                                                                    </p>
-                                                                                )}
-                                                                                {evt.externalUrl && (
-                                                                                    <div className="mt-3">
-                                                                                        <a
-                                                                                            href={evt.externalUrl}
-                                                                                            target="_blank"
-                                                                                            rel="noopener noreferrer"
-                                                                                            className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1 font-semibold"
-                                                                                        >
-                                                                                            <ExternalLink className="w-3.5 h-3.5" />
-                                                                                            <span>Ver información externa</span>
-                                                                                        </a>
+                                                                                    <div className="text-xs text-muted-foreground font-medium">
+                                                                                        {formatCalendarDate(evt.startDate, "PPP")}
                                                                                     </div>
+                                                                                    {(evt.startTime || evt.endTime) && (
+                                                                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-2">
+                                                                                            <Clock className="w-4 h-4" />
+                                                                                            {evt.startTime || "--:--"} hasta {evt.endTime || "--:--"}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {evt.description && (
+                                                                                        <p className="text-sm text-foreground/80 mt-3 bg-muted/40 p-3 rounded-lg border border-border/50">
+                                                                                            {evt.description}
+                                                                                        </p>
+                                                                                    )}
+                                                                                    {evt.externalUrl && (
+                                                                                        <div className="mt-3">
+                                                                                            <a
+                                                                                                href={evt.externalUrl}
+                                                                                                target="_blank"
+                                                                                                rel="noopener noreferrer"
+                                                                                                className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1 font-semibold"
+                                                                                            >
+                                                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                                                                <span>Ver información externa</span>
+                                                                                            </a>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                {!isObserver && (
+                                                                                    <Button
+                                                                                        variant="destructive"
+                                                                                        size="icon"
+                                                                                        onClick={(e) => { e.stopPropagation(); setItemToDelete(evt.id); }}
+                                                                                        className="shrink-0 h-9 w-9 shadow-md rounded-full"
+                                                                                    >
+                                                                                        <Trash2 className="w-4 h-4" />
+                                                                                    </Button>
                                                                                 )}
                                                                             </div>
-                                                                            {!isObserver && (
-                                                                                <Button
-                                                                                    variant="destructive"
-                                                                                    size="icon"
-                                                                                    onClick={(e) => { e.stopPropagation(); setItemToDelete(evt.id); }}
-                                                                                    className="shrink-0 h-9 w-9 shadow-md rounded-full"
-                                                                                >
-                                                                                    <Trash2 className="w-4 h-4" />
-                                                                                </Button>
-                                                                            )}
-                                                                        </div>
-                                                                    </PopoverContent>
-                                                                </Popover>
-                                                            </div>
-                                                        ))}
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                     <div className="absolute inset-0 border-2 border-primary/40 opacity-0 group-hover/day:opacity-100 pointer-events-none transition-opacity rounded-sm z-0" />
                                                 </div>
