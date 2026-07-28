@@ -145,8 +145,12 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
         ? qualPrograms.filter(p => p.id === programId) 
         : qualPrograms;
 
-    // Calculate global stats
-    const allCourses = filteredQualPrograms.flatMap(p => p.periods.flatMap((per: any) => per.courses || []));
+    // Calculate global stats (only normal periods and master courses without group)
+    const allCourses = filteredQualPrograms.flatMap(p => 
+        (p.periods || [])
+            .filter((per: any) => !per.esEspecial)
+            .flatMap((per: any) => (per.courses || []).filter((c: any) => !c.groupId))
+    );
     const totalCoursesCount = allCourses.length;
     const selectedCoursesCount = allCourses.filter((c: any) => selectedQualCourses.includes(c.id)).length;
     const globalPercentage = totalCoursesCount > 0 ? Math.round((selectedCoursesCount / totalCoursesCount) * 100) : 0;
@@ -285,7 +289,8 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                     ) : (
                         <div className="space-y-6">
                             {filteredQualPrograms.map(program => {
-                                const programCourses = program.periods.flatMap((p: any) => p.courses || []);
+                                const normalPeriods = (program.periods || []).filter((p: any) => !p.esEspecial);
+                                const programCourses = normalPeriods.flatMap((p: any) => (p.courses || []).filter((c: any) => !c.groupId));
                                 const totalProgramCourses = programCourses.length;
                                 const selectedProgramCourses = programCourses.filter((c: any) => selectedQualCourses.includes(c.id)).length;
                                 const programPercentage = totalProgramCourses > 0 ? Math.round((selectedProgramCourses / totalProgramCourses) * 100) : 0;
@@ -309,14 +314,16 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                             )}
                                         </div>
                                         <div className="space-y-4">
-                                            {program.periods.map((period: any) => (
-                                                <div key={period.id} className="space-y-2">
-                                                    <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/50 p-1.5 rounded">{period.name}</h5>
-                                                    {period.courses.length === 0 ? (
-                                                        <div className="text-[10px] text-muted-foreground/60 italic pl-2">No hay materias registradas en este periodo.</div>
-                                                    ) : (
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-2">
-                                                            {period.courses.map((course: any) => {
+                                            {normalPeriods.map((period: any) => {
+                                                const periodCourses = (period.courses || []).filter((c: any) => !c.groupId);
+                                                return (
+                                                    <div key={period.id} className="space-y-2">
+                                                        <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/50 p-1.5 rounded">{period.name}</h5>
+                                                        {periodCourses.length === 0 ? (
+                                                            <div className="text-[10px] text-muted-foreground/60 italic pl-2">No hay materias registradas en este periodo.</div>
+                                                        ) : (
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-2">
+                                                                {periodCourses.map((course: any) => {
                                                                 const isChecked = selectedQualCourses.includes(course.id);
                                                                 return (
                                                                     <div 
@@ -351,8 +358,9 @@ export function TeacherQualificationsView({ teacherId, isAdminMode = false, prog
                                                             })}
                                                         </div>
                                                     )}
-                                                </div>
-                                            ))}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 );

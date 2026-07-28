@@ -24,8 +24,14 @@ export async function getTeacherQualificationsAction(teacherId: string) {
             programs: {
                 include: {
                     periods: {
+                        where: {
+                            esEspecial: false
+                        },
                         include: {
                             courses: {
+                                where: {
+                                    groupId: null
+                                },
                                 orderBy: { order: "asc" }
                             }
                         },
@@ -36,7 +42,12 @@ export async function getTeacherQualificationsAction(teacherId: string) {
             qualifiedCourses: {
                 select: {
                     id: true,
-                    title: true
+                    title: true,
+                    period: {
+                        select: {
+                            esEspecial: true
+                        }
+                    }
                 }
             },
             qualificationsLastModifiedBy: {
@@ -49,9 +60,26 @@ export async function getTeacherQualificationsAction(teacherId: string) {
         throw new Error("Teacher not found");
     }
 
+    const masterCourses = (teacher.programs || []).flatMap((p: any) => 
+        (p.periods || []).flatMap((per: any) => per.courses || [])
+    );
+
+    const qualifiedTitles = new Set(
+        (teacher.qualifiedCourses || [])
+            .filter((c: any) => !c.period?.esEspecial)
+            .map((c: any) => c.title?.trim().toLowerCase())
+    );
+
+    const normalQualifiedCourses = masterCourses
+        .filter((mc: any) => 
+            qualifiedTitles.has(mc.title?.trim().toLowerCase()) ||
+            (teacher.qualifiedCourses || []).some((qc: any) => qc.id === mc.id)
+        )
+        .map((mc: any) => ({ id: mc.id, title: mc.title }));
+
     return {
         programs: teacher.programs || [],
-        qualifiedCourses: teacher.qualifiedCourses || [],
+        qualifiedCourses: normalQualifiedCourses,
         locked: teacher.qualifiedCoursesLocked,
         lastModifiedBy: teacher.qualificationsLastModifiedBy ? {
             name: teacher.qualificationsLastModifiedBy.name,

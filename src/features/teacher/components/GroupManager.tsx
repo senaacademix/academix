@@ -106,9 +106,11 @@ import { Switch } from "@/components/ui/switch";
 
 interface GroupManagerProps {
     groups: any[];
+    scheduleStartDate?: string | null;
+    scheduleEndDate?: string | null;
 }
 
-export function GroupManager({ groups }: GroupManagerProps) {
+export function GroupManager({ groups, scheduleStartDate, scheduleEndDate }: GroupManagerProps) {
     const { data: session } = authClient.useSession();
     const teacherId = session?.user?.id;
 
@@ -118,13 +120,13 @@ export function GroupManager({ groups }: GroupManagerProps) {
         // 1. Check if within period (startDate and endDate)
         const dateVal = new Date(dateStr + "T12:00:00Z");
         
-        const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
+        const groupStart = scheduleStartDate || selectedGroup.program?.startDate || selectedGroup.startDate;
         if (groupStart) {
             const startLimit = new Date(toISODateString(groupStart) + "T12:00:00Z");
             if (dateVal < startLimit) return false;
         }
         
-        const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+        const groupEnd = scheduleEndDate || selectedGroup.program?.endDate || selectedGroup.endDate;
         if (groupEnd) {
             const endLimit = new Date(toISODateString(groupEnd) + "T12:00:00Z");
             if (dateVal > endLimit) return false;
@@ -151,8 +153,8 @@ export function GroupManager({ groups }: GroupManagerProps) {
         
         const daysOfWeek = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
         
-        const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
-        const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+        const groupStart = scheduleStartDate || selectedGroup.program?.startDate || selectedGroup.startDate;
+        const groupEnd = scheduleEndDate || selectedGroup.program?.endDate || selectedGroup.endDate;
 
         // Start date of group/program
         const startLimit = groupStart ? new Date(toISODateString(groupStart) + "T12:00:00Z") : null;
@@ -198,7 +200,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
     const getValidClassDaysList = () => {
         if (!selectedGroup || !attCourseId) return [];
         
-        // Derive start date: group.startDate > earliest attendance record > 3 months ago
+        // Derive start date: scheduleStartDate > group.startDate > earliest attendance record > 3 months ago
         const attForCourse = attendanceHistory.filter((a: any) => a.courseId === attCourseId);
         const earliestAtt = attForCourse.length > 0
             ? new Date(Math.min(...attForCourse.map((a: any) => new Date(a.date).getTime())))
@@ -207,12 +209,12 @@ export function GroupManager({ groups }: GroupManagerProps) {
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
         
-        const groupStart = selectedGroup.program?.startDate || selectedGroup.startDate;
+        const groupStart = scheduleStartDate || selectedGroup.program?.startDate || selectedGroup.startDate;
         const startDate = groupStart
             ? new Date(groupStart)
             : (earliestAtt ?? threeMonthsAgo);
             
-        const groupEnd = selectedGroup.program?.endDate || selectedGroup.endDate;
+        const groupEnd = scheduleEndDate || selectedGroup.program?.endDate || selectedGroup.endDate;
         const endDate = groupEnd
             ? new Date(groupEnd)
             : new Date();

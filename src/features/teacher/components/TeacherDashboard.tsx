@@ -40,9 +40,19 @@ interface TeacherDashboardProps {
     currentDate?: string;
     teacherName: string;
     formattedDate?: string;
+    scheduleStartDate?: string | null;
+    scheduleEndDate?: string | null;
 }
 
-export function TeacherDashboard({ courses, groups, currentDate, teacherName, formattedDate }: TeacherDashboardProps) {
+export function TeacherDashboard({ 
+    courses, 
+    groups, 
+    currentDate, 
+    teacherName, 
+    formattedDate,
+    scheduleStartDate,
+    scheduleEndDate
+}: TeacherDashboardProps) {
     const { data: session } = authClient.useSession();
     const [courseFilter, setCourseFilter] = useState("active");
     const [mounted, setMounted] = useState(false);
@@ -73,7 +83,11 @@ export function TeacherDashboard({ courses, groups, currentDate, teacherName, fo
             </div>
 
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                <GroupManager groups={groups} />
+                <GroupManager 
+                    groups={groups} 
+                    scheduleStartDate={scheduleStartDate}
+                    scheduleEndDate={scheduleEndDate}
+                />
             </motion.div>
         </div>
     );

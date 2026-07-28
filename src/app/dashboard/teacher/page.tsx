@@ -19,6 +19,13 @@ export default async function Page() {
 
   const courses = await courseService.getTeacherCourses(session.user.id);
   const groups = await courseService.getTeacherGroups(session.user.id);
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: "settings" },
+    select: {
+      scheduleStartDate: true,
+      scheduleEndDate: true,
+    }
+  });
 
   const reqHeaders = await headers();
   const timezone = reqHeaders.get("x-vercel-ip-timezone") || "America/Bogota";
@@ -33,6 +40,8 @@ export default async function Page() {
       currentDate={currentDate} 
       teacherName={session.user.name}
       formattedDate={formattedDate}
+      scheduleStartDate={settings?.scheduleStartDate ? settings.scheduleStartDate.toISOString() : null}
+      scheduleEndDate={settings?.scheduleEndDate ? settings.scheduleEndDate.toISOString() : null}
     />
   );
 }
