@@ -3,9 +3,10 @@
 import { useEffect, useState, useTransition, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3, UserX, Mail, RotateCcw } from "lucide-react";
+import { Clock, ShieldAlert, BadgeCheck, XSquare, Calendar, LinkIcon, BookOpen, GraduationCap, Link2, ExternalLink, FileText, Eye, EyeOff, CheckCircle2, BarChart3, UserX, Mail, RotateCcw, UserCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
+import { StudentNovedadBadge } from "@/components/StudentNovedadBadge";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -85,7 +86,7 @@ interface StudentRecordsProps {
 }
 
 export function StudentRecords({ studentId, hideTables = false, hideDocumentation = false, defaultTab = "attendance", onlyImprovement = false }: StudentRecordsProps = {}) {
-    const [records, setRecords] = useState<{ attendances: any[], remarks: any[], groupDates?: { startDate: Date | null, endDate: Date | null } | null, scheduleDates?: { startDate: Date | null, endDate: Date | null } | null } | null>(null);
+    const [records, setRecords] = useState<{ attendances: any[], remarks: any[], groupDates?: { startDate: Date | null, endDate: Date | null } | null, scheduleDates?: { startDate: Date | null, endDate: Date | null } | null, targetUser?: any } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [courses, setCourses] = useState<any[]>([]);
     const [gradesLoading, setGradesLoading] = useState(true);
@@ -976,6 +977,40 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
 
     return (
         <div className="space-y-8">
+            {/* Target Student Header Banner */}
+            {studentId && records?.targetUser && (
+                <div className="bg-card/70 border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="px-2.5 py-0.5 text-xs font-bold bg-primary/10 text-primary border-primary/20 gap-1.5 rounded-full">
+                                <UserCheck className="w-3.5 h-3.5" />
+                                Estudiante Seleccionado
+                            </Badge>
+                            {records.targetUser.profile?.identificacion && (
+                                <span className="text-xs font-bold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md border">
+                                    Doc: {records.targetUser.profile.identificacion}
+                                </span>
+                            )}
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight flex items-center gap-3 pt-1">
+                            <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
+                                {formatName(records.targetUser.name, records.targetUser.profile)}
+                            </span>
+                            <StudentNovedadBadge novedad={records.targetUser.profile?.novedad} color={records.targetUser.profile?.novedadColor} />
+                        </h2>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <span>{records.targetUser.email}</span>
+                            {records.targetUser.groupName && (
+                                <>
+                                    <span>•</span>
+                                    <span className="font-bold text-foreground">Grupo: {records.targetUser.groupName}</span>
+                                </>
+                            )}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Summary cards */}
             {!onlyImprovement && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1222,120 +1257,145 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                             </Select>
                                         </div>
 
-                                        {/* Chart Section */}
-                                        <Tabs defaultValue="faltas" className="w-full">
-                                            <TabsList className="grid w-full sm:w-[600px] grid-cols-4 mb-6 mx-auto">
-                                                <TabsTrigger value="faltas">Faltas</TabsTrigger>
-                                                <TabsTrigger value="tardanzas">Tardanzas</TabsTrigger>
-                                                <TabsTrigger value="retiros">Retiros</TabsTrigger>
-                                                <TabsTrigger value="horas">Carga Horaria</TabsTrigger>
-                                            </TabsList>
-                                            
-                                            <TabsContent value="faltas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                        <div className="rounded-3xl border bg-card/60 p-5 shadow-sm space-y-4 my-6">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-3">
                                                 <div>
-                                                    <h3 className="text-base font-black text-foreground">Registro de Inasistencias (Faltas) por Materia</h3>
-                                                    <p className="text-xs text-muted-foreground mt-0.5">Total de días no asistidos en cada materia sobre los días registrados.</p>
+                                                    <h3 className="text-base font-black text-foreground flex items-center gap-2">
+                                                        <BarChart3 className="w-4 h-4 text-primary" />
+                                                        Resumen Estadístico y Porcentual
+                                                    </h3>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Métricas comparativas por materia. Usa las pestañas a continuación para alternar entre Faltas, Tardanzas, Retiros y Carga Horaria.
+                                                    </p>
                                                 </div>
-                                                <div className="space-y-4">
-                                                    {filteredMetrics.map(m => (
-                                                        <div key={m.course.id} className="space-y-1.5">
-                                                            <div className="flex items-center justify-between text-xs font-bold">
-                                                                <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
-                                                                <span className="text-red-600 shrink-0 font-extrabold">
-                                                                    {m.absentCount} / {m.totalClassDays} días ({m.absenceRate.toFixed(1)}%)
-                                                                </span>
-                                                            </div>
-                                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                                                <div className="h-full bg-red-500 rounded-full" style={{ width: `${m.absenceRate}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </TabsContent>
-                                            
-                                            <TabsContent value="tardanzas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
-                                                <div>
-                                                    <h3 className="text-base font-black text-foreground">Registro de Llegadas Tarde por Materia</h3>
-                                                    <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días con ingreso tarde en cada materia.</p>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    {filteredMetrics.map(m => (
-                                                        <div key={m.course.id} className="space-y-1.5">
-                                                            <div className="flex items-center justify-between text-xs font-bold">
-                                                                <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
-                                                                <span className="text-amber-600 shrink-0 font-extrabold">
-                                                                    {m.lateCount} / {m.totalClassDays} días ({m.lateRate.toFixed(1)}%)
-                                                                </span>
-                                                            </div>
-                                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                                                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${m.lateRate}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </TabsContent>
+                                            </div>
 
-                                            <TabsContent value="retiros" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
-                                                <div>
-                                                    <h3 className="text-base font-black text-foreground">Registro de Retiros Tempranos por Materia</h3>
-                                                    <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días con retiro temprano en cada materia.</p>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    {filteredMetrics.map(m => (
-                                                        <div key={m.course.id} className="space-y-1.5">
-                                                            <div className="flex items-center justify-between text-xs font-bold">
-                                                                <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
-                                                                <span className="text-blue-600 shrink-0 font-extrabold">
-                                                                    {m.leaveCount} / {m.totalClassDays} días ({m.leaveRate.toFixed(1)}%)
-                                                                </span>
+                                            <Tabs defaultValue="faltas" className="w-full">
+                                                <TabsList className="grid w-full sm:w-[600px] grid-cols-4 mb-4 mx-auto">
+                                                    <TabsTrigger value="faltas">Faltas</TabsTrigger>
+                                                    <TabsTrigger value="tardanzas">Tardanzas</TabsTrigger>
+                                                    <TabsTrigger value="retiros">Retiros</TabsTrigger>
+                                                    <TabsTrigger value="horas">Carga Horaria</TabsTrigger>
+                                                </TabsList>
+                                                
+                                                <TabsContent value="faltas" className="bg-background border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Registro de Inasistencias (Faltas) por Materia</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Total de días no asistidos en cada materia sobre los días registrados.</p>
+                                                    </div>
+                                                    <div className="space-y-4">
+                                                        {filteredMetrics.map(m => (
+                                                            <div key={m.course.id} className="space-y-1.5">
+                                                                <div className="flex items-center justify-between text-xs font-bold">
+                                                                    <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
+                                                                    <span className="text-red-600 shrink-0 font-extrabold">
+                                                                        {m.absentCount} / {m.totalClassDays} días ({m.absenceRate.toFixed(1)}%)
+                                                                    </span>
+                                                                </div>
+                                                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${m.absenceRate}%` }} />
+                                                                </div>
                                                             </div>
-                                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${m.leaveRate}%` }} />
+                                                        ))}
+                                                    </div>
+                                                </TabsContent>
+                                                
+                                                <TabsContent value="tardanzas" className="bg-background border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Registro de Llegadas Tarde por Materia</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días con ingreso tarde en cada materia.</p>
+                                                    </div>
+                                                    <div className="space-y-4">
+                                                        {filteredMetrics.map(m => (
+                                                            <div key={m.course.id} className="space-y-1.5">
+                                                                <div className="flex items-center justify-between text-xs font-bold">
+                                                                    <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
+                                                                    <span className="text-amber-600 shrink-0 font-extrabold">
+                                                                        {m.lateCount} / {m.totalClassDays} días ({m.lateRate.toFixed(1)}%)
+                                                                    </span>
+                                                                </div>
+                                                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${m.lateRate}%` }} />
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </TabsContent>
+                                                        ))}
+                                                    </div>
+                                                </TabsContent>
 
-                                            <TabsContent value="horas" className="bg-card border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
-                                                <div>
-                                                    <h3 className="text-base font-black text-foreground">Carga Horaria y Asistencia Efectiva</h3>
-                                                    <p className="text-xs text-muted-foreground mt-0.5">Horas asistidas vs perdidas por materia.</p>
-                                                </div>
-                                                <div className="space-y-5">
-                                                    {filteredMetrics.map(m => {
-                                                        const lostHours = m.absentHours + m.lateHours + m.leaveHours;
-                                                        return (
-                                                            <div key={m.course.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
-                                                                <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
-                                                                    <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{m.course.title}</span>
-                                                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
-                                                                        <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {m.attendedHours.toFixed(1)} hs</span>
-                                                                        <span className="text-red-500">Perdidas: {lostHours.toFixed(1)} hs</span>
-                                                                        <span className="text-blue-600 font-extrabold">Efectiva: {m.attendanceHoursRate.toFixed(1)}%</span>
+                                                <TabsContent value="retiros" className="bg-background border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Registro de Retiros Tempranos por Materia</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Cantidad de días con retiro temprano en cada materia.</p>
+                                                    </div>
+                                                    <div className="space-y-4">
+                                                        {filteredMetrics.map(m => (
+                                                            <div key={m.course.id} className="space-y-1.5">
+                                                                <div className="flex items-center justify-between text-xs font-bold">
+                                                                    <span className="truncate text-foreground max-w-[300px] sm:max-w-md">{m.course.title}</span>
+                                                                    <span className="text-blue-600 shrink-0 font-extrabold">
+                                                                        {m.leaveCount} / {m.totalClassDays} días ({m.leaveRate.toFixed(1)}%)
+                                                                    </span>
+                                                                </div>
+                                                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${m.leaveRate}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </TabsContent>
+
+                                                <TabsContent value="horas" className="bg-background border rounded-2xl p-5 shadow-sm space-y-4 focus-visible:outline-none">
+                                                    <div>
+                                                        <h3 className="text-base font-black text-foreground">Carga Horaria y Asistencia Efectiva</h3>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Horas asistidas vs perdidas por materia.</p>
+                                                    </div>
+                                                    <div className="space-y-5">
+                                                        {filteredMetrics.map(m => {
+                                                            const lostHours = m.absentHours + m.lateHours + m.leaveHours;
+                                                            return (
+                                                                <div key={m.course.id} className="space-y-2 border-b border-border/30 pb-3 last:border-0 last:pb-0">
+                                                                    <div className="flex flex-wrap items-center justify-between text-xs font-bold gap-2">
+                                                                        <span className="truncate text-foreground max-w-[280px] sm:max-w-md">{m.course.title}</span>
+                                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-muted-foreground">
+                                                                            <span className="text-emerald-600 dark:text-emerald-400">Asistidas: {m.attendedHours.toFixed(1)} hs</span>
+                                                                            <span className="text-red-500">Perdidas: {lostHours.toFixed(1)} hs</span>
+                                                                            <span className="text-blue-600 font-extrabold">Efectiva: {m.attendanceHoursRate.toFixed(1)}%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                                                                        <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${m.attendanceHoursRate}%` }} title={`Horas Asistidas: ${m.attendedHours.toFixed(1)} hs`} />
+                                                                        {m.absentHours > 0 && (
+                                                                            <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${(m.absentHours / m.totalScheduledHours) * 100}%` }} title={`Horas Faltas: ${m.absentHours.toFixed(1)} hs`} />
+                                                                        )}
+                                                                        {m.lateHours > 0 && (
+                                                                            <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${(m.lateHours / m.totalScheduledHours) * 100}%` }} title={`Horas Tardes: ${m.lateHours.toFixed(1)} hs`} />
+                                                                        )}
+                                                                        {m.leaveHours > 0 && (
+                                                                            <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(m.leaveHours / m.totalScheduledHours) * 100}%` }} title={`Horas Retiros: ${m.leaveHours.toFixed(1)} hs`} />
+                                                                        )}
                                                                     </div>
                                                                 </div>
-                                                                <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
-                                                                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${m.attendanceHoursRate}%` }} title={`Horas Asistidas: ${m.attendedHours.toFixed(1)} hs`} />
-                                                                    {m.absentHours > 0 && (
-                                                                        <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${(m.absentHours / m.totalScheduledHours) * 100}%` }} title={`Horas Faltas: ${m.absentHours.toFixed(1)} hs`} />
-                                                                    )}
-                                                                    {m.lateHours > 0 && (
-                                                                        <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${(m.lateHours / m.totalScheduledHours) * 100}%` }} title={`Horas Tardes: ${m.lateHours.toFixed(1)} hs`} />
-                                                                    )}
-                                                                    {m.leaveHours > 0 && (
-                                                                        <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(m.leaveHours / m.totalScheduledHours) * 100}%` }} title={`Horas Retiros: ${m.leaveHours.toFixed(1)} hs`} />
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </TabsContent>
-                                        </Tabs>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </TabsContent>
+                                            </Tabs>
+                                        </div>
 
-                                        {/* Original Table Section */}
-                                        <div className="space-y-6">
+                                        <div className="pt-6 border-t border-border/80 space-y-4 my-6">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <div>
+                                                    <h3 className="text-base font-black text-foreground flex items-center gap-2">
+                                                        <Calendar className="w-4 h-4 text-primary" />
+                                                        Historial Detallado de Registros por Materia
+                                                    </h3>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Listado completo de asistencias, tardanzas, retiros y justificaciones registradas por curso.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-6">
                                             {filteredCourses.map(({ course, entries }) => {
                                                 const unjustified = entries.filter(a => !a.justification).length;
                                                 return (
@@ -1364,13 +1424,13 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                 </div>
                                             </CardHeader>
                                             <CardContent className="p-0">
-                                                <div className="w-full overflow-x-auto scrollbar-none">
+<div className="w-full overflow-x-auto scrollbar-none">
                                                     <Table className="[&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 min-w-[550px]">
                                                         <TableHeader className="bg-muted/5">
                                                             <TableRow>
                                                                 <TableHead>Fecha</TableHead>
                                                                 <TableHead className="w-[120px] text-center">Estado</TableHead>
-                                                                <TableHead className="w-[130px] text-center">Justificación</TableHead>
+                                                                <TableHead className="min-w-[200px]">Justificación</TableHead>
                                                                 <TableHead className="w-[120px] text-center">Acción</TableHead>
                                                             </TableRow>
                                                         </TableHeader>
@@ -1396,20 +1456,29 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                                 {att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'}
                                                                             </Badge>
                                                                         </TableCell>
-                                                                        <TableCell className="text-center">
+                                                                        <TableCell className="text-left">
                                                                             {isJustified ? (
-                                                                                <div className="flex flex-col items-center gap-1">
-                                                                                    <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 gap-1 w-28 h-6 inline-flex items-center justify-center">
-                                                                                        <CheckCircle2 className="w-3 h-3" /> Justificado
-                                                                                    </Badge>
-                                                                                    {att.justificationUrl && (
-                                                                                        <a href={att.justificationUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                                                                                            <LinkIcon className="w-3 h-3" /> Soporte
-                                                                                        </a>
+                                                                                <div className="space-y-1.5 py-1">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Badge variant="outline" className="text-xs font-bold text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 gap-1 h-5 inline-flex items-center justify-center shrink-0">
+                                                                                            <CheckCircle2 className="w-3 h-3" /> Justificado
+                                                                                        </Badge>
+                                                                                        {att.justificationUrl && (
+                                                                                            <a href={att.justificationUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold shrink-0">
+                                                                                                <LinkIcon className="w-3 h-3" /> Soporte
+                                                                                            </a>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    {att.justification && (
+                                                                                        <div className="text-xs text-foreground bg-muted/40 p-2 rounded-lg border border-border/50 whitespace-pre-wrap leading-relaxed font-normal">
+                                                                                            {att.justification}
+                                                                                        </div>
                                                                                     )}
                                                                                 </div>
                                                                             ) : (
-                                                                                <span className="text-xs text-muted-foreground">Sin justificar</span>
+                                                                                <div className="text-center">
+                                                                                    <span className="text-xs text-muted-foreground">Sin justificar</span>
+                                                                                </div>
                                                                             )}
                                                                         </TableCell>
                                                                         <TableCell className="text-center">
@@ -1444,16 +1513,6 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                                                                 </Dialog>
                                                                             ) : isJustified ? (
                                                                                 <div className="flex items-center justify-center gap-1.5">
-                                                                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                                                                        onClick={() => setViewingJustification({
-                                                                                            justification: att.justification || "",
-                                                                                            url: att.justificationUrl,
-                                                                                            date: att.date,
-                                                                                            statusName: att.status === 'LATE' ? 'Llegada Tarde' : att.status === 'LEAVE_EARLY' ? 'Retiro Temprano' : 'Ausencia'
-                                                                                        })}
-                                                                                    >
-                                                                                        <FileText className="w-3 h-3" /> Ver
-                                                                                    </Button>
                                                                                     {(currentUserRole === "teacher" || currentUserRole === "admin") && (
                                                                                         <Button 
                                                                                             size="sm" 
@@ -1481,8 +1540,9 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
                                 })}
                                         </div>
                                     </div>
-                                );
-                            })()}
+                                </div>
+                            );
+                        })()}
                         </motion.div>
                     </TabsContent>}
 

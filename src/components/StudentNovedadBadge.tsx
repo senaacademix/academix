@@ -12,12 +12,13 @@ interface StudentNovedadBadgeProps {
 export function StudentNovedadBadge({ novedad, color, className = "" }: StudentNovedadBadgeProps) {
     if (!novedad) return null;
 
-    const lowerNovedad = novedad.toLowerCase();
+    const trimmedNovedad = novedad.trim();
+    const lowerNovedad = trimmedNovedad.toLowerCase();
     
     // Si no tiene color asignado en BD, determinar por palabra clave
     let activeColor = color;
     if (!activeColor) {
-        const isCritical = lowerNovedad.includes("condicionado") || lowerNovedad.includes("condicion") || lowerNovedad.includes("alerta") || lowerNovedad.includes("disciplina");
+        const isCritical = lowerNovedad.includes("condicionado") || lowerNovedad.includes("condicion") || lowerNovedad.includes("alerta") || lowerNovedad.includes("disciplina") || lowerNovedad.includes("expul") || lowerNovedad.includes("cancel");
         activeColor = isCritical ? "red" : "blue";
     }
 
@@ -48,21 +49,24 @@ export function StudentNovedadBadge({ novedad, color, className = "" }: StudentN
             break;
     }
 
+    // Truncar texto del badge si supera los 20 caracteres
+    const displayText = trimmedNovedad.length > 20 ? `${trimmedNovedad.slice(0, 18)}...` : trimmedNovedad;
+
     return (
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
                     <span 
-                        className={`inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black border uppercase tracking-wider select-none hover:animate-none cursor-help transition-all duration-150 shrink-0 ${colorClasses} ${className}`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider select-none hover:animate-none cursor-help transition-all duration-150 shrink-0 max-w-[160px] ${colorClasses} ${className}`}
                     >
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span>Novedad</span>
+                        <span className="truncate">{displayText}</span>
                     </span>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="bg-popover border text-popover-foreground max-w-[250px] p-2.5 rounded-xl shadow-xl z-[9999]">
+                <TooltipContent side="top" className="bg-popover border text-popover-foreground max-w-[280px] p-2.5 rounded-xl shadow-xl z-[9999]">
                     <div className="space-y-1">
                         <p className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Novedad del Estudiante</p>
-                        <p className="text-xs font-semibold leading-relaxed">{novedad}</p>
+                        <p className="text-xs font-semibold leading-relaxed break-words">{trimmedNovedad}</p>
                     </div>
                 </TooltipContent>
             </Tooltip>

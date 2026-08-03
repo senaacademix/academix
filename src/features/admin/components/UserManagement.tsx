@@ -1121,13 +1121,33 @@ export function UserManagement({
                 <DialogContent className="!max-w-[100vw] sm:!max-w-[100vw] w-screen h-screen m-0 p-6 !rounded-none overflow-y-auto border-none bg-background flex flex-col">
                     {selectedUser && (
                         <div className="space-y-6 flex-1 flex flex-col min-h-0">
-                            <div className="flex justify-between items-center pb-4 border-b">
-                                <div>
-                                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                                        <GraduationCap className="w-6 h-6 text-primary" /> Registro Académico
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b">
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className="px-2.5 py-0.5 text-xs font-bold bg-primary/10 text-primary border-primary/20 gap-1.5 rounded-full">
+                                            <GraduationCap className="w-3.5 h-3.5" />
+                                            Registro Académico Individual
+                                        </Badge>
+                                        {selectedUser.profile?.identificacion && (
+                                            <span className="text-xs font-bold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md border">
+                                                Doc: {selectedUser.profile.identificacion}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <DialogTitle className="text-3xl sm:text-4xl font-black text-foreground tracking-tight flex items-center gap-3 pt-1">
+                                        <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
+                                            {formatName(selectedUser.name, selectedUser.profile)}
+                                        </span>
+                                        <StudentNovedadBadge novedad={selectedUser.profile?.novedad} color={selectedUser.profile?.novedadColor} />
                                     </DialogTitle>
-                                    <DialogDescription className="text-sm text-muted-foreground mt-1">
-                                        Historial de {formatName(selectedUser.name, selectedUser.profile)}
+                                    <DialogDescription className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                        <span>{selectedUser.email}</span>
+                                        {selectedUser.group?.name && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="font-bold text-foreground">Grupo: {selectedUser.group.name}</span>
+                                            </>
+                                        )}
                                     </DialogDescription>
                                 </div>
                             </div>

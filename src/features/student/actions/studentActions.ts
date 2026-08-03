@@ -58,8 +58,21 @@ export async function getStudentRecords(targetStudentId?: string) {
     const user = await prisma.user.findUnique({
         where: { id: studentId },
         select: {
+            id: true,
+            name: true,
+            email: true,
+            profile: {
+                select: {
+                    identificacion: true,
+                    nombres: true,
+                    apellido: true,
+                    novedad: true,
+                    novedadColor: true,
+                }
+            },
             group: {
                 select: {
+                    name: true,
                     startDate: true,
                     endDate: true,
                     program: {
@@ -78,6 +91,13 @@ export async function getStudentRecords(targetStudentId?: string) {
         remarks,
         groupDates: user?.group ? { startDate: user.group.startDate, endDate: user.group.endDate } : null,
         scheduleDates: user?.group?.program ? { startDate: user.group.program.startDate, endDate: user.group.program.endDate } : null,
+        targetUser: user ? {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            profile: user.profile,
+            groupName: user.group?.name || null
+        } : null,
         currentUser: {
             id: session.user.id,
             role: session.user.role
