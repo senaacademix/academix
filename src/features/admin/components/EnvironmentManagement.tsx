@@ -47,6 +47,7 @@ import {
  CheckCircle2,
  XCircle,
  Monitor,
+ Tv,
  Cpu,
  Wifi,
  BookOpen,
@@ -92,7 +93,7 @@ const SUGGESTED_RESOURCES = [
  { label: "Proyector", icon: Projector },
  { label: "Computadores", icon: Cpu },
  { label: "Wi-Fi", icon: Wifi },
- { label: "Tablero digital", icon: Monitor },
+ { label: "Televisor", icon: Tv },
  { label: "Biblioteca", icon: BookOpen },
  { label: "Aire acondicionado", icon: Layers },
 ];
@@ -103,7 +104,8 @@ const resourceIconMap: Record<string, React.ElementType> = {
  "Proyector": Projector,
  "Computadores": Cpu,
  "Wi-Fi": Wifi,
- "Tablero digital": Monitor,
+ "Televisor": Tv,
+ "Tablero digital": Tv,
  "Biblioteca": BookOpen,
  "Aire acondicionado": Layers,
 };

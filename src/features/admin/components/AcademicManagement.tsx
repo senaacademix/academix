@@ -2450,7 +2450,9 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {programs.map((program) => {
                                 const totalStudents = program.groups.reduce((acc, g) => acc + g.students.length, 0);
-                                const totalCourses = program.periods.reduce((acc, p) => acc + p.courses.length, 0);
+                                const totalCourses = program.periods
+                                    .filter((p: any) => !p.esEspecial)
+                                    .reduce((acc: number, p: any) => acc + (p.courses?.filter((c: any) => !c.groupId)?.length ?? 0), 0);
                                 return (
                                     <Card key={program.id} className="border-none shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative overflow-hidden bg-gradient-to-br from-background to-muted/10">
                                         <CardHeader className="pb-3">
@@ -2639,9 +2641,9 @@ export function AcademicManagement({ initialCourses, teachers, totalCount, isObs
                                                 </CardHeader>
                                                 <CardContent className="p-4 pt-0">
                                                     <div className="text-3xl font-extrabold tracking-tight">
-                                                        {selectedProgram.periods.reduce((acc, p) => acc + p.courses.length, 0)}
+                                                        {normalPeriods.reduce((acc: number, p: any) => acc + (p.courses?.filter((c: any) => !c.groupId)?.length ?? 0), 0)}
                                                     </div>
-                                                    <p className="text-xs text-muted-foreground mt-1.5">Materias curriculares registradas</p>
+                                                    <p className="text-xs text-muted-foreground mt-1.5">Materias curriculares normales</p>
                                                 </CardContent>
                                             </Card>
 

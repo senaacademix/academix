@@ -549,6 +549,50 @@ export async function toggleUserBanAction(userId: string, banned: boolean) {
     return result;
 }
 
+export async function getPendingBanRequestsAction() {
+    await requireAdminOrObserver();
+    const requests = await prisma.remark.findMany({
+        where: {
+            title: { contains: "SOLICITUD DE BANEO", mode: "insensitive" },
+            user: { banned: false }
+        },
+        include: {
+            user: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    banned: true,
+                    profile: { select: { identificacion: true, nombres: true, apellido: true } },
+                    group: { select: { id: true, name: true } }
+                }
+            },
+            teacher: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    profile: { select: { nombres: true, apellido: true } }
+                }
+            },
+            course: {
+                select: { id: true, title: true }
+            }
+        },
+        orderBy: { createdAt: "desc" }
+    });
+    return requests;
+}
+
+export async function dismissBanRequestAction(remarkId: string) {
+    await requireAdmin();
+    await prisma.remark.delete({
+        where: { id: remarkId }
+    });
+    revalidatePath("/dashboard/admin/users");
+    return { success: true };
+}
+
 
 
 export async function deleteUserAction(userId: string) {

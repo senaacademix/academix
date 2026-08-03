@@ -79,6 +79,10 @@ export function StudentManager({
     const [isExporting, setIsExporting] = useState(false);
     const [isExportingZip, setIsExportingZip] = useState(false);
     const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+    const [banDialogOpen, setBanDialogOpen] = useState(false);
+    const [studentToRequestBan, setStudentToRequestBan] = useState<any | null>(null);
+    const [banReasonInput, setBanReasonInput] = useState("");
+    const [isSubmittingBanRequest, setIsSubmittingBanRequest] = useState(false);
 
     const handleExportReport = async () => {
         setIsExporting(true);
@@ -172,13 +176,44 @@ export function StudentManager({
         }
     };
 
+    const handleSendBanRequest = async () => {
+        if (!studentToRequestBan || !banReasonInput.trim()) {
+            toast.error("Por favor ingresa el motivo de la solicitud de baneo");
+            return;
+        }
+
+        setIsSubmittingBanRequest(true);
+        try {
+            const { requestStudentBanAction } = await import("@/features/teacher/actions/studentActions");
+            const res = await requestStudentBanAction({
+                studentId: studentToRequestBan.id,
+                reason: banReasonInput,
+                courseId: courseId
+            });
+            if (res.success) {
+                toast.success(res.message);
+                setBanDialogOpen(false);
+                setStudentToRequestBan(null);
+                setBanReasonInput("");
+            } else {
+                toast.error("No se pudo enviar la solicitud");
+            }
+        } catch (err: any) {
+            toast.error(err.message || "Error al solicitar baneo");
+        } finally {
+            setIsSubmittingBanRequest(false);
+        }
+    };
+
     const filteredStudents = initialStudents.filter(enrollment =>
-        enrollment.user.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
-        enrollment.user.email.toLowerCase().includes(filterQuery.toLowerCase()) ||
-        enrollment.user.profile?.identificacion?.toLowerCase().includes(filterQuery.toLowerCase()) ||
-        enrollment.user.profile?.nombres?.toLowerCase().includes(filterQuery.toLowerCase()) ||
-        enrollment.user.profile?.apellido?.toLowerCase().includes(filterQuery.toLowerCase()) ||
-        enrollment.user.profile?.telefono?.toLowerCase().includes(filterQuery.toLowerCase())
+        !enrollment.user?.banned && (
+            enrollment.user.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
+            enrollment.user.email.toLowerCase().includes(filterQuery.toLowerCase()) ||
+            enrollment.user.profile?.identificacion?.toLowerCase().includes(filterQuery.toLowerCase()) ||
+            enrollment.user.profile?.nombres?.toLowerCase().includes(filterQuery.toLowerCase()) ||
+            enrollment.user.profile?.apellido?.toLowerCase().includes(filterQuery.toLowerCase()) ||
+            enrollment.user.profile?.telefono?.toLowerCase().includes(filterQuery.toLowerCase())
+        )
     );
 
     const getStatusBadge = (status: string) => {
@@ -504,6 +539,16 @@ export function StudentManager({
                                                             <ShieldAlert className="mr-2 h-4 w-4" /> Suspender
                                                         </DropdownMenuItem>
                                                     )}
+                                                    <DropdownMenuItem 
+                                                        onClick={() => {
+                                                            setStudentToRequestBan(enrollment.user);
+                                                            setBanReasonInput("");
+                                                            setBanDialogOpen(true);
+                                                        }}
+                                                        className="text-amber-600 dark:text-amber-400 focus:text-amber-700"
+                                                    >
+                                                        <ShieldAlert className="mr-2 h-4 w-4" /> Solicitar Baneo al Administrador
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <Dialog>
                                                         <DialogTrigger asChild>
@@ -568,6 +613,57 @@ export function StudentManager({
                     </TableBody>
                 </Table>
             </div>
-        </div >
+
+            {/* Modal Dialog: Solicitar Baneo al Administrador */}
+            <Dialog open={banDialogOpen} onOpenChange={setBanDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                            <ShieldAlert className="w-5 h-5" />
+                            Solicitar Baneo al Administrador
+                        </DialogTitle>
+                        <DialogDescription>
+                            Envía una solicitud al administrador global para bloquear el acceso de este estudiante a la plataforma.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {studentToRequestBan && (
+                        <div className="space-y-4 py-2">
+                            <div className="p-3 rounded-lg bg-muted/60 border text-xs space-y-1">
+                                <p className="font-semibold text-sm">{formatName(studentToRequestBan.name, studentToRequestBan.profile)}</p>
+                                <p className="text-muted-foreground">{studentToRequestBan.email}</p>
+                                {studentToRequestBan.profile?.identificacion && (
+                                    <p className="text-muted-foreground">Doc: {studentToRequestBan.profile.identificacion}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ban-reason" className="text-xs font-semibold">
+                                    Motivo o justificación de la solicitud <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                    id="ban-reason"
+                                    placeholder="Ej: Faltas graves de disciplina, conducta inapropiada..."
+                                    value={banReasonInput}
+                                    onChange={(e) => setBanReasonInput(e.target.value)}
+                                    className="text-sm"
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setBanDialogOpen(false)} disabled={isSubmittingBanRequest}>
+                            Cancelar
+                        </Button>
+                        <Button 
+                            className="bg-amber-600 hover:bg-amber-700 text-white" 
+                            onClick={handleSendBanRequest}
+                            disabled={isSubmittingBanRequest || !banReasonInput.trim()}
+                        >
+                            {isSubmittingBanRequest ? "Enviando..." : "Enviar Solicitud"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 }

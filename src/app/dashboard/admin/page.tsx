@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/features/admin/components/AdminDashboard";
-import { getAdminDashboardStatsAction, getRecentActivityAction } from "@/app/admin-actions";
+import { getAdminDashboardStatsAction, getRecentActivityAction } from "@/features/admin/actions/adminActions";
 
 export default async function AdminDashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });

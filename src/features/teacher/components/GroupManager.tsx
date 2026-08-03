@@ -536,6 +536,39 @@ export function GroupManager({ groups, scheduleStartDate, scheduleEndDate }: Gro
     const [attendanceToDelete, setAttendanceToDelete] = useState<{ studentId: string; studentName: string; date: string } | null>(null);
     const [markAllConfirmOpen, setMarkAllConfirmOpen] = useState<boolean>(false);
 
+    const [banRequestDialogOpen, setBanRequestDialogOpen] = useState(false);
+    const [studentToBan, setStudentToBan] = useState<any | null>(null);
+    const [banReasonText, setBanReasonText] = useState("");
+    const [isSendingBanReq, setIsSendingBanReq] = useState(false);
+
+    const handleSendGroupBanRequest = async () => {
+        if (!studentToBan || !banReasonText.trim()) {
+            toast.error("Ingresa la justificación de la solicitud de baneo.");
+            return;
+        }
+        setIsSendingBanReq(true);
+        try {
+            const { requestStudentBanAction } = await import("@/features/teacher/actions/studentActions");
+            const res = await requestStudentBanAction({
+                studentId: studentToBan.id,
+                reason: banReasonText,
+                courseId: attCourseId || undefined
+            });
+            if (res.success) {
+                toast.success(res.message);
+                setBanRequestDialogOpen(false);
+                setStudentToBan(null);
+                setBanReasonText("");
+            } else {
+                toast.error("Error al enviar la solicitud.");
+            }
+        } catch (e: any) {
+            toast.error(e.message || "Error al conectar con el servidor.");
+        } finally {
+            setIsSendingBanReq(false);
+        }
+    };
+
     const [isDateLocked, setIsDateLocked] = useState<boolean>(false);
     const [hasEditPermission, setHasEditPermission] = useState<boolean>(true);
     const [limitSettingsActive, setLimitSettingsActive] = useState<boolean>(false);
@@ -903,7 +936,7 @@ const handleOpenAnalytics = async () => {
 
     const filteredStudents = useMemo(() => {
         if (!selectedGroup?.students) return [];
-        let list = selectedGroup.students;
+        let list = selectedGroup.students.filter((s: any) => !s.banned);
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             list = list.filter((s: any) => 
@@ -917,7 +950,7 @@ const handleOpenAnalytics = async () => {
 
     const filteredStudentsForRemark = useMemo(() => {
         if (!selectedGroup?.students) return [];
-        let list = selectedGroup.students;
+        let list = selectedGroup.students.filter((s: any) => !s.banned);
         if (remarkStudentSearch) {
             const q = remarkStudentSearch.toLowerCase();
             list = list.filter((s: any) => 
@@ -2069,6 +2102,18 @@ const handleOpenAnalytics = async () => {
                                                                                                                         >
                                                                                                                             <RefreshCw className="w-4 h-4" />
                                                                                                                         </Button></TooltipTrigger><TooltipContent><p>Reiniciar intentos diarios</p></TooltipContent></Tooltip>
+                                                            <Tooltip><TooltipTrigger asChild><Button 
+                                                                                                                            variant="ghost" 
+                                                                                                                            size="icon" 
+                                                                                                                            className="h-8 w-8 text-rose-600 hover:bg-rose-500/10"
+                                                                                                                            onClick={() => {
+                                                                                                                                setStudentToBan(s);
+                                                                                                                                setBanReasonText("");
+                                                                                                                                setBanRequestDialogOpen(true);
+                                                                                                                            }}
+                                                                                                                        >
+                                                                                                                            <ShieldAlert className="w-4 h-4" />
+                                                                                                                        </Button></TooltipTrigger><TooltipContent><p>Solicitar baneo al administrador</p></TooltipContent></Tooltip>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -5767,6 +5812,57 @@ const handleOpenAnalytics = async () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Modal: Solicitar Baneo al Administrador */}
+            <Dialog open={banRequestDialogOpen} onOpenChange={setBanRequestDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                            <ShieldAlert className="w-5 h-5" />
+                            Solicitar Baneo al Administrador
+                        </DialogTitle>
+                        <DialogDescription>
+                            Envía un reporte formal al Administrador Global para bloquear el acceso de este estudiante a la plataforma.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {studentToBan && (
+                        <div className="space-y-4 py-2">
+                            <div className="p-3 rounded-lg bg-muted/60 border text-xs space-y-1">
+                                <p className="font-semibold text-sm">{formatName(studentToBan.name, studentToBan.profile)}</p>
+                                <p className="text-muted-foreground">{studentToBan.email}</p>
+                                {studentToBan.profile?.identificacion && (
+                                    <p className="text-muted-foreground">Doc: {studentToBan.profile.identificacion}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ban-reason-gm" className="text-xs font-semibold">
+                                    Motivo o justificación de la solicitud <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                    id="ban-reason-gm"
+                                    placeholder="Ej: Reincidencia en faltas graves, suplantación, conducta indebida..."
+                                    value={banReasonText}
+                                    onChange={(e) => setBanReasonText(e.target.value)}
+                                    className="text-sm"
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setBanRequestDialogOpen(false)} disabled={isSendingBanReq}>
+                            Cancelar
+                        </Button>
+                        <Button 
+                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold" 
+                            onClick={handleSendGroupBanRequest}
+                            disabled={isSendingBanReq || !banReasonText.trim()}
+                        >
+                            {isSendingBanReq ? "Enviando..." : "Enviar Solicitud"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

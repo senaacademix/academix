@@ -205,11 +205,15 @@ export const courseService = {
                 program: true,
                 period: true,
                 students: {
+                    where: {
+                        banned: { not: true }
+                    },
                     select: {
                         id: true,
                         name: true,
                         email: true,
                         image: true,
+                        banned: true,
                         profile: {
                             select: {
                                 identificacion: true,
@@ -520,7 +524,12 @@ export const courseService = {
     async getCourseStudents(courseId: string) {
         try {
             const students = await prisma.enrollment.findMany({
-                where: { courseId },
+                where: { 
+                    courseId,
+                    user: {
+                        banned: { not: true }
+                    }
+                },
                 include: {
                     user: {
                         select: {
@@ -528,6 +537,7 @@ export const courseService = {
                             name: true,
                             email: true,
                             image: true,
+                            banned: true,
                             profile: {
                                 select: {
                                     identificacion: true,
@@ -565,6 +575,7 @@ export const courseService = {
         return await prisma.user.findMany({
             where: {
                 role: "student",
+                banned: { not: true },
                 OR: [
                     { name: { contains: query, mode: "insensitive" } },
                     { email: { contains: query, mode: "insensitive" } },

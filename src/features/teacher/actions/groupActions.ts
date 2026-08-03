@@ -386,6 +386,7 @@ export async function getGroupRemarksHistory(groupId: string) {
             period: true,
             environment: true,
             students: {
+                where: user.role === "admin" ? {} : { banned: { not: true } },
                 select: { id: true, name: true, banned: true, profile: { select: { identificacion: true, novedad: true, novedadColor: true } } }
             },
             courses: {
@@ -443,10 +444,15 @@ export async function getGroupRemarksHistory(groupId: string) {
     ]);
     const totalCourseClasses = uniqueDates.size;
 
+    // Filter students: teachers do not see banned students, admins see all
+    const studentsToProcess = user.role === "admin"
+        ? group.students
+        : group.students.filter(s => !s.banned);
+
     // Calculate students stats
-    const totalStudents = group.students.length;
+    const totalStudents = studentsToProcess.length;
     const bannedStudents = group.students.filter(s => s.banned).length;
-    const activeStudents = totalStudents - bannedStudents;
+    const activeStudents = user.role === "admin" ? totalStudents - bannedStudents : totalStudents;
 
     // Calculate courses average grades
     const coursesStats = coursesTaught.map(course => {
@@ -461,7 +467,7 @@ export async function getGroupRemarksHistory(groupId: string) {
     });
 
     // Calculate individual student metrics
-    const studentMetrics = group.students.map(student => {
+    const studentMetrics = studentsToProcess.map(student => {
         const sAttendances = attendances.filter(a => a.userId === student.id);
         const absent = sAttendances.filter(a => a.status === 'ABSENT').length;
         const late = sAttendances.filter(a => a.status === 'LATE').length;

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserManagement } from "@/features/admin/components/UserManagement";
-import { getAllUsersAction } from "@/app/admin-actions";
+import { getAllUsersAction } from "@/features/admin/actions/adminActions";
 import { getGroupsAction, getProgramsAction } from "@/features/admin/actions/academicActions";
 
 export default async function AdminUsersPage() {

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AcademicManagement } from "@/features/admin/components/AcademicManagement";
-import { getAllCoursesAdminAction, getAllUsersAction, getSystemSettingsAction } from "@/app/admin-actions";
+import { getAllCoursesAdminAction, getAllUsersAction, getSystemSettingsAction } from "@/features/admin/actions/adminActions";
 
 export default async function AdminCoursesPage() {
     const session = await auth.api.getSession({ headers: await headers() });

@@ -97,7 +97,13 @@ export const gradeService = {
         try {
             const [students, groups] = await Promise.all([
                 prisma.enrollment.findMany({
-                    where: { courseId, status: "APPROVED" },
+                    where: { 
+                        courseId, 
+                        status: "APPROVED",
+                        user: {
+                            banned: { not: true }
+                        }
+                    },
                     include: {
                         user: {
                             select: {

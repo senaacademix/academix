@@ -16,8 +16,13 @@ export const adminService = {
                 by: ['role'],
                 _count: true
             }),
-            // Materias totales
-            prisma.course.count(),
+            // Materias totales (solo materias normales)
+            prisma.course.count({
+                where: {
+                    groupId: null,
+                    period: { esEspecial: false }
+                }
+            }),
             // Entregas totales (stubbed to 0)
             Promise.resolve(0),
             // Materias activos (sin fecha de fin o fecha gte a hoy)

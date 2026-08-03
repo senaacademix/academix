@@ -238,6 +238,50 @@ export function UserManagement({
     const [pendingRoleChange, setPendingRoleChange] = useState<{ userId: string; newRole: "teacher" | "student" | "admin"; userName: string } | null>(null);
     const [roleChangeConfirmation, setRoleChangeConfirmation] = useState("");
 
+    // Pending ban requests state
+    const [pendingBanRequests, setPendingBanRequests] = useState<any[]>([]);
+    const [showBanRequestsModal, setShowBanRequestsModal] = useState(false);
+
+    const loadBanRequests = async () => {
+        try {
+            const { getPendingBanRequestsAction } = await import("@/features/admin/actions/adminActions");
+            const res = await getPendingBanRequestsAction();
+            setPendingBanRequests(res || []);
+        } catch (e) {
+            console.error("Error cargando solicitudes de baneo:", e);
+        }
+    };
+
+    useEffect(() => {
+        loadBanRequests();
+    }, []);
+
+    const handleApproveBanRequest = async (studentId: string, remarkId: string) => {
+        startTransition(async () => {
+            try {
+                await toggleUserBanAction(studentId, true);
+                const { dismissBanRequestAction } = await import("@/features/admin/actions/adminActions");
+                await dismissBanRequestAction(remarkId);
+                toast.success("Estudiante baneado y solicitud cerrada.");
+                loadBanRequests();
+                refreshUsers(currentPage);
+            } catch (err: any) {
+                toast.error(err.message || "Error al procesar el baneo");
+            }
+        });
+    };
+
+    const handleDismissBanRequest = async (remarkId: string) => {
+        try {
+            const { dismissBanRequestAction } = await import("@/features/admin/actions/adminActions");
+            await dismissBanRequestAction(remarkId);
+            toast.success("Solicitud desestimada.");
+            loadBanRequests();
+        } catch (err: any) {
+            toast.error(err.message || "Error al desestimar solicitud");
+        }
+    };
+
     // Load group analytics when group filter changes
     useEffect(() => {
         if (showGroupAnalytics && groupFilter && groupFilter !== "all" && groupFilter !== "none") {
@@ -622,6 +666,35 @@ export function UserManagement({
                     )}
                 </div>
             </div>
+
+            {/* Banner de Solicitudes de Baneo Pendientes */}
+            {pendingBanRequests.length > 0 && (
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in-50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                            <AlertCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                Solicitudes de Baneo de Profesores
+                                <Badge variant="secondary" className="bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
+                                    {pendingBanRequests.length} pendiente(s)
+                                </Badge>
+                            </h4>
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
+                                Profesores han enviado solicitudes para que revise y bloquee el acceso a ciertos estudiantes.
+                            </p>
+                        </div>
+                    </div>
+                    <Button 
+                        size="sm" 
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0"
+                        onClick={() => setShowBanRequestsModal(true)}
+                    >
+                        Revisar Solicitudes ({pendingBanRequests.length})
+                    </Button>
+                </div>
+            )}
 
             {/* Filters */}
             <Card>
@@ -1348,6 +1421,82 @@ export function UserManagement({
                         </Button>
                         <Button onClick={handleSaveEditStudent} disabled={isPending}>
                             {isPending ? "Guardando..." : "Guardar Cambios"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal: Solicitudes de Baneo Pendientes */}
+            <Dialog open={showBanRequestsModal} onOpenChange={setShowBanRequestsModal}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-lg font-bold">
+                            <AlertCircle className="w-5 h-5" />
+                            Solicitudes de Baneo de Profesores ({pendingBanRequests.length})
+                        </DialogTitle>
+                        <DialogDescription>
+                            Revisa las solicitudes enviadas por los profesores para bloquear el acceso de estudiantes. Puedes aprobar el baneo o desestimar la solicitud.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        {pendingBanRequests.map((req: any) => (
+                            <div key={req.id} className="p-4 rounded-2xl bg-muted/40 border border-amber-500/20 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+                                    <div>
+                                        <h4 className="font-bold text-base text-slate-900 dark:text-white">
+                                            {formatName(req.user?.name, req.user?.profile)}
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground">{req.user?.email} • Doc: {req.user?.profile?.identificacion || "N/A"}</p>
+                                    </div>
+                                    <Badge variant="outline" className="w-fit border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10">
+                                        Grupo: {req.user?.group?.name || "Sin grupo"}
+                                    </Badge>
+                                </div>
+
+                                <div className="space-y-1 text-xs">
+                                    <p className="font-semibold text-slate-700 dark:text-slate-300">
+                                        Solicitado por: <span className="text-primary font-bold">{req.teacher?.name || "Profesor"}</span> ({req.teacher?.email})
+                                    </p>
+                                    {req.course?.title && (
+                                        <p className="text-muted-foreground">Materia: {req.course.title}</p>
+                                    )}
+                                    <div className="p-2.5 rounded-xl bg-background border mt-2 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+                                        <span className="font-bold">Motivo:</span> {req.description || "Sin motivo especificado."}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end items-center gap-2 pt-2">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        className="h-8 text-xs"
+                                        onClick={() => handleDismissBanRequest(req.id)}
+                                    >
+                                        Desestimar
+                                    </Button>
+                                    <Button 
+                                        size="sm"
+                                        className="h-8 text-xs bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                                        onClick={() => handleApproveBanRequest(req.userId, req.id)}
+                                        disabled={isPending}
+                                    >
+                                        {isPending ? "Procesando..." : "Aprobar y Banear"}
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+
+                        {pendingBanRequests.length === 0 && (
+                            <div className="text-center py-8 text-muted-foreground text-sm">
+                                No hay solicitudes de baneo pendientes.
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowBanRequestsModal(false)}>
+                            Cerrar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

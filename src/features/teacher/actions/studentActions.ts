@@ -144,3 +144,69 @@ export async function updateStudentStatusAction(enrollmentId: string, status: 'A
     revalidatePath(`/dashboard/teacher/courses/${enrollment.courseId}`);
     return enrollment;
 }
+
+export async function requestStudentBanAction(data: {
+    studentId: string;
+    reason: string;
+    courseId?: string;
+}) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("No autorizado");
+    }
+
+    if (!data.studentId || !data.reason?.trim()) {
+        throw new Error("El estudiante y el motivo de la solicitud son obligatorios");
+    }
+
+    const student = await prisma.user.findUnique({
+        where: { id: data.studentId },
+        select: { id: true, name: true, email: true }
+    });
+
+    if (!student) {
+        throw new Error("Estudiante no encontrado");
+    }
+
+    // 1. Encontrar o asignar un curso para la observación
+    let courseId = data.courseId;
+    if (!courseId) {
+        const enrollment = await prisma.enrollment.findFirst({
+            where: { userId: data.studentId },
+            select: { courseId: true }
+        });
+        courseId = enrollment?.courseId;
+    }
+
+    if (courseId) {
+        await prisma.remark.create({
+            data: {
+                type: "ATTENTION",
+                title: "SOLICITUD DE BANEO AL ADMINISTRADOR",
+                description: `Docente ${session.user.name} solicita baneo. Motivo: ${data.reason.trim()}`,
+                userId: data.studentId,
+                teacherId: session.user.id,
+                courseId: courseId
+            }
+        });
+    }
+
+    // 2. Registrar evento en AuditLog para visibilidad en el panel de Administrador
+    const { auditLogger } = await import("../../admin/services/auditLogger");
+    await auditLogger.log({
+        action: "UPDATE",
+        entity: "OTHER",
+        entityId: data.studentId,
+        userId: session.user.id,
+        userName: session.user.name || "Profesor",
+        userRole: session.user.role,
+        description: `SOLICITUD DE BANEO: Docente ${session.user.name} solicitó banear a ${student.name} (${student.email}). Motivo: ${data.reason.trim()}`,
+        metadata: { studentId: data.studentId, reason: data.reason.trim(), requestedBy: session.user.name },
+        success: true,
+    });
+
+    revalidatePath("/dashboard/admin/users");
+    revalidatePath("/dashboard/teacher/courses");
+
+    return { success: true, message: "La solicitud de baneo ha sido enviada al administrador exitosamente." };
+}

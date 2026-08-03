@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminUsersManagement } from "@/features/admin/components/AdminUsersManagement";
-import { getAdminsAndObserversAction } from "@/app/admin-actions";
+import { getAdminsAndObserversAction } from "@/features/admin/actions/adminActions";
 import { getProgramsAction } from "@/features/admin/actions/academicActions";
 
 export const metadata = {
