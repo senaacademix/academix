@@ -977,40 +977,6 @@ export function StudentRecords({ studentId, hideTables = false, hideDocumentatio
 
     return (
         <div className="space-y-8">
-            {/* Target Student Header Banner */}
-            {studentId && records?.targetUser && (
-                <div className="bg-card/70 border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="px-2.5 py-0.5 text-xs font-bold bg-primary/10 text-primary border-primary/20 gap-1.5 rounded-full">
-                                <UserCheck className="w-3.5 h-3.5" />
-                                Estudiante Seleccionado
-                            </Badge>
-                            {records.targetUser.profile?.identificacion && (
-                                <span className="text-xs font-bold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md border">
-                                    Doc: {records.targetUser.profile.identificacion}
-                                </span>
-                            )}
-                        </div>
-                        <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight flex items-center gap-3 pt-1">
-                            <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
-                                {formatName(records.targetUser.name, records.targetUser.profile)}
-                            </span>
-                            <StudentNovedadBadge novedad={records.targetUser.profile?.novedad} color={records.targetUser.profile?.novedadColor} />
-                        </h2>
-                        <p className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <span>{records.targetUser.email}</span>
-                            {records.targetUser.groupName && (
-                                <>
-                                    <span>•</span>
-                                    <span className="font-bold text-foreground">Grupo: {records.targetUser.groupName}</span>
-                                </>
-                            )}
-                        </p>
-                    </div>
-                </div>
-            )}
-
             {/* Summary cards */}
             {!onlyImprovement && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
