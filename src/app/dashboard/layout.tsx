@@ -157,7 +157,7 @@ export default async function DashboardLayout({
 
   return (
 
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <ProfileCompletionCheck />
       <AppSidebar />
       <SidebarInset className={`min-w-0 ${studentNovedad ? "md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:rounded-t-none" : ""}`}>

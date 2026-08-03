@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useWebPush } from "@/hooks/useWebPush";
-import { Bell, BellOff, Loader2 } from "lucide-react";
+import { Bell, BellOff, Loader2, Sparkles } from "lucide-react";
 import { getFormattedTodayDate } from "@/lib/dateUtils";
 
 export function StudentDashboard({
@@ -158,49 +158,69 @@ export function StudentDashboard({
             "flex-1 w-full",
             isInsideCourse ? "p-0 h-[calc(100vh-4rem)] overflow-hidden flex flex-col" : "p-4 sm:p-6 md:p-8 space-y-6"
         )}>
-            {/* Header - Hidden when inside a course */}
             {!isInsideCourse && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                            ¡Hola, {studentName ? formatName(studentName) : 'Estudiante'}!
-                        </h1>
-                        <p className="text-sm text-muted-foreground capitalize">
-                            {displayDate} — Aquí tienes un resumen de tu actividad académica en AcademiX.
-                        </p>
-                    </div>
-                    {/* Botón de Notificaciones para el Estudiante */}
-                    {mounted && permission !== "unsupported" && (
-                        <div className="shrink-0">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handlePushToggle}
-                                disabled={pushLoading}
-                                className={cn(
-                                    "h-9 font-bold text-xs gap-2 rounded-2xl border border-border/50 shadow-md transition-all duration-200",
-                                    isSubscribed 
-                                        ? "text-emerald-600 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 border-emerald-500/20" 
-                                        : "text-muted-foreground hover:text-foreground"
-                                )}
-                            >
-                                {pushLoading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : isSubscribed ? (
-                                    <>
-                                        <Bell className="h-4 w-4 fill-current text-emerald-500 animate-pulse" />
-                                        <span>Notificaciones Activas</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <BellOff className="h-4 w-4" />
-                                        <span>Activar Notificaciones</span>
-                                    </>
-                                )}
-                            </Button>
+                <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="relative rounded-3xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 p-6 sm:p-8 backdrop-blur-2xl shadow-md dark:shadow-xl overflow-hidden transition-colors"
+                >
+                    <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary/15 blur-[100px] rounded-full pointer-events-none" />
+
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-2">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Panel de Estudiante</span>
+                            </div>
+                            <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                ¡Hola,{" "}
+                                <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-primary dark:from-white dark:via-slate-200 dark:to-primary bg-clip-text text-transparent">
+                                    {studentName ? formatName(studentName) : 'Estudiante'}
+                                </span>
+                                !
+                            </h1>
+                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 capitalize flex items-center gap-2 font-medium">
+                                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                                <span>{displayDate}</span>
+                                <span className="text-slate-400 dark:text-slate-600">•</span>
+                                <span>Resumen de tu actividad académica en AcademiX</span>
+                            </p>
                         </div>
-                    )}
-                </div>
+
+                        {/* Botón de Notificaciones para el Estudiante */}
+                        {mounted && permission !== "unsupported" && (
+                            <div className="shrink-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handlePushToggle}
+                                    disabled={pushLoading}
+                                    className={cn(
+                                        "gap-2 rounded-2xl h-11 px-4 text-xs font-bold transition-all shadow-sm",
+                                        isSubscribed
+                                            ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                                            : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    )}
+                                >
+                                    {pushLoading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : isSubscribed ? (
+                                        <>
+                                            <Bell className="h-4 w-4 text-emerald-500" />
+                                            <span>Notificaciones Activas</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BellOff className="h-4 w-4 text-slate-400" />
+                                            <span>Activar Notificaciones</span>
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
             )}
 
             {pendingEnrollments.length > 0 && !isInsideCourse && (
