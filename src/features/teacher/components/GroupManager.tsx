@@ -60,7 +60,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import * as htmlToImage from "html-to-image";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw, RotateCcw } from "lucide-react";
+import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,9 +108,11 @@ interface GroupManagerProps {
     groups: any[];
     scheduleStartDate?: string | null;
     scheduleEndDate?: string | null;
+    teacherName?: string;
+    displayDate?: string;
 }
 
-export function GroupManager({ groups, scheduleStartDate, scheduleEndDate }: GroupManagerProps) {
+export function GroupManager({ groups, scheduleStartDate, scheduleEndDate, teacherName, displayDate }: GroupManagerProps) {
     const { data: session } = authClient.useSession();
     const teacherId = session?.user?.id;
 
@@ -1728,51 +1730,82 @@ const handleOpenAnalytics = async () => {
 
     return (
         <div className="flex flex-col gap-6 max-w-full">
-            {/* TOP BAR - GROUP SELECTOR */}
-            <Card className="w-full border-0 shadow-sm bg-gradient-to-r from-muted/40 to-muted/10 rounded-2xl overflow-hidden">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 px-5">
-                    <div className="flex items-center gap-3 w-full md:w-auto mb-3 md:mb-0">
-                        <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                            <Users className="w-5 h-5 text-primary" />
+            {/* TOP BAR - MERGED HEADER BANNER */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="relative rounded-3xl bg-slate-100/90 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 p-4 sm:p-5 backdrop-blur-2xl shadow-md dark:shadow-xl overflow-hidden transition-colors"
+            >
+                {/* Background Glow */}
+                <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary/10 dark:bg-primary/15 blur-[100px] rounded-full pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    {/* Left Section: Greeting, Date & Pill Badge */}
+                    <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-semibold">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Panel de Docente</span>
+                            </div>
+                            {displayDate && (
+                                <span className="text-xs text-slate-600 dark:text-slate-400 capitalize font-medium flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span>{displayDate}</span>
+                                </span>
+                            )}
                         </div>
-                        <Select value={selectedGroupId} onValueChange={handleGroupChangeAttempt}>
-                            <SelectTrigger className="w-full md:w-[320px] h-10 text-base font-bold border border-primary/20 bg-background shadow-sm rounded-lg">
-                                <SelectValue placeholder="Selecciona un Grupo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {groups.map(g => (
-                                    <SelectItem key={g.id} value={g.id} className="py-2.5 font-semibold text-sm">
-                                        {g.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                            ¡Hola,{" "}
+                            <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-primary dark:from-white dark:via-slate-200 dark:to-primary bg-clip-text text-transparent">
+                                {teacherName ? formatName(teacherName) : (session?.user?.name ? formatName(session.user.name) : "Profesor")}
+                            </span>
+                            !
+                        </h1>
                     </div>
-                    {selectedGroup && (
-                        <div className="text-left md:text-right space-y-0.5">
-                            <p className="font-bold text-sm text-foreground leading-tight">
-                                {selectedGroup.program?.name} 
-                                <span className="text-muted-foreground font-semibold text-xs ml-2">({selectedGroup.period?.name})</span>
-                            </p>
-                            <div className="text-[11px] font-medium text-muted-foreground flex flex-wrap items-center gap-1.5 md:justify-end">
-                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold bg-background h-5">
+
+                    {/* Right Section: Group Selector & Selected Group Metadata */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white/90 dark:bg-slate-950/70 p-2.5 px-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-md shadow-xs">
+                        <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="p-2 bg-primary/15 rounded-xl text-primary shrink-0">
+                                <Users className="w-4 h-4" />
+                            </div>
+                            <Select value={selectedGroupId} onValueChange={handleGroupChangeAttempt}>
+                                <SelectTrigger className="w-full sm:w-[220px] h-9 text-xs sm:text-sm font-extrabold border-primary/20 bg-background shadow-xs rounded-xl">
+                                    <SelectValue placeholder="Selecciona un Grupo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {groups.map(g => (
+                                        <SelectItem key={g.id} value={g.id} className="py-2 font-semibold text-xs sm:text-sm">
+                                            {g.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {selectedGroup && (
+                            <div className="flex flex-wrap items-center gap-2 sm:border-l sm:border-slate-200 sm:dark:border-slate-800 sm:pl-3 pt-2 sm:pt-0 border-t border-slate-200/50 dark:border-slate-800/50">
+                                <Badge variant="secondary" className="text-[11px] font-extrabold py-0.5 px-2.5 bg-primary/10 text-primary border border-primary/20 shrink-0">
+                                    {selectedGroup.program?.name || selectedGroup.name}
+                                    {selectedGroup.period?.name ? ` (${selectedGroup.period.name})` : ""}
+                                </Badge>
+                                <Badge variant="outline" className="text-[11px] font-bold py-0.5 px-2 bg-background shrink-0">
+                                    <Users className="w-3 h-3 mr-1 text-muted-foreground" />
                                     {selectedGroup.students?.length || 0} Estudiantes
                                 </Badge>
                                 {groupScheduleInfo && (
-                                    <>
-                                        <span className="text-muted-foreground/30">•</span>
-                                        <span className="flex items-center gap-1 text-foreground/80">
-                                            <Clock className="w-3 h-3 text-primary/70 shrink-0" />
-                                            <span className="font-bold">{groupScheduleInfo.days}</span>
-                                            <span className="text-muted-foreground">({groupScheduleInfo.time})</span>
-                                        </span>
-                                    </>
+                                    <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-primary/70 shrink-0" />
+                                        <span className="font-bold text-foreground/90">{groupScheduleInfo.days}</span>
+                                        <span className="text-muted-foreground">({groupScheduleInfo.time})</span>
+                                    </span>
                                 )}
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
-            </Card>
+            </motion.div>
 
             {/* MAIN WORKSPACE */}
             <Card className="flex-1 w-full min-w-0 border-0 shadow-lg rounded-2xl overflow-hidden">
@@ -2134,6 +2167,7 @@ const handleOpenAnalytics = async () => {
                             <TabsContent value="analytics" className="m-0 h-full outline-none p-0 flex flex-col">
                                 <GroupAnalyticsPanel 
                                     inline={true}
+                                    isTeacher={true}
                                     isLoading={loadingAnalytics}
                                     analyticsData={fullAnalyticsData}
                                 />
@@ -2530,62 +2564,62 @@ const handleOpenAnalytics = async () => {
                                                         </div>
 
                                                         {/* Quick Actions Row */}
-                                                        <div className="flex flex-wrap items-center gap-1.5 w-full">
+                                                        <div className="grid grid-cols-4 gap-1 sm:gap-1.5 w-full">
                                                             <Button 
                                                                 size="sm"
                                                                 disabled={isSavingAtt}
-                                                                variant={isPresent ? "default" : "outline"}
-                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
+                                                                variant="ghost"
+                                                                className={`h-8 px-1 gap-1 text-[11px] sm:text-xs rounded-lg transition-all border ${
                                                                     isPresent 
-                                                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-extrabold' 
-                                                                        : 'text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50/50 hover:border-emerald-200 border-border/80'
+                                                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs font-black' 
+                                                                        : 'bg-background text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-300 border-border/70 font-semibold'
                                                                 }`}
                                                                 onClick={() => setStudentAttendance(s.id, isPresent ? "UNMARKED" : "PRESENT")}
                                                             >
-                                                                <UserCheck className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
-                                                                Presente
+                                                                <UserCheck className="size-3.5 shrink-0" />
+                                                                <span className="truncate">Presente</span>
                                                             </Button>
                                                             <Button 
                                                                 size="sm"
                                                                 disabled={isSavingAtt}
-                                                                variant={isAbsent ? "default" : "outline"}
-                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
+                                                                variant="ghost"
+                                                                className={`h-8 px-1 gap-1 text-[11px] sm:text-xs rounded-lg transition-all border ${
                                                                     isAbsent 
-                                                                        ? 'bg-red-600 hover:bg-red-700 text-white shadow-sm font-extrabold' 
-                                                                        : 'text-muted-foreground hover:text-red-600 hover:bg-red-50/50 hover:border-red-200 border-border/80'
+                                                                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-xs font-black' 
+                                                                        : 'bg-background text-muted-foreground hover:text-red-600 hover:bg-red-500/10 hover:border-red-300 border-border/70 font-semibold'
                                                                 }`}
                                                                 onClick={() => setStudentAttendance(s.id, isAbsent ? "UNMARKED" : "ABSENT")}
                                                             >
-                                                                <UserX className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
-                                                                Falta
+                                                                <UserX className="size-3.5 shrink-0" />
+                                                                <span className="truncate">Falta</span>
                                                             </Button>
                                                             <Button 
                                                                 size="sm"
                                                                 disabled={isSavingAtt}
-                                                                variant={isLate ? "default" : "outline"}
-                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
+                                                                variant="ghost"
+                                                                className={`h-8 px-1 gap-1 text-[11px] sm:text-xs rounded-lg transition-all border ${
                                                                     isLate 
-                                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm font-extrabold' 
-                                                                        : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-50/50 hover:border-amber-200 border-border/80'
+                                                                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-xs font-black' 
+                                                                        : 'bg-background text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 hover:border-amber-300 border-border/70 font-semibold'
                                                                 }`}
                                                                 onClick={() => setStudentAttendance(s.id, isLate ? "UNMARKED" : "LATE")}
                                                             >
-                                                                <Clock className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
-                                                                Tarde
+                                                                <Clock className="size-3.5 shrink-0" />
+                                                                <span className="truncate">Tarde</span>
                                                             </Button>
                                                             <Button 
                                                                 size="sm"
                                                                 disabled={isSavingAtt}
-                                                                variant={isLeaveEarly ? "default" : "outline"}
-                                                                className={`flex-1 min-w-[70px] h-8 font-bold text-[10px] sm:text-xs rounded-lg transition-all px-1.5 ${
+                                                                variant="ghost"
+                                                                className={`h-8 px-1 gap-1 text-[11px] sm:text-xs rounded-lg transition-all border ${
                                                                     isLeaveEarly 
-                                                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-extrabold' 
-                                                                        : 'text-muted-foreground hover:text-blue-600 hover:bg-blue-50/50 hover:border-blue-200 border-border/80'
+                                                                        ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-xs font-black' 
+                                                                        : 'bg-background text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10 hover:border-blue-300 border-border/70 font-semibold'
                                                                 }`}
                                                                 onClick={() => setStudentAttendance(s.id, isLeaveEarly ? "UNMARKED" : "LEAVE_EARLY")}
                                                             >
-                                                                <LogOut className="w-3 h-3 mr-0.5 sm:mr-1 shrink-0" />
-                                                                Retiro
+                                                                <LogOut className="size-3.5 shrink-0" />
+                                                                <span className="truncate">Retiro</span>
                                                             </Button>
                                                         </div>
 

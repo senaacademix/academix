@@ -528,7 +528,7 @@ export async function getGroupRemarksHistory(groupId: string) {
             attendances: { present, absent, late },
             remarks: { attention, commendation }
         };
-    });
+    }).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 
     const coursesList = coursesTaught.map(c => ({ id: c.id, title: c.title }));
 
