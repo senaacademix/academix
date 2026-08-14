@@ -370,7 +370,7 @@ export async function updateStudentAction(userId: string, data: {
     }
 
     const fullName = `${data.nombres.trim()} ${data.apellido.trim()}`;
-    const groupId = (data.groupId && data.groupId !== "none" && data.groupId !== "all") ? data.groupId : null;
+    const groupId = data.groupId === undefined ? user.groupId : ((data.groupId && data.groupId !== "none" && data.groupId !== "all") ? data.groupId : null);
 
     const updatedUser = await prisma.user.update({
         where: { id: userId },

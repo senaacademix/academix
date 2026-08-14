@@ -532,9 +532,23 @@ export async function assignStudentToGroupAction(studentId: string, groupId: str
         select: { name: true }
     });
 
+    const targetGroup = groupId ? await prisma.group.findUnique({
+        where: { id: groupId },
+        select: { name: true }
+    }) : null;
+
     const result = await prisma.user.update({
         where: { id: studentId },
-        data: { groupId }
+        data: { groupId },
+        include: {
+            profile: true,
+            group: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
     });
 
     const { auditLogger } = await import("../services/auditLogger");
@@ -546,13 +560,14 @@ export async function assignStudentToGroupAction(studentId: string, groupId: str
         userName: session.user.name || "Admin",
         userRole: "admin",
         description: groupId
-            ? `Estudiante "${student?.name || 'Desconocido'}" asignado al grupo ID: ${groupId}`
-            : `Estudiante "${student?.name || 'Desconocido'}" desasignado de su grupo`,
-        metadata: { studentId, groupId },
+            ? `Estudiante "${student?.name || 'Desconocido'}" trasladado/asignado a la ficha: "${targetGroup?.name || groupId}"`
+            : `Estudiante "${student?.name || 'Desconocido'}" desasignado de su ficha`,
+        metadata: { studentId, groupId, groupName: targetGroup?.name },
         success: true,
     });
 
     revalidatePath("/dashboard/admin/courses");
+    revalidatePath("/dashboard/admin/users");
     return result;
 }
 

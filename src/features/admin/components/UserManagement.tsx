@@ -57,10 +57,10 @@ import {
 import {
     Search, Trash2, Eye, UserCog, Users as UsersIcon, UserPlus, ChevronLeft, ChevronRight,
     BookOpen, Calendar, MessageSquare, FileText, CheckCircle2, AlertCircle, X, GraduationCap,
-    Key, RefreshCw, Bookmark, MoreVertical, Pencil
+    Key, RefreshCw, Bookmark, MoreVertical, Pencil, ArrowRightLeft, ShieldAlert, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction, updateStudentNovedadAction, updateStudentAction } from "@/app/admin-actions";
+import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, resetUserPasswordToDocAction, getComprehensiveGroupAnalyticsAction, getAllFilteredUserIdsAction, getUserEmailsAction, updateStudentNovedadAction, updateStudentAction, assignStudentToGroupAction } from "@/app/admin-actions";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -187,8 +187,7 @@ export function UserManagement({
                     identificacion: editIdentificacion,
                     nombres: editNombres,
                     apellido: editApellido,
-                    telefono: editTelefono,
-                    groupId: editGroupId
+                    telefono: editTelefono
                 });
                 setUsers(prev => prev.map(u => u.id === editingUser.id ? {
                     ...u,
@@ -232,6 +231,43 @@ export function UserManagement({
     const [currentTotal, setCurrentTotal] = useState(totalCount);
     const usersPerPage = 20;
     const totalPages = Math.ceil(currentTotal / usersPerPage);
+
+    // Group transfer dialog state
+    const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+    const [userForGroupTransfer, setUserForGroupTransfer] = useState<User | null>(null);
+    const [transferNewGroupId, setTransferNewGroupId] = useState<string>("none");
+
+    const handleConfirmGroupTransfer = async () => {
+        if (!userForGroupTransfer) return;
+        const targetGroupId = transferNewGroupId !== "none" ? transferNewGroupId : null;
+
+        startTransition(async () => {
+            try {
+                const updated = await assignStudentToGroupAction(userForGroupTransfer.id, targetGroupId);
+                const newGroupObj = groupsList.find(g => g.id === targetGroupId);
+
+                setUsers(prev => prev.map(u => u.id === userForGroupTransfer.id ? {
+                    ...u,
+                    groupId: targetGroupId,
+                    group: newGroupObj ? { id: newGroupObj.id, name: newGroupObj.name } : null
+                } : u));
+
+                toast.success("Estudiante trasladado de ficha", {
+                    description: targetGroupId 
+                        ? `Se trasladó a ${formatName(userForGroupTransfer.name, userForGroupTransfer.profile)} a la ficha ${newGroupObj?.name || ""}` 
+                        : `Se desasignó de la ficha a ${formatName(userForGroupTransfer.name, userForGroupTransfer.profile)}`
+                });
+
+                setTransferDialogOpen(false);
+                setUserForGroupTransfer(null);
+                setTransferNewGroupId("none");
+            } catch (error: any) {
+                toast.error("Error al trasladar estudiante", {
+                    description: error.message || "No se pudo realizar el traslado"
+                });
+            }
+        });
+    };
 
     // Role change dialog state
     const [roleChangeDialogOpen, setRoleChangeDialogOpen] = useState(false);
@@ -906,10 +942,22 @@ export function UserManagement({
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="w-52">
                                                             {!isObserver && (
-                                                                <DropdownMenuItem onClick={() => handleOpenEditModal(user)}>
-                                                                    <Pencil className="mr-2 h-4 w-4 text-blue-600" />
-                                                                    <span>Editar estudiante</span>
-                                                                </DropdownMenuItem>
+                                                                <>
+                                                                    <DropdownMenuItem onClick={() => handleOpenEditModal(user)}>
+                                                                        <Pencil className="mr-2 h-4 w-4 text-blue-600" />
+                                                                        <span>Editar estudiante</span>
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => {
+                                                                            setUserForGroupTransfer(user);
+                                                                            setTransferNewGroupId(user.groupId || user.group?.id || "none");
+                                                                            setTransferDialogOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <ArrowRightLeft className="mr-2 h-4 w-4 text-purple-600" />
+                                                                        <span>Trasladar de ficha / grupo</span>
+                                                                    </DropdownMenuItem>
+                                                                </>
                                                             )}
                                                             <DropdownMenuItem
                                                                 onClick={() => {
@@ -1360,6 +1408,111 @@ export function UserManagement({
                 </DialogContent>
             </Dialog>
 
+            {/* Modal Exclusivo: Trasladar Estudiante de Ficha / Grupo */}
+            <Dialog open={transferDialogOpen} onOpenChange={(open) => {
+                setTransferDialogOpen(open);
+                if (!open) {
+                    setUserForGroupTransfer(null);
+                    setTransferNewGroupId("none");
+                }
+            }}>
+                <DialogContent className="sm:max-w-[480px] p-6 rounded-2xl">
+                    <DialogHeader className="space-y-2">
+                        <DialogTitle className="flex items-center gap-2 text-base font-black text-foreground">
+                            <ArrowRightLeft className="h-5 w-5 text-purple-600" />
+                            Trasladar Estudiante de Ficha
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Selecciona la nueva ficha o grupo de formación de destino.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {userForGroupTransfer && (
+                        <div className="space-y-4 py-2">
+                            {/* Card Resumen de Estudiante */}
+                            <div className="p-3.5 rounded-xl bg-muted/40 border flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <UserAvatar 
+                                        src={userForGroupTransfer.image} 
+                                        alt={formatName(userForGroupTransfer.name, userForGroupTransfer.profile)}
+                                        fallbackText={formatName(userForGroupTransfer.name, userForGroupTransfer.profile)}
+                                        size="sm"
+                                    />
+                                    <div>
+                                        <p className="text-xs font-bold text-foreground">
+                                            {formatName(userForGroupTransfer.name, userForGroupTransfer.profile)}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground font-mono">
+                                            Doc: {userForGroupTransfer.profile?.identificacion || "—"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Badge variant="outline" className="text-[10px] font-bold bg-background">
+                                    {userForGroupTransfer.group?.name ? `Actual: ${userForGroupTransfer.group.name}` : "Sin Ficha"}
+                                </Badge>
+                            </div>
+
+                            {/* Banner Informativo de Protección de Histórico */}
+                            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-900 dark:text-purple-300 space-y-1">
+                                <div className="flex items-center gap-1.5 font-bold">
+                                    <ShieldAlert className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                    Conservación de Historial Académico
+                                </div>
+                                <p className="text-[11px] text-purple-700 dark:text-purple-400 leading-normal">
+                                    El traslado **NO altera ni elimina** asistencias anteriores, observaciones disciplinarias ni notas. Todo el histórico permanece 100% conservado en la hoja de vida del estudiante.
+                                </p>
+                            </div>
+
+                            {/* Selector de Nueva Ficha */}
+                            <div className="space-y-2 pt-1">
+                                <Label htmlFor="transferGroupId" className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                    Ficha / Grupo de Destino *
+                                </Label>
+                                <Select value={transferNewGroupId} onValueChange={setTransferNewGroupId} disabled={isPending}>
+                                    <SelectTrigger id="transferGroupId" className="h-10 rounded-xl font-medium">
+                                        <SelectValue placeholder="Seleccionar nueva ficha" />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-60">
+                                        <SelectItem value="none" className="font-semibold text-muted-foreground">
+                                            🚫 Sin grupo asignado
+                                        </SelectItem>
+                                        {groupsList.map((g) => (
+                                            <SelectItem key={g.id} value={g.id} className="font-semibold text-xs">
+                                                {g.name} {g.id === (userForGroupTransfer.groupId || userForGroupTransfer.group?.id) ? "(Ficha Actual)" : ""}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            variant="outline"
+                            className="rounded-xl font-bold"
+                            onClick={() => setTransferDialogOpen(false)}
+                            disabled={isPending}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            className="rounded-xl font-bold bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                            onClick={handleConfirmGroupTransfer}
+                            disabled={isPending}
+                        >
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Trasladando...
+                                </>
+                            ) : (
+                                "Confirmar Traslado"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Edit Student Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
                 <DialogContent className="max-w-md">
@@ -1418,21 +1571,17 @@ export function UserManagement({
                                 placeholder="Ej: 3001234567"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="editGroupId">Grupo / Ficha</Label>
-                            <Select value={editGroupId} onValueChange={setEditGroupId}>
-                                <SelectTrigger id="editGroupId">
-                                    <SelectValue placeholder="Seleccionar grupo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Sin grupo asignado</SelectItem>
-                                    {groupsList.map((g) => (
-                                        <SelectItem key={g.id} value={g.id}>
-                                            {g.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="editGroupId" className="text-xs font-semibold text-muted-foreground">Grupo / Ficha (Lectura únicamente)</Label>
+                            <Input
+                                id="editGroupId"
+                                value={editingUser?.group?.name || groupsList.find(g => g.id === editGroupId)?.name || "Sin grupo asignado"}
+                                disabled
+                                className="bg-muted/60 cursor-not-allowed font-bold text-foreground text-xs"
+                            />
+                            <p className="text-[11px] text-muted-foreground italic pt-0.5">
+                                Para trasladar este estudiante a otra ficha, utiliza la opción dedicada <strong>"Trasladar de ficha / grupo"</strong> en el menú de acciones `⋮`.
+                            </p>
                         </div>
                     </div>
                     <DialogFooter>

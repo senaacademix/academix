@@ -55,12 +55,30 @@ const formatTime12h = (timeStr: any): string => {
     return `${hour12}:${minutesStr} ${ampm}`;
 };
 
+const getJustificationLink = (rec?: { justification?: string | null; justificationUrl?: string | null } | null) => {
+    if (!rec) return null;
+    if (rec.justificationUrl && rec.justificationUrl.trim().length > 0) {
+        const url = rec.justificationUrl.trim();
+        return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
+    }
+    if (rec.justification) {
+        const text = rec.justification.trim();
+        if (text.startsWith("http://") || text.startsWith("https://")) {
+            return text;
+        }
+        const match = text.match(/(https?:\/\/[^\s]+)/i);
+        if (match) {
+            return match[0];
+        }
+    }
+    return null;
+};
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import * as htmlToImage from "html-to-image";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
-import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
+import { Users, Key, Clock, Lock, Unlock, MessageSquare, Save, Search, ShieldAlert, UserX, UserCheck, ArrowRight, ArrowLeft, Play, LayoutList, ListTodo, CheckSquare, Mail, Eye, EyeOff, GraduationCap, BookOpen, Loader2, HelpCircle, FileText, X, ClipboardList, History, FileSpreadsheet, FileDown, Trash2, ChevronDown, Dices, Shuffle, ChevronLeft, ChevronRight, BarChart3, LogOut, RefreshCw, RotateCcw, Sparkles, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -353,6 +371,15 @@ export function GroupManager({ groups, scheduleStartDate, scheduleEndDate, teach
     const [impTeacherSignDialog, setImpTeacherSignDialog] = useState<{ planId: string; url: string } | null>(null);
     const [resetPlanDialog, setResetPlanDialog] = useState<{ open: boolean; planId: string; stepNumber: number; reason: string } | null>(null);
     const [gradePlanDialog, setGradePlanDialog] = useState<{ open: boolean; planId: string; grade: string } | null>(null);
+    const [viewJustificationDialog, setViewJustificationDialog] = useState<{
+        open: boolean;
+        studentName: string;
+        studentId?: string;
+        date: string;
+        status: string;
+        justification: string;
+        linkUrl?: string | null;
+    } | null>(null);
 
     const loadGroupPlans = async (gId?: string) => {
         const id = gId || selectedGroupId;
@@ -3609,26 +3636,70 @@ const handleOpenAnalytics = async () => {
                                                                                                  <span className="text-muted-foreground text-[11px]">Día completo</span>
                                                                                              )}
                                                                                         </TableCell>
-                                                                                        <TableCell className="text-xs py-3 max-w-[300px]">
-                                                                                            {rec.justification ? (
-                                                                                                rec.justification.startsWith("http") ? (
-                                                                                                    <a 
-                                                                                                        href={rec.justification} 
-                                                                                                        target="_blank" 
-                                                                                                        rel="noopener noreferrer" 
-                                                                                                        className="text-primary hover:underline font-bold inline-flex items-center gap-1"
-                                                                                                    >
-                                                                                                        <FileText className="w-3 h-3" />
-                                                                                                        Ver soporte
-                                                                                                    </a>
-                                                                                                ) : (
-                                                                                                    <span className="text-muted-foreground italic truncate block" title={rec.justification}>
-                                                                                                        {rec.justification}
-                                                                                                    </span>
-                                                                                                )
-                                                                                            ) : (
-                                                                                                <span className="text-muted-foreground/60 italic text-[11px]">Sin justificación</span>
-                                                                                            )}
+                                                                                        <TableCell className="text-xs py-3 max-w-[320px]">
+                                                                                            {(() => {
+                                                                                                const linkUrl = getJustificationLink(rec);
+                                                                                                const hasText = !!(rec.justification && rec.justification.trim().length > 0 && !rec.justification.trim().startsWith("http"));
+                                                                                                const hasLink = !!linkUrl;
+
+                                                                                                if (!hasText && !hasLink) {
+                                                                                                    return <span className="text-muted-foreground/60 italic text-[11px]">Sin justificación</span>;
+                                                                                                }
+
+                                                                                                return (
+                                                                                                    <div className="flex flex-col gap-1.5 items-start">
+                                                                                                        {hasText && (
+                                                                                                            <div className="flex items-center gap-1.5 max-w-full">
+                                                                                                                <span 
+                                                                                                                    className="text-xs font-medium text-foreground/90 italic truncate max-w-[190px] cursor-pointer hover:text-primary transition-colors"
+                                                                                                                    title="Haz clic para ver el texto completo"
+                                                                                                                    onClick={() => setViewJustificationDialog({
+                                                                                                                        open: true,
+                                                                                                                        studentName: formatName(student.name, student.profile),
+                                                                                                                        studentId: student.profile?.identificacion,
+                                                                                                                        date: formattedDate,
+                                                                                                                        status: isAbsent ? "Falta" : isLate ? "Tarde" : "Retiro",
+                                                                                                                        justification: rec.justification || "",
+                                                                                                                        linkUrl
+                                                                                                                    })}
+                                                                                                                >
+                                                                                                                    "{rec.justification}"
+                                                                                                                </span>
+                                                                                                                <Button
+                                                                                                                    type="button"
+                                                                                                                    variant="ghost"
+                                                                                                                    size="sm"
+                                                                                                                    className="h-6 px-2 text-[11px] font-semibold text-primary hover:text-primary hover:bg-primary/10 rounded-lg shrink-0 gap-1"
+                                                                                                                    onClick={() => setViewJustificationDialog({
+                                                                                                                        open: true,
+                                                                                                                        studentName: formatName(student.name, student.profile),
+                                                                                                                        studentId: student.profile?.identificacion,
+                                                                                                                        date: formattedDate,
+                                                                                                                        status: isAbsent ? "Falta" : isLate ? "Tarde" : "Retiro",
+                                                                                                                        justification: rec.justification || "",
+                                                                                                                        linkUrl
+                                                                                                                    })}
+                                                                                                                >
+                                                                                                                    <Eye className="w-3 h-3" />
+                                                                                                                    Ver texto
+                                                                                                                </Button>
+                                                                                                            </div>
+                                                                                                        )}
+
+                                                                                                        {hasLink && (
+                                                                                                            <a
+                                                                                                                href={linkUrl}
+                                                                                                                target="_blank"
+                                                                                                                rel="noopener noreferrer"
+                                                                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-all shadow-xs"
+                                                                                                            >
+                                                                                                                <ExternalLink className="w-3 h-3" />
+                                                                                                                Abrir Enlace Adjunto
+                                                                                                            </a>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                );
+                                                                                            })()}
                                                                                         </TableCell>
                                                                                         <TableCell className="text-right pr-6 py-3">
                                                                                             <Button 
@@ -5294,18 +5365,18 @@ const handleOpenAnalytics = async () => {
                                         <div className="text-[11px] text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-muted/50 mt-1 flex flex-col gap-1.5">
                                             <div>
                                                 <span className="font-bold text-foreground">Justificación:</span>{" "}
-                                                <span className="italic">{att.justification || "Sin justificación registrada."}</span>
+                                                <span className="italic block text-xs text-foreground/90 whitespace-pre-wrap mt-0.5">{att.justification || "Sin justificación registrada."}</span>
                                             </div>
-                                            {att.justificationUrl && (
-                                                <div className="flex items-center gap-1 mt-0.5 border-t border-muted/30 pt-1.5">
-                                                    <span className="font-bold text-foreground">Soporte:</span>
+                                            {getJustificationLink(att) && (
+                                                <div className="flex items-center justify-between gap-2 mt-1 border-t border-muted/30 pt-2">
+                                                    <span className="font-bold text-foreground text-[11px]">Soporte adjunto:</span>
                                                     <a 
-                                                        href={att.justificationUrl} 
+                                                        href={getJustificationLink(att)!} 
                                                         target="_blank" 
                                                         rel="noopener noreferrer" 
-                                                        className="text-primary hover:underline font-semibold flex items-center gap-0.5 ml-1"
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-all"
                                                     >
-                                                        <FileText className="w-3.5 h-3.5" /> Ver documento soporte
+                                                        <ExternalLink className="w-3.5 h-3.5" /> Abrir enlace adjunto
                                                     </a>
                                                 </div>
                                             )}
@@ -5355,6 +5426,67 @@ const handleOpenAnalytics = async () => {
 
                     <DialogFooter>
                         <Button onClick={() => setDetailOpen(false)} className="w-full sm:w-auto">Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Full Justification Viewer Dialog */}
+            <Dialog open={!!viewJustificationDialog?.open} onOpenChange={(open) => !open && setViewJustificationDialog(null)}>
+                <DialogContent className="max-w-lg rounded-2xl p-6">
+                    <DialogHeader className="space-y-2">
+                        <DialogTitle className="flex items-center gap-2 text-base font-black text-foreground">
+                            <FileText className="h-5 w-5 text-primary" />
+                            Justificación de Asistencia
+                        </DialogTitle>
+                        {viewJustificationDialog && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                                <span className="font-bold text-foreground">{viewJustificationDialog.studentName}</span>
+                                {viewJustificationDialog.studentId && (
+                                    <span className="text-muted-foreground font-mono">({viewJustificationDialog.studentId})</span>
+                                )}
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-muted-foreground">{viewJustificationDialog.date}</span>
+                                <Badge variant="outline" className="font-bold text-[10px] uppercase ml-auto">
+                                    {viewJustificationDialog.status}
+                                </Badge>
+                            </div>
+                        )}
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                Texto Completo de la Justificación
+                            </Label>
+                            <div className="p-4 rounded-xl bg-muted/30 border border-border text-sm text-foreground whitespace-pre-wrap leading-relaxed max-h-[250px] overflow-y-auto font-medium">
+                                {viewJustificationDialog?.justification || "Sin texto de justificación."}
+                            </div>
+                        </div>
+
+                        {viewJustificationDialog?.linkUrl && (
+                            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="space-y-0.5">
+                                    <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300">Enlace / Soporte Adjunto</p>
+                                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 truncate max-w-[280px]">
+                                        {viewJustificationDialog.linkUrl}
+                                    </p>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 shrink-0 rounded-xl"
+                                    onClick={() => window.open(viewJustificationDialog.linkUrl!, "_blank")}
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    Abrir Enlace
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" className="rounded-xl font-bold" onClick={() => setViewJustificationDialog(null)}>
+                            Cerrar
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

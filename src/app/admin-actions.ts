@@ -28,3 +28,6 @@ export {
     updateStudentAction
 } from "@/features/admin/actions/adminActions";
 
+export { assignStudentToGroupAction } from "@/features/admin/actions/academicActions";
+
+
