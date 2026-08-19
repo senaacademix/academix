@@ -43,7 +43,7 @@ export function AppIdentity() {
             "flex items-center transition-all duration-300 ease-in-out w-full border-b border-sidebar-border/60",
             isCollapsed
               ? "justify-center h-14 py-2"
-              : "justify-start h-20 px-4 py-3 bg-slate-50/50 dark:bg-slate-900/40 backdrop-blur-md"
+              : "justify-start h-20 px-4 py-3 bg-sidebar/50 backdrop-blur-md"
           )}
         >
           <div className="flex items-center gap-3">
@@ -68,7 +68,7 @@ export function AppIdentity() {
               isMounted && !isPending ? (
                 <div className="flex flex-col items-start min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-base font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+                    <span className="text-base font-black tracking-tight text-sidebar-foreground leading-tight">
                       Academi<span className="text-primary">X</span>
                     </span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

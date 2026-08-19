@@ -1,35 +1,40 @@
 :root {
+  /* 60% DOMINANT CANVAS (Fondo Solar Verano) */
   --background: oklch(0.98 0.01 81.76);
   --foreground: oklch(0.38 0.02 64.16);
-  --card: oklch(0.98 0.01 67.70);
-  --card-foreground: oklch(0.38 0.02 64.16);
-  --popover: oklch(0.96 0.04 83.12);
+  --sidebar: oklch(0.98 0.01 81.76);
+  --sidebar-foreground: oklch(0.38 0.02 64.16);
+  --popover: oklch(0.99 0.01 81.76);
   --popover-foreground: oklch(0.38 0.02 64.16);
-  --primary: oklch(0.70 0.17 28.12);
-  --primary-foreground: oklch(1.00 0 0);
-  --secondary: oklch(0.81 0.15 71.81);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Estructura Cálida, Bordes) */
+  --card: oklch(1.00 0 0);
+  --card-foreground: oklch(0.38 0.02 64.16);
+  --secondary: oklch(0.92 0.06 83.12);
   --secondary-foreground: oklch(0.38 0.02 64.16);
   --muted: oklch(0.94 0.03 62.32);
   --muted-foreground: oklch(0.56 0.05 58.74);
   --accent: oklch(0.93 0.04 83.20);
   --accent-foreground: oklch(0.47 0.05 58.08);
+  --border: oklch(0.88 0.05 66.11);
+  --input: oklch(0.88 0.05 66.11);
+  --sidebar-accent: oklch(0.93 0.04 83.20);
+  --sidebar-accent-foreground: oklch(0.38 0.02 64.16);
+  --sidebar-border: oklch(0.88 0.05 66.11);
+
+  /* 10% ACCENT FOCAL POINT (Coral Atardecer Veraniego) */
+  --primary: oklch(0.70 0.17 28.12);
+  --primary-foreground: oklch(1.00 0 0);
   --destructive: oklch(0.57 0.20 26.34);
-  --border: oklch(0.90 0.06 66.11);
-  --input: oklch(0.90 0.06 66.11);
   --ring: oklch(0.70 0.17 28.12);
+  --sidebar-primary: oklch(0.70 0.17 28.12);
+  --sidebar-primary-foreground: oklch(1.00 0 0);
+  --sidebar-ring: oklch(0.70 0.17 28.12);
   --chart-1: oklch(0.70 0.17 28.12);
   --chart-2: oklch(0.81 0.15 71.81);
   --chart-3: oklch(0.71 0.18 37.63);
   --chart-4: oklch(0.89 0.15 91.66);
   --chart-5: oklch(0.59 0.19 36.05);
-  --sidebar: oklch(0.97 0.02 72.57);
-  --sidebar-foreground: oklch(0.38 0.02 64.16);
-  --sidebar-primary: oklch(0.70 0.17 28.12);
-  --sidebar-primary-foreground: oklch(1.00 0 0);
-  --sidebar-accent: oklch(0.81 0.15 71.81);
-  --sidebar-accent-foreground: oklch(0.38 0.02 64.16);
-  --sidebar-border: oklch(0.87 0.08 65.83);
-  --sidebar-ring: oklch(0.70 0.17 28.12);
 
   --font-sans: Nunito, Segoe UI, Tahoma, Geneva, Verdana, sans-serif;
   --font-serif: Lora, ui-serif, Georgia, Cambria, Times New Roman, Times, serif;
@@ -43,44 +48,48 @@
   --shadow: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.05), 0px 1px 2px -1px oklch(0.70 0.17 28.12 / 0.05);
   --shadow-md: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.05), 0px 2px 4px -1px oklch(0.70 0.17 28.12 / 0.05);
   --shadow-lg: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.05), 0px 4px 6px -1px oklch(0.70 0.17 28.12 / 0.05);
-  --shadow-xl: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.05), 0px 8px 10px -1px oklch(0.70 0.17 28.12 / 0.05);
+  --shadow-xl: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.03), 0px 8px 10px -1px oklch(0.70 0.17 28.12 / 0.05);
   --shadow-2xl: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.13);
-  
 }
 
 .dark {
-  --background: oklch(0.26 0.02 63.41);
+  /* 60% DOMINANT CANVAS (Fondo Oscuro Sol Nocturno) */
+  --background: oklch(0.20 0.02 63.41);
   --foreground: oklch(0.87 0.08 65.83);
-  --card: oklch(0.31 0.03 60.03);
-  --card-foreground: oklch(0.87 0.08 65.83);
-  --popover: oklch(0.36 0.03 54.43);
+  --sidebar: oklch(0.20 0.02 63.41);
+  --sidebar-foreground: oklch(0.87 0.08 65.83);
+  --popover: oklch(0.22 0.02 63.41);
   --popover-foreground: oklch(0.87 0.08 65.83);
-  --primary: oklch(0.70 0.17 28.12);
-  --primary-foreground: oklch(1.00 0 0);
-  --secondary: oklch(0.81 0.15 71.81);
-  --secondary-foreground: oklch(0.26 0.02 63.41);
-  --muted: oklch(0.38 0.03 60.76);
-  --muted-foreground: oklch(0.79 0.06 71.87);
-  --accent: oklch(0.45 0.03 54.70);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Estructura Cálida, Bordes) */
+  --card: oklch(0.26 0.03 60.03);
+  --card-foreground: oklch(0.87 0.08 65.83);
+  --secondary: oklch(0.30 0.03 60.03);
+  --secondary-foreground: oklch(0.87 0.08 65.83);
+  --muted: oklch(0.24 0.02 60.76);
+  --muted-foreground: oklch(0.75 0.05 71.87);
+  --accent: oklch(0.32 0.04 54.70);
   --accent-foreground: oklch(0.97 0.03 82.90);
+  --border: oklch(0.35 0.03 58.74);
+  --input: oklch(0.35 0.03 58.74);
+  --sidebar-accent: oklch(0.28 0.03 60.03);
+  --sidebar-accent-foreground: oklch(0.87 0.08 65.83);
+  --sidebar-border: oklch(0.35 0.03 58.74);
+
+  /* 10% ACCENT FOCAL POINT (Coral Atardecer Veraniego) */
+  --primary: oklch(0.72 0.18 28.12);
+  --primary-foreground: oklch(1.00 0 0);
   --destructive: oklch(0.50 0.19 27.43);
-  --border: oklch(0.42 0.03 58.74);
-  --input: oklch(0.40 0.04 60.31);
-  --ring: oklch(0.70 0.17 28.12);
-  --chart-1: oklch(0.70 0.17 28.12);
+  --ring: oklch(0.72 0.18 28.12);
+  --sidebar-primary: oklch(0.72 0.18 28.12);
+  --sidebar-primary-foreground: oklch(1.00 0 0);
+  --sidebar-ring: oklch(0.72 0.18 28.12);
+  --chart-1: oklch(0.72 0.18 28.12);
   --chart-2: oklch(0.81 0.15 71.81);
   --chart-3: oklch(0.71 0.18 37.63);
   --chart-4: oklch(0.89 0.15 91.66);
   --chart-5: oklch(0.59 0.19 36.05);
-  --sidebar: oklch(0.31 0.03 60.03);
-  --sidebar-foreground: oklch(0.87 0.08 65.83);
-  --sidebar-primary: oklch(0.70 0.17 28.12);
-  --sidebar-primary-foreground: oklch(1.00 0 0);
-  --sidebar-accent: oklch(0.81 0.15 71.81);
-  --sidebar-accent-foreground: oklch(0.26 0.02 63.41);
-  --sidebar-border: oklch(0.45 0.05 60.24);
-  --sidebar-ring: oklch(0.70 0.17 28.12);
-  
+
   --shadow-2xs: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.03);
   --shadow-xs: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.03);
   --shadow-sm: 0px 1px 3px 0px oklch(0.70 0.17 28.12 / 0.05), 0px 1px 2px -1px oklch(0.70 0.17 28.12 / 0.05);

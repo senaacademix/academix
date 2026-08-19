@@ -3,38 +3,43 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: hsl(210 16.6667% 97.6471%);
-  --foreground: hsl(240 41.4634% 8.0392%);
+  /* 60% DOMINANT CANVAS (Fondo Cyberpunk Claro) */
+  --background: hsl(210 16% 96%);
+  --foreground: hsl(240 41% 8%);
+  --sidebar: hsl(210 16% 96%);
+  --sidebar-foreground: hsl(240 41% 8%);
+  --popover: hsl(210 16% 98%);
+  --popover-foreground: hsl(240 41% 8%);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Estructura, Bordes Ciber) */
   --card: hsl(0 0% 100%);
-  --card-foreground: hsl(240 41.4634% 8.0392%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(240 41.4634% 8.0392%);
-  --primary: hsl(312.9412 100% 50%);
+  --card-foreground: hsl(240 41% 8%);
+  --secondary: hsl(240 60% 95%);
+  --secondary-foreground: hsl(240 41% 8%);
+  --muted: hsl(240 40% 94%);
+  --muted-foreground: hsl(240 20% 40%);
+  --accent: hsl(168 80% 90%);
+  --accent-foreground: hsl(240 41% 8%);
+  --border: hsl(198 25% 85%);
+  --input: hsl(198 25% 85%);
+  --sidebar-accent: hsl(168 80% 90%);
+  --sidebar-accent-foreground: hsl(240 41% 8%);
+  --sidebar-border: hsl(198 25% 85%);
+
+  /* 10% ACCENT FOCAL POINT (Neón Magenta Neorave) */
+  --primary: hsl(313 100% 50%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(240 100% 97.0588%);
-  --secondary-foreground: hsl(240 41.4634% 8.0392%);
-  --muted: hsl(240 100% 97.0588%);
-  --muted-foreground: hsl(240 41.4634% 8.0392%);
-  --accent: hsl(168 100% 50%);
-  --accent-foreground: hsl(240 41.4634% 8.0392%);
-  --destructive: hsl(14.3529 100% 50%);
+  --destructive: hsl(14 100% 50%);
   --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(198.0000 18.5185% 89.4118%);
-  --input: hsl(198.0000 18.5185% 89.4118%);
-  --ring: hsl(312.9412 100% 50%);
-  --chart-1: hsl(312.9412 100% 50%);
-  --chart-2: hsl(273.8824 100% 50%);
-  --chart-3: hsl(186.1176 100% 50%);
-  --chart-4: hsl(168 100% 50%);
-  --chart-5: hsl(54.1176 100% 50%);
-  --sidebar: hsl(240 100% 97.0588%);
-  --sidebar-foreground: hsl(240 41.4634% 8.0392%);
-  --sidebar-primary: hsl(312.9412 100% 50%);
+  --ring: hsl(313 100% 50%);
+  --sidebar-primary: hsl(313 100% 50%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(168 100% 50%);
-  --sidebar-accent-foreground: hsl(240 41.4634% 8.0392%);
-  --sidebar-border: hsl(198.0000 18.5185% 89.4118%);
-  --sidebar-ring: hsl(312.9412 100% 50%);
+  --sidebar-ring: hsl(313 100% 50%);
+  --chart-1: hsl(313 100% 50%);
+  --chart-2: hsl(273 100% 50%);
+  --chart-3: hsl(186 100% 50%);
+  --chart-4: hsl(168 100% 50%);
+  --chart-5: hsl(54 100% 50%);
   --font-sans: Outfit, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: Fira Code, monospace;
@@ -58,38 +63,43 @@
 }
 
 .dark {
-  --background: hsl(240 41.4634% 8.0392%);
-  --foreground: hsl(217.5000 26.6667% 94.1176%);
-  --card: hsl(240 35.4839% 18.2353%);
-  --card-foreground: hsl(217.5000 26.6667% 94.1176%);
-  --popover: hsl(240 35.4839% 18.2353%);
-  --popover-foreground: hsl(217.5000 26.6667% 94.1176%);
-  --primary: hsl(312.9412 100% 50%);
+  /* 60% DOMINANT CANVAS (Fondo Cyberpunk Oscuro Profundo) */
+  --background: hsl(240 41% 8%);
+  --foreground: hsl(217 27% 94%);
+  --sidebar: hsl(240 41% 8%);
+  --sidebar-foreground: hsl(217 27% 94%);
+  --popover: hsl(240 35% 12%);
+  --popover-foreground: hsl(217 27% 94%);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Estructura, Bordes Ciber) */
+  --card: hsl(240 35% 14%);
+  --card-foreground: hsl(217 27% 94%);
+  --secondary: hsl(240 30% 20%);
+  --secondary-foreground: hsl(217 27% 94%);
+  --muted: hsl(240 30% 14%);
+  --muted-foreground: hsl(232 18% 60%);
+  --accent: hsl(168 80% 15%);
+  --accent-foreground: hsl(168 100% 60%);
+  --border: hsl(240 30% 25%);
+  --input: hsl(240 30% 25%);
+  --sidebar-accent: hsl(168 80% 15%);
+  --sidebar-accent-foreground: hsl(168 100% 60%);
+  --sidebar-border: hsl(240 30% 25%);
+
+  /* 10% ACCENT FOCAL POINT (Neón Magenta Neorave) */
+  --primary: hsl(313 100% 50%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(240 35.4839% 18.2353%);
-  --secondary-foreground: hsl(217.5000 26.6667% 94.1176%);
-  --muted: hsl(240 39.1304% 13.5294%);
-  --muted-foreground: hsl(232.1053 17.5926% 57.6471%);
-  --accent: hsl(168 100% 50%);
-  --accent-foreground: hsl(240 41.4634% 8.0392%);
-  --destructive: hsl(14.3529 100% 50%);
+  --destructive: hsl(14 100% 50%);
   --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(240 34.2857% 27.4510%);
-  --input: hsl(240 34.2857% 27.4510%);
-  --ring: hsl(312.9412 100% 50%);
-  --chart-1: hsl(312.9412 100% 50%);
-  --chart-2: hsl(273.8824 100% 50%);
-  --chart-3: hsl(186.1176 100% 50%);
-  --chart-4: hsl(168 100% 50%);
-  --chart-5: hsl(54.1176 100% 50%);
-  --sidebar: hsl(240 41.4634% 8.0392%);
-  --sidebar-foreground: hsl(217.5000 26.6667% 94.1176%);
-  --sidebar-primary: hsl(312.9412 100% 50%);
+  --ring: hsl(313 100% 50%);
+  --sidebar-primary: hsl(313 100% 50%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(168 100% 50%);
-  --sidebar-accent-foreground: hsl(240 41.4634% 8.0392%);
-  --sidebar-border: hsl(240 34.2857% 27.4510%);
-  --sidebar-ring: hsl(312.9412 100% 50%);
+  --sidebar-ring: hsl(313 100% 50%);
+  --chart-1: hsl(313 100% 50%);
+  --chart-2: hsl(273 100% 50%);
+  --chart-3: hsl(186 100% 50%);
+  --chart-4: hsl(168 100% 50%);
+  --chart-5: hsl(54 100% 50%);
   --font-sans: Outfit, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: Fira Code, monospace;

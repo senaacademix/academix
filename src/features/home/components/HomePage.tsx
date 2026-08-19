@@ -5,7 +5,7 @@ import { getSettingsAction } from "@/features/admin/actions/settingsActions";
 import { authClient } from "@/lib/auth-client";
 import { getRoleFromUser } from "@/features/auth/services/authService";
 import Link from "next/link";
-import { formatName } from "@/lib/utils";
+import { cn, formatName } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { getFormattedTodayDate } from "@/lib/dateUtils";
 import {
@@ -18,6 +18,14 @@ import {
   Sparkles,
   ArrowRight
 } from "lucide-react";
+
+import { PageTransition, StaggerGroup, StaggerItem } from "@/components/ui/animated-container";
+import { SpotlightCard } from "@/components/ui/spotlight-card";
+
+import { StatWidget } from "@/components/aicanvas/stat-widget";
+import { QuickCalendarWidget } from "@/components/aicanvas/quick-calendar-widget";
+import { ProgressTrackerCard } from "@/components/aicanvas/progress-tracker-card";
+import { GraduationCap, CheckCircle, Activity, Award } from "lucide-react";
 
 interface HomePageProps {
   initialUserName?: string;
@@ -124,11 +132,11 @@ export default function HomePage({ initialUserName, initialUserRole, initialDate
   const navItems = getNavigationItems();
 
   return (
-    <div className="w-full space-y-8 pb-12">
+    <PageTransition className="w-full space-y-8 pb-12">
       {/* Banner Hero Estilo AI Canvas Adaptativo */}
-      <section className="relative rounded-3xl overflow-hidden bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 p-8 sm:p-12 backdrop-blur-2xl shadow-xl dark:shadow-2xl dark:shadow-primary/5 transition-colors">
+      <section className="relative rounded-3xl overflow-hidden bg-card/80 border border-border/80 p-8 sm:p-12 backdrop-blur-2xl shadow-xl dark:shadow-2xl dark:shadow-primary/5 transition-colors">
         {/* Background Grid & Glow */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#64748b10_1px,transparent_1px),linear-gradient(to_bottom,#64748b10_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:3rem_3rem] pointer-events-none" />
+        <div className="absolute inset-0 bg-grid-pattern pointer-events-none" />
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-primary/10 dark:bg-primary/15 blur-[120px] rounded-full pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center text-center max-w-3xl mx-auto space-y-4">
@@ -136,7 +144,7 @@ export default function HomePage({ initialUserName, initialUserRole, initialDate
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold backdrop-blur-md"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold backdrop-blur-md badge-glow"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Panel Académico de {role === "teacher" ? "Profesor" : role === "admin" ? "Administrador" : "Estudiante"}</span>
@@ -146,73 +154,128 @@ export default function HomePage({ initialUserName, initialUserRole, initialDate
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight"
+            className="text-3xl sm:text-5xl font-extrabold text-foreground tracking-tight leading-tight text-balance"
           >
-            ¡Hola, <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-primary dark:from-white dark:via-slate-200 dark:to-primary bg-clip-text text-transparent">{userName ? formatName(userName) : 'Docente'}</span>!
+            ¡Hola, <span className="bg-gradient-to-r from-foreground via-foreground/80 to-primary bg-clip-text text-transparent">{userName ? formatName(userName) : 'Docente'}</span>!
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-slate-600 dark:text-slate-400 text-sm sm:text-base capitalize flex items-center justify-center gap-2 font-medium"
+            className="text-muted-foreground text-sm sm:text-base capitalize flex items-center justify-center gap-2 font-medium text-pretty"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>{displayDate}</span>
             {settings.institutionName && (
               <>
-                <span className="text-slate-400 dark:text-slate-600">•</span>
-                <span className="text-slate-700 dark:text-slate-300 font-semibold">{settings.institutionName}</span>
+                <span className="text-muted-foreground/60">•</span>
+                <span className="text-foreground font-semibold">{settings.institutionName}</span>
               </>
             )}
           </motion.p>
         </div>
       </section>
 
-      {/* Quick Access Section */}
-      <section className="space-y-6">
-        <div className="flex items-center justify-between px-2">
-          <div>
-            <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span>Acceso Rápido</span>
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Selecciona el módulo al que deseas acceder</p>
+      {/* Metrics Grid AI Canvas */}
+      <StaggerGroup className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StaggerItem>
+          <StatWidget
+            title="Asistencia General"
+            value="96.4%"
+            change="+2.1%"
+            isPositive={true}
+            icon={CheckCircle}
+            description="Asistencia promedio semanal"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatWidget
+            title="Fichas / Cursos"
+            value="12 Cursos"
+            change="+1"
+            isPositive={true}
+            icon={GraduationCap}
+            description="Cursos activos asignados"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatWidget
+            title="Rendimiento Promedio"
+            value="4.5 / 5.0"
+            change="+0.3"
+            isPositive={true}
+            icon={Award}
+            description="Desempeño general de estudiantes"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatWidget
+            title="Actividades Pendientes"
+            value="3 Evaluaciones"
+            change="-2"
+            isPositive={true}
+            icon={Activity}
+            description="Por calificar este período"
+          />
+        </StaggerItem>
+      </StaggerGroup>
+
+      {/* Main Grid: Quick Access & AI Canvas Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Quick Access Section */}
+        <section className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <div>
+              <h2 className="text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2 text-balance">
+                <span>Acceso Rápido</span>
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1 text-pretty">Selecciona el módulo al que deseas acceder</p>
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {navItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <Link key={index} href={item.url} className="group">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: index * 0.1 }}
-                  whileHover={{ y: -4 }}
-                  className="relative rounded-3xl bg-white/90 dark:bg-slate-900/70 border border-slate-200/90 dark:border-slate-800/80 p-6 hover:border-primary/50 dark:hover:border-slate-700 transition-all duration-300 backdrop-blur-xl shadow-sm hover:shadow-xl dark:shadow-lg dark:hover:shadow-2xl dark:hover:shadow-primary/5 flex items-start gap-5 overflow-hidden"
-                >
-                  <div className={`p-4 rounded-2xl border ${item.color} shrink-0 group-hover:scale-110 transition-transform duration-300`}>
-                    <Icon className="w-7 h-7" />
-                  </div>
+          <StaggerGroup className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {navItems.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <StaggerItem key={index}>
+                  <Link href={item.url} className="group block h-full">
+                    <SpotlightCard className="h-full flex items-center gap-4 transition-all duration-300">
+                      <div className={cn("w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-300", item.color)}>
+                        <Icon className="w-6 h-6" />
+                      </div>
 
-                  <div className="flex-1 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors flex items-center gap-2">
-                        {item.title}
-                      </h3>
-                      <ArrowRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                      {item.description}
-                    </p>
-                  </div>
-                </motion.div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-    </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                            {item.title}
+                          </h3>
+                          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 text-pretty">
+                          {item.description}
+                        </p>
+                      </div>
+                    </SpotlightCard>
+                  </Link>
+                </StaggerItem>
+              );
+            })}
+          </StaggerGroup>
+        </section>
+
+        {/* Sidebar Widgets Section */}
+        <section className="space-y-6">
+          <QuickCalendarWidget />
+          <ProgressTrackerCard
+            title="Progreso del Período"
+            subtitle="Período Académico Actual"
+            progressPercentage={78}
+            completedTasks={14}
+            totalTasks={18}
+          />
+        </section>
+      </div>
+    </PageTransition>
   );
 }

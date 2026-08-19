@@ -1,74 +1,84 @@
 :root {
-  --background: oklch(1 0 0);
+  /* 60% DOMINANT CANVAS (Fondo Claro Punk-Runner) */
+  --background: oklch(0.98 0 0);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.98 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --popover: oklch(0.99 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Contenedores, Bordes) */
+  --card: oklch(1.00 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.95 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.50 0 0);
+  --accent: oklch(0.94 0.05 165.39);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.90 0 0);
+  --input: oklch(0.90 0 0);
+  --sidebar-accent: oklch(0.94 0.05 165.39);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --sidebar-border: oklch(0.90 0 0);
+
+  /* 10% ACCENT FOCAL POINT (Rosa Neón Punk-Runner) */
+  --primary: oklch(0.636 0.250 21.006);
+  --primary-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --ring: oklch(0.636 0.250 21.006);
+  --sidebar-primary: oklch(0.636 0.250 21.006);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-ring: oklch(0.636 0.250 21.006);
+  --chart-1: oklch(0.636 0.250 21.006);
+  --chart-2: oklch(0.60 0.118 184.70);
+  --chart-3: oklch(0.398 0.07 227.39);
+  --chart-4: oklch(0.828 0.189 84.42);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --radius: 0.625rem;
 }
 
 .dark {
-  --background: oklch(0.157 0.016 188.256);
-  --foreground: oklch(0.935 0.014 359.938);
-  --card: oklch(0.157 0.016 188.256);
-  --card-foreground: oklch(0.615 0.113 158.573);
-  --popover: oklch(0.244 0.038 180.714);
-  --popover-foreground: oklch(0.615 0.113 158.573);
+  /* 60% DOMINANT CANVAS (Fondo Oscuro Ciber Neón Punk) */
+  --background: oklch(0.15 0.01 188.25);
+  --foreground: oklch(0.935 0.014 359.93);
+  --sidebar: oklch(0.15 0.01 188.25);
+  --sidebar-foreground: oklch(0.935 0.014 359.93);
+  --popover: oklch(0.18 0.02 180.71);
+  --popover-foreground: oklch(0.935 0.014 359.93);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Contenedores, Bordes) */
+  --card: oklch(0.20 0.02 188.25);
+  --card-foreground: oklch(0.935 0.014 359.93);
+  --secondary: oklch(0.24 0.03 180.71);
+  --secondary-foreground: oklch(0.935 0.014 359.93);
+  --muted: oklch(0.18 0.01 188.25);
+  --muted-foreground: oklch(0.615 0.113 158.57);
+  --accent: oklch(0.26 0.04 165.39);
+  --accent-foreground: oklch(0.887 0.184 165.39);
+  --border: oklch(0.28 0.03 158.57);
+  --input: oklch(0.28 0.03 158.57);
+  --sidebar-accent: oklch(0.24 0.03 180.71);
+  --sidebar-accent-foreground: oklch(0.887 0.184 165.39);
+  --sidebar-border: oklch(0.28 0.03 158.57);
+
+  /* 10% ACCENT FOCAL POINT (Rosa Neón Punk-Runner) */
   --primary: oklch(0.636 0.250 21.006);
-  --primary-foreground: oklch(0.935 0.014 359.938);
-  --secondary: oklch(0.887 0.184 165.397);
-  --secondary-foreground: oklch(0.168 0.000 263.283);
-  --muted: oklch(0.157 0.016 188.256);
-  --muted-foreground: oklch(0.615 0.113 158.573);
-  --accent: oklch(0.244 0.038 180.714);
-  --accent-foreground: oklch(0.887 0.184 165.397);
+  --primary-foreground: oklch(0.935 0.014 359.93);
   --destructive: oklch(0.636 0.250 21.006);
-  --border: oklch(0.615 0.113 158.573);
-  --input: oklch(0.157 0.016 188.256);
-  --ring: oklch(1.000 0.000 263.283 / 0%);
-  --chart-1: oklch(0.851 0.118 160.479);
-  --chart-2: oklch(0.845 0.171 138.131);
-  --chart-3: oklch(0.616 0.222 2.159);
-  --chart-4: oklch(0.683 0.152 9.692);
-  --chart-5: oklch(0.601 0.221 17.448);
-  --sidebar: oklch(0.157 0.016 188.256);
-  --sidebar-foreground: oklch(0.615 0.113 158.573);
+  --ring: oklch(0.636 0.250 21.006);
   --sidebar-primary: oklch(0.636 0.250 21.006);
-  --sidebar-primary-foreground: oklch(0.935 0.014 359.938);
-  --sidebar-accent: oklch(0.244 0.038 180.714);
-  --sidebar-accent-foreground: oklch(0.887 0.184 165.397);
-  --sidebar-border: oklch(1.000 0.000 263.283 / 0%);
-  --sidebar-ring: oklch(0.244 0.038 180.714);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --sidebar-primary-foreground: oklch(0.935 0.014 359.93);
+  --sidebar-ring: oklch(0.636 0.250 21.006);
+  --chart-1: oklch(0.636 0.250 21.006);
+  --chart-2: oklch(0.845 0.171 138.13);
+  --chart-3: oklch(0.616 0.222 2.15);
+  --chart-4: oklch(0.683 0.152 9.69);
+  --chart-5: oklch(0.601 0.221 17.44);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --radius: 0.625rem;

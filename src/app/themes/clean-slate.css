@@ -1,35 +1,40 @@
 :root {
-  --background: hsl(0 0% 97%);
+  /* 60% DOMINANT CANVAS (Fondo Pizarra Minimalista) */
+  --background: hsl(218 20% 97%);
   --foreground: hsl(218 36% 18%);
+  --sidebar: hsl(218 20% 97%);
+  --sidebar-foreground: hsl(218 36% 18%);
+  --popover: hsl(218 20% 99%);
+  --popover-foreground: hsl(218 36% 18%);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Contenedores, Bordes) */
   --card: hsl(0 0% 100%);
   --card-foreground: hsl(218 36% 18%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(218 36% 18%);
-  --primary: hsl(238 82% 67%);
-  --primary-foreground: hsl(0 0% 100%);
   --secondary: hsl(218 26% 92%);
   --secondary-foreground: hsl(217 19% 26%);
-  --muted: hsl(0 0% 96%);
+  --muted: hsl(218 15% 94%);
   --muted-foreground: hsl(220 8% 46%);
-  --accent: hsl(227 88% 94%);
+  --accent: hsl(227 40% 92%);
   --accent-foreground: hsl(217 19% 26%);
+  --border: hsl(218 15% 85%);
+  --input: hsl(218 15% 85%);
+  --sidebar-accent: hsl(227 40% 92%);
+  --sidebar-accent-foreground: hsl(217 19% 26%);
+  --sidebar-border: hsl(218 15% 85%);
+
+  /* 10% ACCENT FOCAL POINT (Acento Índigo Pizarra) */
+  --primary: hsl(238 82% 67%);
+  --primary-foreground: hsl(0 0% 100%);
   --destructive: hsl(0 86% 61%);
-  --border: hsl(218 13% 84%);
-  --input: hsl(218 13% 84%);
   --ring: hsl(238 82% 67%);
+  --sidebar-primary: hsl(238 82% 67%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-ring: hsl(238 82% 67%);
   --chart-1: hsl(238 82% 67%);
   --chart-2: hsl(243 75% 59%);
   --chart-3: hsl(244 57% 51%);
   --chart-4: hsl(244 55% 42%);
   --chart-5: hsl(243 49% 35%);
-  --sidebar: hsl(0 0% 96%);
-  --sidebar-foreground: hsl(218 36% 18%);
-  --sidebar-primary: hsl(238 82% 67%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(227 88% 94%);
-  --sidebar-accent-foreground: hsl(217 19% 26%);
-  --sidebar-border: hsl(218 13% 84%);
-  --sidebar-ring: hsl(238 82% 67%);
 
   --font-sans: Inter, sans-serif;
   --font-serif: Merriweather, serif;
@@ -45,42 +50,46 @@
   --shadow-lg: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 4px 6px -2px hsl(0 0% 0% / 0.10);
   --shadow-xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.10), 0px 8px 10px -2px hsl(0 0% 0% / 0.10);
   --shadow-2xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.25);
-  
 }
 
 .dark {
-  --background: hsl(221 48% 11%);
+  /* 60% DOMINANT CANVAS (Fondo Oscuro Pizarra) */
+  --background: hsl(221 48% 10%);
   --foreground: hsl(215 27% 91%);
-  --card: hsl(218 36% 18%);
-  --card-foreground: hsl(215 27% 91%);
-  --popover: hsl(218 36% 18%);
+  --sidebar: hsl(221 48% 10%);
+  --sidebar-foreground: hsl(215 27% 91%);
+  --popover: hsl(221 48% 12%);
   --popover-foreground: hsl(215 27% 91%);
-  --primary: hsl(235 91% 74%);
-  --primary-foreground: hsl(221 48% 11%);
-  --secondary: hsl(218 21% 23%);
+
+  /* 30% SECONDARY STRUCTURE (Tarjetas, Contenedores, Bordes) */
+  --card: hsl(218 36% 16%);
+  --card-foreground: hsl(215 27% 91%);
+  --secondary: hsl(218 25% 22%);
   --secondary-foreground: hsl(218 13% 84%);
-  --muted: hsl(218 36% 18%);
+  --muted: hsl(218 30% 18%);
   --muted-foreground: hsl(218 10% 65%);
-  --accent: hsl(217 19% 26%);
+  --accent: hsl(217 25% 24%);
   --accent-foreground: hsl(218 13% 84%);
+  --border: hsl(216 20% 30%);
+  --input: hsl(216 20% 30%);
+  --sidebar-accent: hsl(217 25% 20%);
+  --sidebar-accent-foreground: hsl(218 13% 84%);
+  --sidebar-border: hsl(216 20% 30%);
+
+  /* 10% ACCENT FOCAL POINT (Acento Índigo Pizarra) */
+  --primary: hsl(235 91% 74%);
+  --primary-foreground: hsl(221 48% 10%);
   --destructive: hsl(0 86% 61%);
-  --border: hsl(216 15% 35%);
-  --input: hsl(216 15% 35%);
   --ring: hsl(235 91% 74%);
+  --sidebar-primary: hsl(235 91% 74%);
+  --sidebar-primary-foreground: hsl(221 48% 10%);
+  --sidebar-ring: hsl(235 91% 74%);
   --chart-1: hsl(235 91% 74%);
   --chart-2: hsl(238 82% 67%);
   --chart-3: hsl(243 75% 59%);
   --chart-4: hsl(244 57% 51%);
   --chart-5: hsl(244 55% 42%);
-  --sidebar: hsl(218 36% 18%);
-  --sidebar-foreground: hsl(215 27% 91%);
-  --sidebar-primary: hsl(235 91% 74%);
-  --sidebar-primary-foreground: hsl(221 48% 11%);
-  --sidebar-accent: hsl(217 19% 26%);
-  --sidebar-accent-foreground: hsl(218 13% 84%);
-  --sidebar-border: hsl(216 15% 35%);
-  --sidebar-ring: hsl(235 91% 74%);
-  
+
   --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);

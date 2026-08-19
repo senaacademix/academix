@@ -76,14 +76,14 @@ export function NavMain({
                   className={cn(
                     "relative h-11 px-3.5 rounded-2xl transition-all duration-300 font-semibold text-xs sm:text-sm flex items-center gap-3 overflow-hidden",
                     active
-                      ? "bg-primary/15 text-primary shadow-sm shadow-primary/10 border border-primary/25 font-bold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white"
+                      ? "bg-sidebar-primary/15 text-sidebar-primary shadow-sm shadow-sidebar-primary/10 border border-sidebar-primary/30 font-bold"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   )}
                 >
                   <Link href={item.url} onClick={handleLinkClick}>
                     {/* Active Left Glow Bar */}
                     {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-r-full bg-primary shadow-lg shadow-primary" />
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-r-full bg-sidebar-primary shadow-lg shadow-sidebar-primary" />
                     )}
 
                     {item.icon && (
@@ -91,8 +91,8 @@ export function NavMain({
                         className={cn(
                           "h-5 w-5 shrink-0 transition-transform duration-300",
                           active
-                            ? "text-primary scale-110"
-                            : "text-slate-400 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300"
+                            ? "text-sidebar-primary scale-110"
+                            : "text-sidebar-foreground/60 group-hover/menu-item:text-sidebar-accent-foreground"
                         )}
                       />
                     )}
@@ -118,20 +118,20 @@ export function NavMain({
                     className={cn(
                       "h-11 px-3.5 rounded-2xl transition-all duration-300 font-semibold text-xs sm:text-sm flex items-center gap-3",
                       active
-                        ? "bg-primary/15 text-primary font-bold border border-primary/25"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                        ? "bg-sidebar-primary/15 text-sidebar-primary font-bold border border-sidebar-primary/30"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     )}
                   >
                     {item.icon && (
                       <item.icon
                         className={cn(
                           "h-5 w-5 shrink-0",
-                          active ? "text-primary" : "text-slate-400 dark:text-slate-500"
+                          active ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover/menu-item:text-sidebar-accent-foreground"
                         )}
                       />
                     )}
                     <span className="truncate">{item.title}</span>
-                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-slate-400" />
+                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-sidebar-foreground/60" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pl-4 pt-1 space-y-1">
